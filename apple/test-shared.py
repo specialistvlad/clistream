@@ -22,8 +22,8 @@ class SharedAppleSession(BrokerFixture):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.devices = {"iphone": os.environ["IPHONE_SIMULATOR_ID"],
-                       "ipad": os.environ["IPAD_SIMULATOR_ID"]}
+        cls.devices = {"ipad": os.environ["IPAD_SIMULATOR_ID"],
+                       "iphone": os.environ["IPHONE_SIMULATOR_ID"]}
         cls.mobile_id = "com.vlk.clistream.shared-acceptance"
         cls.mac_options = [
             "-scheme", "CLIStream-macOS", "-destination", "platform=macOS,arch=" + platform.machine(),
@@ -35,10 +35,7 @@ class SharedAppleSession(BrokerFixture):
         subprocess.run(["xcodebuild", "-quiet", "build", "-scheme", "CLIStream-SharedTestHost",
                         "-destination", "generic/platform=iOS Simulator", "-derivedDataPath",
                         "build/accept-ios"], cwd=APP, check=True)
-        package = APP / "build/accept-ios/Build/Products/Debug-iphonesimulator/CLIStreamSharedTestHost.app"
-        for udid in cls.devices.values():
-            subprocess.run(["xcrun", "simctl", "bootstatus", udid, "-b"], check=True)
-            subprocess.run(["xcrun", "simctl", "install", udid, package], check=True)
+        cls.package = APP / "build/accept-ios/Build/Products/Debug-iphonesimulator/CLIStreamSharedTestHost.app"
 
     def test_simultaneous_clients(self):
         child, sid = self.session(
@@ -53,7 +50,7 @@ class SharedAppleSession(BrokerFixture):
         reports = Path(tempfile.mkdtemp(prefix="shared-", dir=APP / "build"))
 
         # XCTest may take longer to launch than an invitation stays valid.
-        routes = {device: "/" + os.urandom(24).hex() for device in ["mac", *self.devices]}
+        routes = {device: "/" + os.urandom(24).hex() for device in [*self.devices, "mac"]}
         pending = {route + "/PIPE": device for device, route in routes.items()}
 
         def mint():
@@ -87,13 +84,7 @@ class SharedAppleSession(BrokerFixture):
                 prefix + "CLISTREAM_FIXTURE": f"http://127.0.0.1:{service.server_port}{routes[name]}",
             }
 
-        with (self.base / "mac.log").open("wb") as log:
-            mac = self.spawn([
-                "xcodebuild", "-quiet", "test-without-building", *self.mac_options,
-                "-only-testing:CLIStream-MacTests/ClientTests/testSharedPipe",
-                "-parallel-testing-enabled", "NO", "-resultBundlePath", str(reports / "mac.xcresult"),
-            ], env=environment("mac", "TEST_RUNNER_"), cwd=APP, stdout=log, stderr=log)
-
+        mac = None
         records = {}
         ready_lines = set()
         with selectors.DefaultSelector() as sel:
@@ -101,18 +92,30 @@ class SharedAppleSession(BrokerFixture):
             for name in routes:
                 if name in self.devices:
                     udid = self.devices[name]
+                    # Launch each client as soon as its own runtime has migrated.
+                    print("Booting", name, flush=True)
+                    subprocess.run(["xcrun", "simctl", "bootstatus", udid, "-b"], check=True)
+                    subprocess.run(["xcrun", "simctl", "install", udid, self.package], check=True)
                     container = subprocess.check_output(
                         ["xcrun", "simctl", "get_app_container", udid, self.mobile_id, "data"], text=True
                     ).strip()
                     records[name] = Path(container) / "tmp" / f"shared-{sid}.json"
                     subprocess.run(["xcrun", "simctl", "launch", "--terminate-running-process", udid,
                                     self.mobile_id], env=environment(name, "SIMCTL_CHILD_"),
-                                   check=True, timeout=120)
+                                   check=True, timeout=480)
                     self.addCleanup(subprocess.run, ["xcrun", "simctl", "terminate", udid, self.mobile_id],
                                     capture_output=True)
+                else:
+                    with (self.base / "mac.log").open("wb") as log:
+                        mac = self.spawn([
+                            "xcodebuild", "-quiet", "test-without-building", *self.mac_options,
+                            "-only-testing:CLIStream-MacTests/ClientTests/testSharedPipe",
+                            "-parallel-testing-enabled", "NO", "-resultBundlePath", str(reports / "mac.xcresult"),
+                        ], env=environment("mac", "TEST_RUNNER_"), cwd=APP, stdout=log, stderr=log)
                 deadline = time.monotonic() + 600
                 while not sel.select(1):
-                    self.assertIsNone(mac.poll(), f"Mac test exited before {name} attached")
+                    if mac is not None:
+                        self.assertIsNone(mac.poll(), f"Mac test exited before {name} attached")
                     if name in records and records[name].exists():
                         self.fail(f"{name}: {json.loads(records[name].read_text()).get('failedStage')}")
                     self.assertLess(time.monotonic(), deadline, f"{name} did not attach")

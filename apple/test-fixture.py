@@ -259,7 +259,7 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
                     x, y = (float(params[axis][0]) for axis in ("x", "y"))
                     if not (0 <= x < 4096 and 0 <= y < 4096):
                         raise ValueError("invalid simulator point")
-                    gesture = ["--hold", "1" if purpose == "WORD" else "0.18"]
+                    gesture = ["--hold", "1"] if purpose == "WORD" else []
                     subprocess.run(["axe", "tap", "-x", str(x), "-y", str(y),
                                     *gesture, "--udid", simulator], check=True, timeout=30)
                 except (OSError, KeyError, ValueError, subprocess.SubprocessError):

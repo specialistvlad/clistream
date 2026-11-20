@@ -34,7 +34,22 @@ struct WorkspaceBrowser: View {
 
   var body: some View {
     observedNavigation
-      .fileImporter(isPresented: $importer, allowedContentTypes: [.data], onCompletion: imported)
+      #if os(iOS)
+        .sheet(isPresented: $importer) {
+          UploadPicker { source in
+            importer = false
+            if let source {
+              Task {
+                await put(source)
+                // Import mode returns a temporary copy owned by this app.
+                try? FileManager.default.removeItem(at: source)
+              }
+            }
+          }
+        }
+      #else
+        .fileImporter(isPresented: $importer, allowedContentTypes: [.data], onCompletion: imported)
+      #endif
       .fileExporter(
         isPresented: $exporter, item: download, contentTypes: [.data],
         defaultFilename: download?.url.lastPathComponent,
@@ -265,3 +280,30 @@ struct WorkspaceBrowser: View {
     message = r.Error ?? "Uploaded \(url.lastPathComponent)"
   }
 }
+
+#if os(iOS)
+  /// Upload an independent copy so providers can finish materializing the document
+  /// before the asynchronous transfer starts.
+  private struct UploadPicker: UIViewControllerRepresentable {
+    let completion: (URL?) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(completion) }
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+      let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data], asCopy: true)
+      picker.delegate = context.coordinator
+      return picker
+    }
+
+    func updateUIViewController(_ picker: UIDocumentPickerViewController, context: Context) {}
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+      let completion: (URL?) -> Void
+      init(_ completion: @escaping (URL?) -> Void) { self.completion = completion }
+      func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        completion(urls.first)
+      }
+      func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { completion(nil) }
+    }
+  }
+#endif

@@ -65,7 +65,7 @@ jobs:
           case "$DEVICE" in
             macOS) apple/test-device.sh macOS ;;
             shared)
-              IPHONE_SIMULATOR_ID="$(simulator "$phone")" IPAD_SIMULATOR_ID="$(simulator "$pad")" python3 apple/test-shared.py ;;
+              IPHONE_SIMULATOR_ID="$(simulator "$phone")" IPAD_SIMULATOR_ID="$(simulator 'iPad mini (A17 Pro)')" python3 apple/test-shared.py ;;
             iPhone) SIMULATOR_ID="$(simulator "$phone")" apple/test-device.sh ;;
             iPad) SIMULATOR_ID="$(simulator "$pad")" apple/test-device.sh ;;
           esac

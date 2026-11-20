@@ -84,7 +84,7 @@ CLISTREAM_APP_DRIVERS=1 apple/test-device.sh macOS
 IPHONE_SIMULATOR_ID="$IPHONE_SIMULATOR_ID" IPAD_SIMULATOR_ID="$IPAD_SIMULATOR_ID" python3 apple/test-shared.py
 ```
 
-GitHub Actions selects the iPhone 17 Pro and 13-inch iPad Pro (M5) on the iOS 26.4 runtime so each run uses the same device layout.
+GitHub Actions selects the iPhone 17 Pro and 13-inch iPad Pro (M5) on the iOS 26.4 runtime for the device UI suites. The simultaneous-client job uses the iPhone and iPad mini (A17 Pro) to reduce the graphics memory required by two live simulators.
 
 The device suite prints its result directory under `apple/build/results-*`. Each scenario has its own XCTest bundle. The simultaneous-client harness launches a test-only build of the app on both simulators. Each mobile app writes to the same session and records the stdout and stderr received by its view model. The harness checks all four writers on both channels and saves one JSON report per mobile device alongside the Mac XCTest bundle under `apple/build/shared-*`. Open the bundle with Xcode or run `xcrun xcresulttool get test-results tests --path PATH.xcresult` for the individual outcomes.
 

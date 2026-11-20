@@ -151,7 +151,11 @@ final class SessionTests: XCTestCase {
         attachFixtureImage(grid, named: "Fixture document grid")
         XCTFail("No visible portion of the document inside \(viewport)")
       }
-      let point = CGPoint(x: row.midX, y: row.midY)
+      let filename = document.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+      let title = filename.exists ? filename.frame.intersection(row) : CGRect.null
+      let point = CGPoint(x: title.width > 4 ? title.midX : row.midX, y: row.midY)
+      let target = anchor.withOffset(CGVector(dx: point.x - anchor.screenPoint.x,
+                                              dy: point.y - anchor.screenPoint.y))
       let delivery = try await fixtureResponse("DOCUMENT", at: point)
       XCTAssertEqual(delivery, "delivered")
       let open = app.buttons["Open"].firstMatch
@@ -159,9 +163,12 @@ final class SessionTests: XCTestCase {
         if open.exists && open.isHittable && open.isEnabled {
           open.tap()
         } else if visible(fileMatches) != nil {
-          anchor.withOffset(CGVector(dx: point.x - anchor.screenPoint.x,
-                                     dy: point.y - anchor.screenPoint.y)).doubleTap()
-          if open.exists && open.isHittable && open.isEnabled { open.tap() }
+          target.press(forDuration: 1.1)
+          if open.waitForExistence(timeout: 3) && open.isHittable && open.isEnabled {
+            open.tap()
+          } else {
+            target.tap()
+          }
         }
         if !cancel.waitForNonExistence(timeout: 15) {
           if grid.exists { attachFixtureImage(grid, named: "Fixture document grid") }

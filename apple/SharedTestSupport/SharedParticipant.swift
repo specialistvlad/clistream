@@ -47,7 +47,7 @@ enum SharedParticipant {
   }
 
   private static func wait(until complete: () -> Bool) async throws {
-    let deadline = ContinuousClock.now + .seconds(600)
+    let deadline = ContinuousClock.now + .seconds(1200)
     while !complete() {
       guard ContinuousClock.now < deadline else { throw URLError(.timedOut) }
       try await Task.sleep(for: .milliseconds(100))
