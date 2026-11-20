@@ -1,5 +1,8 @@
 name: Test
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
 concurrency:
   group: test-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -31,7 +34,7 @@ jobs:
         device: [macOS, iPhone, iPad, shared]
     runs-on: macos-26
     # A cold iOS runtime must finish migrating before the per-case watchdogs start.
-    timeout-minutes: 50
+    timeout-minutes: ${{ matrix.device == 'shared' && 65 || 50 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

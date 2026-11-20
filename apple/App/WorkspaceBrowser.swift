@@ -42,7 +42,11 @@ struct WorkspaceBrowser: View {
   }
 
   private func imported(_ result: Result<URL, Error>) {
-    if case .success(let url) = result { Task { await put(url) } }
+    switch result {
+    case .success(let url): Task { await put(url) }
+    case .failure(let error as CocoaError) where error.code == .userCancelled: break
+    case .failure(let error): message = error.localizedDescription
+    }
   }
 
   private func exported(_ result: Result<URL, Error>) {

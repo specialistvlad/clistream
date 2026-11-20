@@ -1,6 +1,6 @@
 """Exercise concurrent Apple and CLI control of the same child on one private broker."""
 
-import concurrent.futures
+import http.server
 import json
 import os
 import platform
@@ -8,6 +8,7 @@ import selectors
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -71,77 +72,87 @@ class SharedAppleSession(BrokerFixture):
         observer = self.spawn(self.a + ["attach", sid])
         reports = Path(tempfile.mkdtemp(prefix="shared-", dir=APP / "build"))
 
-        def apple(device):
-            system = self.destinations[device][0]
-            tests = "CLIStream-MacTests" if system == "macOS" else "CLIStream-iOSTests"
-            link = (
-                self.run_cli(self.server + ["invite", "client"]).stdout.decode().strip()
-            )
-            args = self.command(device, "test-without-building") + [
-                "-only-testing:" + tests + "/ClientTests/testSharedPipe",
-                "-parallel-testing-enabled",
-                "NO",
-                "-resultBundlePath",
-                str(reports / (device + ".xcresult")),
-            ]
-            env = {
-                **os.environ,
-                "TEST_RUNNER_CLISTREAM_SESSION": sid,
-                "TEST_RUNNER_CLISTREAM_PIPE_LINK": link,
-                "TEST_RUNNER_CLISTREAM_PARTICIPANT": device,
-            }
-            subprocess.run(
-                args, env=env, cwd=APP, check=True, timeout=180, capture_output=True
-            )
-            report = subprocess.check_output(
-                [
-                    "xcrun",
-                    "xcresulttool",
-                    "get",
-                    "test-results",
-                    "summary",
-                    "--path",
-                    str(reports / (device + ".xcresult")),
+        # XCTest may take longer to launch than an invitation stays valid.
+        routes = {device: "/" + os.urandom(24).hex() for device in self.destinations}
+        pending = {route + "/PIPE" for route in routes.values()}
+
+        def mint():
+            return self.run_cli(self.server + ["invite", "client"]).stdout
+
+        class Invitations(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                if self.path not in pending:
+                    self.send_error(404)
+                    return
+                pending.remove(self.path)
+                data = mint()
+                self.send_response(200)
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        service = http.server.HTTPServer(("127.0.0.1", 0), Invitations)
+        self.addCleanup(service.server_close)
+        threading.Thread(target=service.serve_forever, daemon=True).start()
+        self.addCleanup(service.shutdown)
+        jobs = {}
+        ready_lines = set()
+        with selectors.DefaultSelector() as sel:
+            sel.register(observer.stdout, selectors.EVENT_READ)
+            for device, (system, _) in self.destinations.items():
+                tests = "CLIStream-MacTests" if system == "macOS" else "CLIStream-iOSTests"
+                args = self.command(device, "test-without-building") + [
+                    "-only-testing:" + tests + "/ClientTests/testSharedPipe",
+                    "-parallel-testing-enabled", "NO",
+                    "-resultBundlePath", str(reports / (device + ".xcresult")),
                 ]
-            )
+                env = {
+                    **os.environ,
+                    "TEST_RUNNER_CLISTREAM_SESSION": sid,
+                    "TEST_RUNNER_CLISTREAM_FIXTURE": f"http://127.0.0.1:{service.server_port}{routes[device]}",
+                    "TEST_RUNNER_CLISTREAM_PARTICIPANT": device,
+                }
+                print("Starting", device, flush=True)
+                log = self.enterContext((self.base / (device + ".log")).open("wb"))
+                jobs[device] = self.spawn(args, env=env, cwd=APP, stdout=log, stderr=log)
+                deadline = time.monotonic() + 360
+                while not sel.select(1):
+                    for name, job in jobs.items():
+                        self.assertIsNone(job.poll(), f"{name} exited before {device} was ready")
+                    self.assertLess(time.monotonic(), deadline, f"{device} did not attach")
+                line = observer.stdout.readline()
+                self.assertEqual(line, f"out:ready-{device}\n".encode())
+                ready_lines.add(line)
+                print(device, "attached to child", flush=True)
+
+        # Only release the writers after all four clients are attached.
+        observer.stdin.write(b"hosted-cli-echo\n")
+        for device, job in jobs.items():
+            self.assertEqual(job.wait(timeout=150), 0, device)
+            report = subprocess.check_output([
+                "xcrun", "xcresulttool", "get", "test-results", "summary", "--path",
+                str(reports / (device + ".xcresult")),
+            ])
             counts = json.loads(report)
             self.assertEqual(
                 (counts["passedTests"], counts["skippedTests"], counts["failedTests"]),
-                (1, 0, 0),
-                device,
+                (1, 0, 0), device,
             )
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as runners:
-            jobs = [runners.submit(apple, name) for name in self.destinations]
-            # Every Apple attachment waits for the CLI's last line before leaving.
-            expected = {
-                f"out:hosted-{device}-echo\n".encode() for device in self.destinations
-            }
-            seen = set()
-            until = time.monotonic() + 90
-            with selectors.DefaultSelector() as sel:
-                sel.register(observer.stdout, selectors.EVENT_READ)
-                while seen != expected:
-                    self.assertTrue(
-                        sel.select(max(0, until - time.monotonic())),
-                        "waiting for all three Apple clients",
-                    )
-                    record = observer.stdout.readline()
-                    self.assertIn(record, expected)
-                    seen.add(record)
-            observer.stdin.write(b"hosted-cli-echo\n")
-            for job in jobs:
-                job.result()
         child.stdin.close()
         self.assertEqual(child.wait(8), 0)
         stdout, stderr = observer.communicate(timeout=8)
         self.assertEqual(observer.returncode, 0)
-        self.assertEqual(stdout, b"out:hosted-cli-echo\n")
-        expected.add(stdout)
-        self.assertEqual(set(child.stdout.read().splitlines(keepends=True)), expected)
+        echoes = [f"out:hosted-{name}-echo\n".encode() for name in [*jobs, "cli"]]
+        self.assertCountEqual(stdout.splitlines(keepends=True), echoes)
+        expected = ready_lines.union(echoes)
+        self.assertCountEqual(child.stdout.read().splitlines(keepends=True), expected)
         errors = {entry.replace(b"out:", b"err:", 1) for entry in expected}
-        self.assertEqual(set(stderr.splitlines(keepends=True)), errors)
-        self.assertEqual(set(child.stderr.read().splitlines(keepends=True)), errors)
+        self.assertCountEqual(stderr.splitlines(keepends=True), errors)
+        self.assertCountEqual(child.stderr.read().splitlines(keepends=True), errors)
         print("Verified four simultaneous clients. XCTest results in", reports, flush=True)
 
 

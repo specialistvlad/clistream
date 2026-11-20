@@ -171,12 +171,19 @@ final class ClientTests: XCTestCase {
     defer { _ = Core.call(["Op": "close", "Handle": key]) }
     let participant = ProcessInfo.processInfo.environment["CLISTREAM_PARTICIPANT"] ?? "apple"
     let names = participant == "apple" ? ["apple"] : ["iphone", "ipad", "mac", "cli"]
-    let payload = Data("hosted-\(participant)-echo\n".utf8)
-    _ = try await request("input", ["Handle": key, "Data": payload.base64EncodedString()])
+    func send(_ line: String) async throws {
+      _ = try await request("input", ["Handle": key, "Data": Data((line + "\n").utf8).base64EncodedString()])
+    }
+    var sent = names.count == 1
+    try await send(sent ? "hosted-\(participant)-echo" : "ready-\(participant)")
     var channels = [String: Data]()
-    try await consume(key, seconds: names.count == 1 ? 12 : 100) { event in
+    try await consume(key, seconds: names.count == 1 ? 12 : 900) { event in
       if let ch = event.Channel, let data = event.Data {
         channels[ch, default: Data()].append(data)
+      }
+      if !sent, channels["stdout"]?.range(of: Data("out:hosted-cli-echo\n".utf8)) != nil {
+        try await send("hosted-\(participant)-echo")
+        sent = true
       }
       return names.allSatisfy { name in
         let stdout = Data("out:hosted-\(name)-echo\n".utf8)
@@ -225,7 +232,7 @@ final class ClientTests: XCTestCase {
   }
 
   /// Closing a handle unblocks a pending "next", including on a failed assertion.
-  private func consume(_ key: String, seconds: Int = 12, until complete: (Reply) -> Bool)
+  private func consume(_ key: String, seconds: Int = 12, until complete: (Reply) async throws -> Bool)
     async throws
   {
     let timer = Task {
@@ -235,7 +242,7 @@ final class ClientTests: XCTestCase {
     defer { timer.cancel() }
     while true {
       let event = try await request("next", ["Handle": key])
-      if complete(event) { return }
+      if try await complete(event) { return }
       if event.Exit != nil { throw POSIXError(.EPIPE) }
     }
   }

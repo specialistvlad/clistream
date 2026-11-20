@@ -212,7 +212,9 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
     available = {"PIPE", "PTY", "FILES", "PORTS", "DRIVERS", "QR"}
     if suite == "scroll":
         available.add("HISTORY")
+    initial_grid = None
     if simulator and suite == "terminal":
+        available.update({"GRID", "RESIZED"})
         model = subprocess.check_output(
             ["xcrun", "simctl", "getenv", simulator, "SIMULATOR_MODEL_IDENTIFIER"], text=True
         ).strip()
@@ -223,6 +225,7 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
             pass
 
         def do_GET(self):
+            nonlocal initial_grid
             purpose = self.path.removeprefix(route)
             if not self.path.startswith(route) or purpose not in available:
                 self.send_error(404)
@@ -240,6 +243,25 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
                     self.send_error(503, "Simulator hardware input failed")
                     return
                 payload = b"delivered"
+            elif purpose in {"GRID", "RESIZED"}:
+                def grid():
+                    lines = Path(str(capture) + ".sizes").read_bytes().splitlines()
+                    return lines[-1] if lines else None
+
+                if purpose == "GRID":
+                    initial_grid = wait_until(grid)
+                    payload = initial_grid
+                else:
+                    def changed_grid():
+                        current = grid()
+                        return current if current != initial_grid else None
+
+                    try:
+                        payload = wait_until(changed_grid)
+                    except RuntimeError:
+                        print(f"Child PTY size stayed at {initial_grid!r}", flush=True)
+                        self.send_error(409, "Child PTY size did not change")
+                        return
             elif purpose == "HISTORY":
                 Path(str(capture) + ".history").touch()
                 payload = b"released"
@@ -380,8 +402,7 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
         assert received.count(b"\x1b[<0;1;1M") == expected_presses, received
         resize_events = Path(str(capture) + ".sizes").read_text().splitlines()
         sizes = [tuple(map(int, line.split())) for line in resize_events]
-        columns = {cols for cols, rows in sizes if cols > 0 and rows > 0}
-        assert len(columns) >= 2, f"no child terminal width change: {sizes}"
+        assert len(set(sizes)) >= 2 and all(min(size) > 0 for size in sizes), sizes
         if os.environ.get("SIMULATOR_ID"):
             assert b"\x1b[A\x1b[B\x1b[C\x1b[D\x1b\x03" in received, (
                 f"missing terminal keys: {received!r}"

@@ -83,7 +83,8 @@ final class SessionTests: XCTestCase {
       choosePath(saved + "/" + name + ".txt", in: app)
       tap(app.buttons["OKButton"])
     #else
-      let pickerFile = app.cells.matching(
+      let fileView = app.collectionViews["File View"].firstMatch
+      let pickerFile = fileView.cells.matching(
         NSPredicate(format: "label BEGINSWITH %@", name)
       ).firstMatch
       if usedSidebar {
@@ -99,15 +100,21 @@ final class SessionTests: XCTestCase {
       let ready = XCTNSPredicateExpectation(
         predicate: NSPredicate(format: "hittable == true"), object: pickerFile)
       XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 12), .completed)
-      // Files lays out its icon and its secondary labels within a single cell.
-      // Touch the document thumbnail in the upper half of the grid cell.
-      pickerFile.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+      // Files supplies the cell's activation point for both list and icon layouts.
+      pickerFile.tap()
       let open = app.buttons["Open"].firstMatch
-      if open.waitForExistence(timeout: 2), open.isHittable { open.tap() }
-      if !pickerFile.waitForNonExistence(timeout: 3), pickerFile.isHittable {
-        // On a wide iPad the picker can still be transitioning from Recents
-        // to local storage when the same document first becomes hittable.
-        pickerFile.doubleTap()
+      func finishedSelecting() -> Bool {
+        if open.exists && open.isEnabled && open.isHittable { open.tap() }
+        return fileView.waitForNonExistence(timeout: 4)
+      }
+      if !finishedSelecting() {
+        // Files can expose an item before it finishes changing location.
+        // Activate the name in the settled view, then handle the confirmation.
+        let label = pickerFile.staticTexts.matching(
+          NSPredicate(format: "label BEGINSWITH %@", name)
+        ).firstMatch
+        if label.exists && label.isHittable { label.tap() } else { pickerFile.doubleTap() }
+        XCTAssertTrue(finishedSelecting(), "Files did not return the selected document")
       }
     #endif
     XCTAssertTrue(
@@ -132,6 +139,11 @@ final class SessionTests: XCTestCase {
   }
 
   @MainActor func testTerminalInput() async throws {
+    #if os(iOS)
+      let initialOrientation = XCUIDevice.shared.orientation
+      XCUIDevice.shared.orientation = .portrait
+      defer { if initialOrientation != .unknown { XCUIDevice.shared.orientation = initialOrientation } }
+    #endif
     let app = try await pairedApp(session: "CLISTREAM_UI_PTY")
     let view = app.descendants(matching: .any)["session-terminal"].firstMatch
     XCTAssertTrue(view.waitForExistence(timeout: 10), app.debugDescription)
@@ -160,12 +172,25 @@ final class SessionTests: XCTestCase {
       tap(app.buttons["Keys"])
       tap(app.buttons["Control Key"])
       tap(app.buttons["Control-C"])
-      let portraitWidth = view.frame.width
+      // A windowed iPad can keep its horizontal size class through rotation.
+      // Start with the software keyboard up and measure both grid dimensions.
+      tap(app.buttons["Keys"])
+      tap(app.buttons["Show Keyboard"])
+      XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+      let portrait = view.frame.size
+      let firstGrid = try await fixtureResponse("GRID")
       XCUIDevice.shared.orientation = .landscapeLeft
-      defer { XCUIDevice.shared.orientation = .portrait }
+      tap(app.buttons["Keys"])
+      tap(app.buttons["Hide Keyboard"])
+      XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
       let resized = XCTNSPredicateExpectation(
-        predicate: NSPredicate { _, _ in abs(view.frame.width - portraitWidth) > 1 }, object: view)
+        predicate: NSPredicate { _, _ in
+          let size = view.frame.size
+          return abs(size.width - portrait.width) > 1 || abs(size.height - portrait.height) > 1
+        }, object: view)
       XCTAssertEqual(XCTWaiter.wait(for: [resized], timeout: 15), .completed)
+      let resizedGrid = try await fixtureResponse("RESIZED")
+      XCTAssertNotEqual(firstGrid, resizedGrid, "The child PTY kept its original grid")
       let rotated = view.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 4, dy: 4))
       rotated.tap()
       if UIDevice.current.userInterfaceIdiom == .pad {
