@@ -83,7 +83,7 @@ final class SessionTests: XCTestCase {
       choosePath(saved + "/" + name + ".txt", in: app)
       tap(app.buttons["OKButton"])
     #else
-      let pickerFile = app.descendants(matching: .any).matching(
+      let pickerFile = app.cells.matching(
         NSPredicate(format: "label BEGINSWITH %@", name)
       ).firstMatch
       if usedSidebar {
@@ -96,9 +96,19 @@ final class SessionTests: XCTestCase {
           tap(storageRow)
         }
       }
-      tap(pickerFile)
-      let open = app.buttons["Open"]
-      if open.exists { open.tap() }
+      let ready = XCTNSPredicateExpectation(
+        predicate: NSPredicate(format: "hittable == true"), object: pickerFile)
+      XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 12), .completed)
+      // Files lays out its icon and its secondary labels within a single cell.
+      // Touch the document thumbnail in the upper half of the grid cell.
+      pickerFile.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+      let open = app.buttons["Open"].firstMatch
+      if open.waitForExistence(timeout: 2), open.isHittable { open.tap() }
+      if !pickerFile.waitForNonExistence(timeout: 3), pickerFile.isHittable {
+        // On a wide iPad the picker can still be transitioning from Recents
+        // to local storage when the same document first becomes hittable.
+        pickerFile.doubleTap()
+      }
     #endif
     XCTAssertTrue(
       app.staticTexts.matching(
@@ -268,14 +278,13 @@ final class SessionTests: XCTestCase {
       tap(app.buttons["Files"])
       openEntry("inbox", in: app)
       openEntry("nested", in: app)
-      let list = app.collectionViews.firstMatch
-      XCTAssertTrue(list.waitForExistence(timeout: 5))
+      let fileRow = NSPredicate(format: "identifier BEGINSWITH %@", "entry-row-")
+      let list = app.collectionViews.containing(fileRow).firstMatch
+      XCTAssertTrue(list.waitForExistence(timeout: 8))
       let edge = list.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.5))
       edge.press(
         forDuration: 0.05, thenDragTo: edge.withOffset(CGVector(dx: 22, dy: 0)),
         withVelocity: .slow, thenHoldForDuration: 0.5)
-      XCTAssertTrue(app.navigationBars["nested"].exists)
-      list.swipeUp()
       XCTAssertTrue(app.navigationBars["nested"].exists)
       edge.press(
         forDuration: 0.05,
@@ -286,8 +295,67 @@ final class SessionTests: XCTestCase {
       try app.performAccessibilityAudit(for: [
         .sufficientElementDescription, .contrast, .dynamicType,
       ])
+      // Test vertical scrolling separately so its deceleration cannot consume
+      // the first horizontal swipe of the back-navigation check.
+      openEntry("nested", in: app)
+      let firstFile = list.buttons["entry-row-000"]
+      XCTAssertTrue(firstFile.waitForExistence(timeout: 8))
+      let firstY = firstFile.frame.midY
+      list.swipeUp()
+      let scrolled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+        !firstFile.exists || firstFile.frame.midY < firstY - 20
+      }, object: firstFile)
+      XCTAssertEqual(XCTWaiter.wait(for: [scrolled], timeout: 10), .completed)
+      XCTAssertTrue(app.navigationBars["nested"].exists)
+      // The contrast audit samples pixels. Wait until scrolling and the
+      // system scroll indicator finish animating before taking its snapshot.
+      var previousImage: Data?
+      let atRest = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+        let image = list.screenshot().pngRepresentation
+        defer { previousImage = image }
+        return previousImage == image
+      }, object: list)
+      XCTAssertEqual(XCTWaiter.wait(for: [atRest], timeout: 12), .completed)
+      // A list can extend beneath the navigation bar. Measure a filename in
+      // its unobstructed center, fully between the sheet's top and bottom bars.
+      let visibleArea = list.frame.insetBy(dx: 0, dy: list.frame.height * 0.2)
+      let row = try XCTUnwrap(list.buttons.matching(fileRow).allElementsBoundByIndex.first {
+        visibleArea.contains($0.frame) && $0.isHittable
+      })
+      try checkVisibleFilenameContrast(row)
       tap(app.buttons["Done"])
       tap(app.buttons["Detach"])
+    }
+  #endif
+
+  #if os(iOS)
+    // Measure the actual filename glyphs on the scrolled, rendered row. The
+    // platform audit can report even white text on a dark row near a nav bar.
+    private func checkVisibleFilenameContrast(_ row: XCUIElement) throws {
+      let source = try XCTUnwrap(row.screenshot().image.cgImage)
+      // Exclude the file icon, trailing file size and row separators.
+      let area = CGRect(x: CGFloat(source.width) * 0.15, y: CGFloat(source.height) * 0.22,
+                        width: CGFloat(source.width) * 0.33, height: CGFloat(source.height) * 0.56)
+      let crop = try XCTUnwrap(source.cropping(to: area))
+      let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+      let bitmap = try XCTUnwrap(CGContext(data: nil, width: crop.width, height: crop.height,
+        bitsPerComponent: 8, bytesPerRow: crop.width * 4, space: space,
+        bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue))
+      bitmap.draw(crop, in: CGRect(x: 0, y: 0, width: crop.width, height: crop.height))
+      let pixels = try XCTUnwrap(bitmap.data).assumingMemoryBound(to: UInt8.self)
+      let linear = (0...255).map { value -> Double in
+        let s = Double(value) / 255
+        return s <= 0.04045 ? s / 12.92 : pow((s + 0.055) / 1.055, 2.4)
+      }
+      var lightness = [Double]()
+      for index in stride(from: 0, to: crop.width * crop.height * 4, by: 4) {
+        lightness.append(0.2126 * linear[Int(pixels[index])]
+          + 0.7152 * linear[Int(pixels[index + 1])] + 0.0722 * linear[Int(pixels[index + 2])])
+      }
+      lightness.sort()
+      let contrast = (lightness[lightness.count * 98 / 100] + 0.05)
+        / (lightness[lightness.count * 2 / 100] + 0.05)
+      XCTAssertGreaterThanOrEqual(contrast, 4.5, "Rendered contrast for " + row.label)
     }
   #endif
 

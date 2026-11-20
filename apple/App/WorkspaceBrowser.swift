@@ -19,6 +19,7 @@ struct WorkspaceBrowser: View {
   @ObservedObject var connection: Connection
   let session: SessionInfo
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.colorSchemeContrast) private var contrast
   @Binding var location: WorkspaceLocation
   @State private var listings = [String: [WorkspaceEntry]]()
   private var entries: [WorkspaceEntry] { listings[location.folder] ?? [] }
@@ -136,15 +137,22 @@ struct WorkspaceBrowser: View {
             }.accessibilityIdentifier("entry-" + entry.Name)
               .accessibilityAddTraits(location.selections[folder] == entry.Name ? .isSelected : [])
           } else {
+            let size = entry.Size.formatted(.byteCount(style: .file))
             Button {
               open(entry.Name)
             } label: {
               HStack {
                 Label(entry.Name, systemImage: "doc")
                 Spacer()
-                Text(entry.Size.formatted(.byteCount(style: .file))).foregroundStyle(.secondary)
+                Text(size)
+                  .foregroundStyle(contrast == .increased ? Color.primary : Color.secondary)
               }
+              .contentShape(Rectangle())
+              .accessibilityElement(children: .ignore)
+              .accessibilityLabel(Text(entry.Name))
+              .accessibilityValue(Text(size))
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("entry-" + entry.Name)
             .accessibilityAddTraits(location.selections[folder] == entry.Name ? .isSelected : [])
           }
@@ -168,6 +176,10 @@ struct WorkspaceBrowser: View {
     .navigationTitle(
       folder == "." ? session.Name + " Files" : URL(fileURLWithPath: folder).lastPathComponent
     )
+    #if os(iOS)
+      .toolbarBackground(Color(uiColor: .systemBackground), for: .navigationBar)
+      .toolbarBackground(.visible, for: .navigationBar)
+    #endif
     #if os(macOS)
       .toolbar {
         Button("Up") { location.path.removeLast() }.keyboardShortcut(.upArrow, modifiers: .command)
