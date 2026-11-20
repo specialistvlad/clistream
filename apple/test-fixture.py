@@ -195,8 +195,17 @@ else:
     os.write(1, b'COPYME terminal selection test\\r\\n')
     os.write(1, b'\\x1b[?1000h\\x1b[?1006h')
 with open(sys.argv[1], 'wb', buffering=0) as captured:
+    mouse_press = b'\\x1b[<0;1;1M'
+    tail = b''
+    clicks = 0
     while data := os.read(0, 4096):
         captured.write(data)
+        pending = tail + data
+        reported = pending.count(mouse_press)
+        tail = pending[-(len(mouse_press) - 1):]
+        if reported:
+            clicks += reported
+            os.write(1, f"\\x1b[2;1Hpointer-{clicks}".encode())
 """,
             str(capture), suite,
         ],
@@ -216,6 +225,8 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
     # invitation. Only this private runner may request one client invite per case.
     route = "/" + os.urandom(24).hex() + "/"
     available = {"PIPE", "PTY", "FILES", "PORTS", "DRIVERS", "QR"}
+    if suite == "hosted":
+        available.update({"FLUSH", "FLUSHED"})
     if suite == "scroll":
         available.add("HISTORY")
     if simulator and suite == "files":
@@ -248,7 +259,7 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
                     x, y = (float(params[axis][0]) for axis in ("x", "y"))
                     if not (0 <= x < 4096 and 0 <= y < 4096):
                         raise ValueError("invalid simulator point")
-                    gesture = ["--hold", "1"] if purpose == "WORD" else []
+                    gesture = ["--hold", "1" if purpose == "WORD" else "0.18"]
                     subprocess.run(["axe", "tap", "-x", str(x), "-y", str(y),
                                     *gesture, "--udid", simulator], check=True, timeout=30)
                 except (OSError, KeyError, ValueError, subprocess.SubprocessError):
@@ -286,6 +297,13 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
                         print(f"Child PTY size stayed at {initial_grid!r}", flush=True)
                         self.send_error(409, "Child PTY size did not change")
                         return
+            elif purpose == "FLUSHED":
+                try:
+                    wait_until(lambda: b"out:before-detach" in (root / "observer.out").read_bytes().splitlines())
+                except RuntimeError:
+                    self.send_error(409, "Child did not receive the last input before detach")
+                    return
+                payload = b"received"
             elif purpose == "HISTORY":
                 # The real list has already scrolled and the PTY is attached.
                 # Release its filler supervisors before exercising scrollback.
@@ -391,7 +409,7 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
         "xcrun", "xcresulttool", "get", "test-results", "summary", "--path", bundle
     ]))
     optional_driver = int(suite == "hosted" and os.environ.get("CLISTREAM_APP_DRIVERS") != "1")
-    minimum = 5 if suite == "hosted" else 1
+    minimum = 6 if suite == "hosted" else 1
     passed, skipped, failed = (summary[key] for key in ("passedTests", "skippedTests", "failedTests"))
     if failed or skipped != optional_driver or passed < minimum - optional_driver:
         raise RuntimeError(f"Unexpected {suite} XCTest outcome: {passed} passed, {skipped} skipped, {failed} failed")

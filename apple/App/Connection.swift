@@ -127,7 +127,10 @@ final class Connection: ObservableObject {
     pending = Data()
     stdout = Data()
     stderr = Data()
-    Task { for key in closing { _ = await Core.request(["Op": "close", "Handle": key]) } }
+    // Flush accepted keystrokes and pointer reports before closing their stream.
+    inputQueue.async {
+      for key in closing { _ = Core.call(["Op": "close", "Handle": key]) }
+    }
   }
 
   func attach(_ item: SessionInfo) async {

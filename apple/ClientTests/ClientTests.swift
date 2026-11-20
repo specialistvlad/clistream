@@ -195,6 +195,22 @@ final class ClientTests: XCTestCase {
   }
 
   @MainActor
+  func testLastInputBeforeDetach() async throws {
+    let model = Connection()
+    let link = try await fixtureResponse("FLUSH")
+    await model.pair(link)
+    let id = try session()
+    let item = try XCTUnwrap(model.sessions.first { $0.id == id })
+    let reader = Task { await model.attach(item) }
+    defer { model.leave(); reader.cancel() }
+    try await waitUntil { model.selected?.id == id }
+    model.send(["Op": "input", "Data": Data("before-detach\n".utf8).base64EncodedString()])
+    model.leave()
+    let result = try await fixtureResponse("FLUSHED")
+    XCTAssertEqual(result, "received")
+  }
+
+  @MainActor
   func testPTYRenderingKeyboardResizeAndExit() async throws {
     let model = Connection()
     let link = try await fixtureResponse("PTY")

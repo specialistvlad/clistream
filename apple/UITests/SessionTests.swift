@@ -112,16 +112,22 @@ final class SessionTests: XCTestCase {
       }, object: nil)
       XCTAssertEqual(XCTWaiter.wait(for: [browserReady], timeout: 12), .completed)
       let grid = try XCTUnwrap(visible(browser), "Files did not show a document grid")
+      if !(grid.value as? String ?? "").localizedCaseInsensitiveContains("list") {
+        let modes = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "DOC.itemCollectionMenuButton.")).firstMatch
+        let options = modes.exists && modes.isHittable ? modes : app.buttons["OverflowBarButtonItem"].firstMatch
+        tap(options)
+        tap(app.descendants(matching: .any)["List"].firstMatch)
+        let list = XCTNSPredicateExpectation(
+          predicate: NSPredicate(format: "value CONTAINS[c] %@", "List"), object: grid)
+        XCTAssertEqual(XCTWaiter.wait(for: [list], timeout: 12), .completed)
+      }
       var file = visible(fileMatches)
       for _ in 0..<12 where file == nil {
         grid.swipeUp()
         file = visible(fileMatches)
       }
       let document = try XCTUnwrap(file, "Exported document was absent from the visible Files grid")
-      // A cell can be hittable while its thumbnail is under Files' sticky
-      // search field. Restrict the touch to the unobstructed part of the image.
-      let thumbnail = document.images.firstMatch
-      let caption = document.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+      // Files can keep rows behind its sticky header in the accessibility tree.
       let anchor = app.coordinate(withNormalizedOffset: .zero)
       let content = grid.frame.intersection(app.frame)
       var top = content.minY
@@ -140,14 +146,12 @@ final class SessionTests: XCTestCase {
         }
       }
       let viewport = CGRect(x: content.minX, y: top, width: content.width, height: max(0, bottom - top))
-      let hit = [thumbnail, caption, document].lazy.compactMap { part -> CGPoint? in
-        guard part.exists else { return nil }
-        let bounds = part.frame.intersection(viewport)
-        guard bounds.width > 6 && bounds.height > 6 else { return nil }
-        return CGPoint(x: bounds.midX, y: bounds.midY)
-      }.first
-      if hit == nil { attachFixtureImage(grid, named: "Fixture document grid") }
-      let point = try XCTUnwrap(hit, "No visible portion of the document inside \(viewport)")
+      let row = document.frame.intersection(viewport)
+      if row.width < 8 || row.height < 8 {
+        attachFixtureImage(grid, named: "Fixture document grid")
+        XCTFail("No visible portion of the document inside \(viewport)")
+      }
+      let point = CGPoint(x: row.midX, y: row.midY)
       let delivery = try await fixtureResponse("DOCUMENT", at: point)
       XCTAssertEqual(delivery, "delivered")
       let open = app.buttons["Open"].firstMatch
@@ -155,9 +159,8 @@ final class SessionTests: XCTestCase {
         if open.exists && open.isHittable && open.isEnabled {
           open.tap()
         } else if visible(fileMatches) != nil {
-          let label = caption.exists ? caption.frame : document.frame
-          anchor.withOffset(CGVector(dx: label.midX - anchor.screenPoint.x,
-                                     dy: label.midY - anchor.screenPoint.y)).doubleTap()
+          anchor.withOffset(CGVector(dx: point.x - anchor.screenPoint.x,
+                                     dy: point.y - anchor.screenPoint.y)).doubleTap()
           if open.exists && open.isHittable && open.isEnabled { open.tap() }
         }
         if !cancel.waitForNonExistence(timeout: 15) {
@@ -210,6 +213,7 @@ final class SessionTests: XCTestCase {
       view.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 4, dy: 4)).click()
     #else
       cell.tap()
+      assertText("pointer-1", in: view)
       if UIDevice.current.userInterfaceIdiom == .pad {
         let result = try await fixtureResponse("HID")
         XCTAssertEqual(result, "delivered")
@@ -242,8 +246,10 @@ final class SessionTests: XCTestCase {
       XCTAssertNotEqual(firstGrid, resizedGrid, "The child PTY kept its original grid")
       let rotated = view.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 4, dy: 4))
       rotated.tap()
+      assertText("pointer-2", in: view)
       if UIDevice.current.userInterfaceIdiom == .pad {
         rotated.click()
+        assertText("pointer-3", in: view)
       }
     #endif
     tap(app.buttons["Detach"])

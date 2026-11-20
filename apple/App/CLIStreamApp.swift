@@ -149,7 +149,13 @@ struct BrowserView: View {
           refresh: { Task { await connection.refresh() } }, files: { browsing = true },
           detach: detach, attached: connection.selected != nil))
     #endif
-    .task { await connection.refresh() }
+    .task {
+      #if CLISTREAM_SHARED_TEST_HOST
+        await SharedParticipant.run(connection)
+      #else
+        await connection.refresh()
+      #endif
+    }
     .onOpenURL { url in
       if url.scheme == "clistream", url.host == "pair" { pairing = Pairing(link: url) }
     }

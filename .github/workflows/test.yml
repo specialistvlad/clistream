@@ -73,6 +73,9 @@ jobs:
         if: always()
         run: |
           mkdir -p results
+          for mobile in apple/build/shared-*/*.json; do
+            [[ -f "$mobile" ]] && cp "$mobile" results/
+          done
           for bundle in apple/build/results-*/*.xcresult apple/build/shared-*/*.xcresult; do
             [[ -f "$bundle/Info.plist" ]] || continue
             report="results/$(basename "$bundle" .xcresult).json"
