@@ -8,7 +8,7 @@ import XCTest
 /// Runs in the built app on macOS or in the iOS simulator. All calls use its linked Go client.
 final class ClientTests: XCTestCase {
   func profile(_ fixture: String) async throws -> String {
-    let link = try await testInvitation(fixture)
+    let link = try await fixtureResponse(fixture)
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
     let fields = ["Op": "pair", "Dir": dir.path, "Link": link]
@@ -190,7 +190,7 @@ final class ClientTests: XCTestCase {
   @MainActor
   func testPTYRenderingKeyboardResizeAndExit() async throws {
     let model = Connection()
-    let link = try await testInvitation("PTY")
+    let link = try await fixtureResponse("PTY")
     await model.pair(link)
     let id = try session("PTY_SESSION")
     let item = try XCTUnwrap(model.sessions.first { $0.id == id })

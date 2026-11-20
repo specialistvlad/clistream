@@ -37,6 +37,15 @@ jobs:
         with:
           go-version-file: go.mod
       - run: command -v xcodegen || brew install xcodegen
+      - name: Install the simulator hardware-keyboard test tool
+        if: matrix.device == 'iPad'
+        run: |
+          mkdir -p "$RUNNER_TEMP/simulator-hid"
+          cd "$RUNNER_TEMP/simulator-hid"
+          curl -fsSLo axe.tgz https://github.com/cameroncooke/AXe/releases/download/v2.1.1/AXe-macOS-v2.1.1-universal.tar.gz
+          echo '8788838b1b32059d143cf06541b72fcaead85c16274457cdbff086510a5b17fa  axe.tgz' | shasum -a 256 -c -
+          tar -xzf axe.tgz
+          echo "$PWD" >> "$GITHUB_PATH"
       - run: make apple
       - name: Run app-hosted and UI tests
         env:

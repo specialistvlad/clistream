@@ -207,6 +207,12 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
     # invitation. Only this private runner may request one client invite per case.
     route = "/" + os.urandom(24).hex() + "/"
     available = {"PIPE", "PTY", "FILES", "PORTS", "DRIVERS", "QR"}
+    if simulator and suite == "terminal":
+        model = subprocess.check_output(
+            ["xcrun", "simctl", "getenv", simulator, "SIMULATOR_MODEL_IDENTIFIER"], text=True
+        ).strip()
+        if model.startswith("iPad"):
+            available.add("HID")
     class Invitations(http.server.BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -217,7 +223,19 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
                 self.send_error(404)
                 return
             available.remove(purpose)
-            if purpose == "QR":
+            if purpose == "HID":
+                # USB HID usage 224 is left Control and usage 7 is the D key.
+                # XCTest can otherwise synthesize a plain software-keyboard "d".
+                try:
+                    subprocess.run(["axe", "key-combo", "--modifiers", "224", "--key", "7",
+                                    "--udid", simulator], check=True, timeout=25)
+                    wait_until(lambda: b"\x04" in capture.read_bytes())
+                except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+                    print(f"Simulator hardware input failed: {error}. Test child received {capture.read_bytes()!r}", flush=True)
+                    self.send_error(503, "Simulator hardware input failed")
+                    return
+                payload = b"delivered"
+            elif purpose == "QR":
                 qr = subprocess.check_output(server)
                 payload = subprocess.check_output([APP / "build/test-qr"], input=qr)
             else:
@@ -345,7 +363,9 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
             ).strip()
             if model.startswith("iPad"):
                 expected_presses += 1
-                assert b"\x04" in received, f"missing hardware Control-D: {received!r}"
+                assert received.count(b"\x04") == 1 and b"d" not in received, (
+                    f"incorrect hardware Control-D: {received!r}"
+                )
         assert received.count(b"\x1b[<0;1;1M") == expected_presses, received
         resize_events = Path(str(capture) + ".sizes").read_text().splitlines()
         sizes = [tuple(map(int, line.split())) for line in resize_events]

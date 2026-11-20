@@ -131,9 +131,8 @@ final class SessionTests: XCTestCase {
     #else
       cell.tap()
       if UIDevice.current.userInterfaceIdiom == .pad {
-        XCUIElement.perform(withKeyModifiers: .control) {
-          view.typeKey("d", modifierFlags: [.control])
-        }
+        let result = try await fixtureResponse("HID")
+        XCTAssertEqual(result, "delivered")
       }
       for name in ["Up Arrow", "Down Arrow", "Right Arrow", "Left Arrow", "Escape"] {
         tap(app.buttons["Keys"])
@@ -262,7 +261,7 @@ final class SessionTests: XCTestCase {
       ]
     }
     app.launch()
-    let invitation = try await testInvitation("QR")
+    let invitation = try await fixtureResponse("QR")
     let link = try XCTUnwrap(URL(string: invitation))
     if largeText {
       app.open(link)
