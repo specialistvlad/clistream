@@ -26,6 +26,17 @@ Apple’s Food Truck sample demonstrates how a SwiftUI split view and navigation
 
 Switching views keeps the attachment alive. **Detach** leaves the session and its child running for other clients. [Apple keyboard guidance](https://developer.apple.com/design/human-interface-guidelines/keyboards/) · [Apple pointing-device guidance](https://developer.apple.com/design/human-interface-guidelines/pointing-devices)
 
+## Touch-only operation on iPhone and iPad
+
+Every user-facing action offered on iPhone or iPad must be reachable and usable by touch alone, including with the onscreen keyboard open. This covers pairing and cancellation, listing and opening sessions, both terminal modes, file navigation and transfers, starting and stopping port forwarding, error recovery and detaching. Actions available through a shortcut or pointer must also have a discoverable touch path, such as a labeled button or a native menu item. Follow the platform’s standard gestures and keep Back and Cancel available where a gesture can dismiss a view. [Apple gesture guidance](https://developer.apple.com/design/human-interface-guidelines/gestures)
+
+| Interaction | Expected result |
+|---|---|
+| Tap, scroll and go back | Tapping a control activates it once and gives visible feedback. A swipe through sessions, files or terminal history scrolls the intended view without activating the row or cell under the finger. In a navigation stack, the edge-swipe and Back button return to the same parent. Cancelling a partial back swipe preserves the current view. |
+| Enter and select text | Tap to focus, show or dismiss the keyboard, enter text and send it. In PTY mode, arrows, Escape and Control combinations are available onscreen. In a text-selection context, touch and hold to select output, drag the selection handles and use the system Copy action. Paste into the intended input using the system edit menu. |
+| Interact with a full-screen CLI | When the child requests mouse reporting, a deliberate tap on a terminal item targets that item’s row and column, including after rotation or a keyboard resize. Gestures in app controls, sheets and file pickers stay local. |
+| Reach controls across layouts | Keep touch targets comfortably sized and separated. The keyboard, safe areas and adjacent controls must leave actions reachable in portrait, landscape and compact iPad windows. Touch users can dismiss a sheet, cancel a picker or recover from an error and resume the same session. |
+
 ## Browse the session workspace
 
 **Files** opens at the supervisor’s workspace root on the first visit. Keep the current folder and selection on later visits to the same session. Show the session name and current folder so the user can identify the remote destination before transferring a file.
@@ -48,5 +59,6 @@ Use native SwiftUI, AppKit or UIKit lists, toolbars, menus, sheets and pickers. 
 2. On iPhone and iPad simulators, navigate into two nested folders, download a file, upload it to the other folder and compare its contents on the supervisor. Cancel a second transfer in the picker and verify the current folder and selection. At the root, verify parent navigation cannot expose host files.
 3. Keep a second client attached. While the Apple user browses Files, send output from the running child. On return to Terminal, verify the same session shows that output and accepts the next keystroke.
 4. Review the session list, terminal and file browser in light and dark appearances, at large text sizes and in a narrow window. Check keyboard focus and VoiceOver labels and reading order. Record outcomes by platform, including which interactions were checked manually.
+5. On **both iPhone and iPad simulators**, disconnect hardware keyboard input and exercise the touch-only workflows above through the visible UI. Include swipes, a cancelled back gesture, long-press selection, handle dragging, copy/paste, onscreen terminal keys, port controls and picker cancellation. Check the resulting screen state and the input received by the child. Repeat terminal-cell targeting after a layout change. Record each workflow’s outcome separately on each device, including any gesture requiring manual verification.
 
 These are acceptance criteria for the intended design. The verification record identifies the interactions already exercised in a build. [Executed tests](verification.md)
