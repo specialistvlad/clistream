@@ -25,3 +25,5 @@ The current supervisor opens its startup working directory once as the shared fo
 Compression runs inside encrypted QUIC and uses a fresh Snappy block for each record. This avoids a shared compression dictionary across devices, files, invitations or keystrokes. A single record can still expose its approximate compressed size. TLS negotiates its standard TLS 1.3 AEAD suite. The implementation has not undergone an independent security audit.
 
 Supervisor reconnects use the saved device key and pinned broker identity. A pin mismatch or explicit authorization rejection ends retries. The supervisor header uses the client’s label and terminal-cell sanitization.
+
+The supervisor’s default local view exposes operation metadata. The private journal is written in both display modes and excludes command arguments, names of accessed files and exports, terminal data, and peer error text. The supervisor observes the broker-facing channels and does not infer remote device identity. The child continues to run with the host account’s ordinary permissions.

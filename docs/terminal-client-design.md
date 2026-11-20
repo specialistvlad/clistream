@@ -49,7 +49,7 @@ The client requests distinct keyboard codes for Ctrl-[ and Escape. On terminals 
 
 ## Supervisor terminal
 
-On Linux and macOS, a supervisor with terminal stdin and stdout opens directly on its local process. Bubble Tea renders a two-row header above the same bounded emulator viewport as the client. The first row identifies the supervisor, program and broker. The second shows the child state independently of the broker connection, for example **Running · Reconnecting in 4s**. After a managed exit the last screen stays visible with its exit status. A replacement starts in a fresh viewport. Local input goes directly to the child during network outages. In read-only mode remote viewers can still interact, and Ctrl-C exits locally.
+On Linux and macOS, the supervisor defaults to a timestamped activity feed on stderr. With `--interactive` and terminal stdin and stdout, it opens directly on its local process. Bubble Tea renders a two-row header above the same bounded emulator viewport as the client. The first row identifies the supervisor, program and broker. The second shows the child state independently of the broker connection, for example **Running · Reconnecting in 4s**. After a managed exit the last screen stays visible with its exit status. A replacement starts in a fresh viewport. Local input goes directly to the child during network outages. In read-only mode remote viewers can still interact, and Ctrl-C exits locally.
 
 ## Launch examples
 

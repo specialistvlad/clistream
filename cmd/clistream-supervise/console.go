@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/vt"
+	"github.com/specialistvlad/clistream/internal/activity"
 	"github.com/specialistvlad/clistream/internal/client"
 	"github.com/specialistvlad/clistream/internal/files"
 	"github.com/specialistvlad/clistream/internal/session"
@@ -38,8 +39,11 @@ type childOutput struct {
 	data  []byte
 }
 type console struct {
-	program    *tea.Program
-	dimensions atomic.Uint32
+	journal               *activity.Log
+	logOnly               bool
+	instance, lastSession string
+	program               *tea.Program
+	dimensions            atomic.Uint32
 }
 type consoleWriter struct {
 	c     *console
@@ -56,12 +60,24 @@ func (w consoleWriter) Write(data []byte) (int, error) {
 }
 
 func (c *console) status(label string, delay time.Duration) {
+	event := "connection_failed"
+	switch label {
+	case "Connecting":
+		event = "connecting"
+	case "Connected":
+		event = "connected"
+	case "Reconnecting":
+		event = "retry"
+	}
+	c.record(activity.Event{Name: event, RetrySeconds: int(delay.Seconds())})
 	s := connectionStatus{label: label}
 	if delay > 0 {
 		s.retryAt = time.Now().Add(delay)
 	}
 	if c.program != nil {
 		c.program.Send(s)
+	} else if c.logOnly {
+		return
 	} else if delay > 0 {
 		fmt.Fprintf(os.Stderr, "%s in %s\n", label, delay)
 	} else if label != "Connected" && label != "Connecting" {
@@ -69,7 +85,8 @@ func (c *console) status(label string, delay time.Duration) {
 	}
 }
 func (c *console) session(id string) {
-	if c.program == nil || !term.IsTerminal(int(os.Stderr.Fd())) {
+	c.lastSession = id
+	if !c.logOnly && (c.program == nil || !term.IsTerminal(int(os.Stderr.Fd()))) {
 		fmt.Fprintln(os.Stderr, "session", id)
 	}
 }
@@ -78,8 +95,13 @@ func (c *console) stopped(label string) {
 		c.program.Send(childStopped{label})
 	}
 }
-func (c *console) start(path string, args []string, mode string, ports map[string]string, root *files.Root, managed bool, name string) (*session.Process, error) {
+func (c *console) start(runID, path string, args []string, mode string, ports map[string]string, root *files.Root, managed bool, name string) (*session.Process, error) {
 	output := session.LocalOutput{Stdout: os.Stdout, Stderr: os.Stderr, Cols: 80, Rows: 24}
+	if c.logOnly {
+		output.DetachTerminal = true
+		output.Stdout = io.Discard
+		output.Stderr = io.Discard
+	}
 	var child *childDisplay
 	if c.program != nil {
 		size := c.dimensions.Load()
@@ -92,7 +114,14 @@ func (c *console) start(path string, args []string, mode string, ports map[strin
 		}
 		c.program.Send(child)
 	}
-	p, err := session.Start(path, args, mode, ports, root, managed, output)
+	p, err := session.Start(path, args, mode, ports, root, managed, output, func(operation, outcome string) {
+		c.record(activity.Event{Name: "channel", Session: runID, Operation: operation, Outcome: outcome})
+	})
+	event := "child_started"
+	if err != nil {
+		event = "launch_failed"
+	}
+	c.record(activity.Event{Name: event, Session: runID})
 	if child != nil {
 		child.process = p
 		close(child.ready)
@@ -106,16 +135,17 @@ func (c *console) start(path string, args []string, mode string, ports map[strin
 }
 
 type supervisorModel struct {
-	console              *console
-	cancel               context.CancelFunc
-	address, name, state string
-	local, singleRun     bool
-	width, height        int
-	conn                 connectionStatus
-	child                *childDisplay
-	running              bool
-	emulator             *vt.Emulator
-	inputDone            chan struct{}
+	console                     *console
+	cancel                      context.CancelFunc
+	address, name, state        string
+	journalPath, journalWarning string
+	local, singleRun            bool
+	width, height               int
+	conn                        connectionStatus
+	child                       *childDisplay
+	running                     bool
+	emulator                    *vt.Emulator
+	inputDone                   chan struct{}
 }
 type clockTick struct{}
 
@@ -151,6 +181,10 @@ func (m *supervisorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resize()
 	case attachOnly:
 		m.singleRun = true
+	case journalLocation:
+		m.journalPath = string(ev)
+	case journalFailure:
+		m.journalWarning = string(ev)
 	case connectionStatus:
 		m.conn = ev
 	case *childDisplay:
@@ -253,6 +287,13 @@ func (m *supervisorModel) View() tea.View {
 			s.SetCell(x, i, cell)
 			x += max(1, cell.Width)
 		}
+	}
+	if s.Height() > 2 && (m.journalWarning != "" || (!m.running && m.journalPath != "")) {
+		text := m.journalWarning
+		if text == "" {
+			text = "Log " + m.journalPath
+		}
+		uv.NewStyledString(terminalview.Printable(text)).Draw(&s, image.Rect(0, 2, s.Width(), min(3, s.Height())))
 	}
 	v.Content = s.Render()
 	return v

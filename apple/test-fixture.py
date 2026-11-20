@@ -128,7 +128,7 @@ def run(root, stack, suite, command):
 
     def session(mode, args, label, flags=(), env=None, filler=False):
         proc = launch(
-            supervisor + ["-mode", mode, "-local-input=false", *flags, "--", *args],
+            supervisor + ["--interactive", "-mode", mode, "-local-input=false", *flags, "--", *args],
             label,
             env,
         )

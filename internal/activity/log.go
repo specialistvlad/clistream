@@ -17,19 +17,20 @@ import (
 
 // Event intentionally has no free-form message, error or protocol payload.
 type Event struct {
-	Time       time.Time `json:"time"`
-	Name       string    `json:"event"`
-	Connection string    `json:"connection_id,omitempty"`
-	Device     string    `json:"device,omitempty"`
-	Address    string    `json:"address,omitempty"`
-	Role       string    `json:"role,omitempty"`
-	Supervisor string    `json:"supervisor_id,omitempty"`
-	Session    string    `json:"session_id,omitempty"`
-	Stream     *int64    `json:"stream_id,omitempty"`
-	Operation  string    `json:"operation,omitempty"`
-	Outcome    string    `json:"outcome,omitempty"`
-	ExitCode   *int      `json:"exit_code,omitempty"`
-	Duration   *int64    `json:"duration_ms,omitempty"`
+	RetrySeconds int       `json:"retry_seconds,omitempty"`
+	Time         time.Time `json:"time"`
+	Name         string    `json:"event"`
+	Connection   string    `json:"connection_id,omitempty"`
+	Device       string    `json:"device,omitempty"`
+	Address      string    `json:"address,omitempty"`
+	Role         string    `json:"role,omitempty"`
+	Supervisor   string    `json:"supervisor_id,omitempty"`
+	Session      string    `json:"session_id,omitempty"`
+	Stream       *int64    `json:"stream_id,omitempty"`
+	Operation    string    `json:"operation,omitempty"`
+	Outcome      string    `json:"outcome,omitempty"`
+	ExitCode     *int      `json:"exit_code,omitempty"`
+	Duration     *int64    `json:"duration_ms,omitempty"`
 }
 
 func Since(start time.Time) *int64 {
@@ -41,12 +42,20 @@ type Log struct {
 	mu          sync.Mutex
 	path        string
 	file        *os.File
-	stderr      io.Writer
+	display     func(Event, []byte)
+	failure     func(error)
 	size, limit int64
 }
 
 func Open(dir string, noFile bool, stderr io.Writer) *Log {
-	l := &Log{path: filepath.Join(dir, "server.log"), stderr: stderr, limit: 10 << 20}
+	return OpenJournal(filepath.Join(dir, "server.log"), noFile, func(_ Event, data []byte) { stderr.Write(data) }, func(err error) {
+		fmt.Fprintf(stderr, "clistreamd: activity log unavailable (%v), writing events to stderr\n", err)
+	})
+}
+
+// OpenJournal writes a private rotating journal and presents each serialized event.
+func OpenJournal(path string, noFile bool, display func(Event, []byte), failure func(error)) *Log {
+	l := &Log{path: path, display: display, failure: failure, limit: 10 << 20}
 	if !noFile {
 		if err := l.open(); err != nil {
 			l.fallback(err)
@@ -98,7 +107,7 @@ func (l *Log) fallback(err error) {
 		l.file.Close()
 		l.file = nil
 	}
-	fmt.Fprintf(l.stderr, "clistreamd: activity log unavailable (%v), writing events to stderr\n", err)
+	l.failure(err)
 }
 
 func (l *Log) Record(event Event) {
@@ -127,12 +136,16 @@ func (l *Log) Record(event Event) {
 			l.fallback(err)
 		}
 	}
-	l.stderr.Write(data)
+	l.display(event, data)
 }
 
 func (l *Log) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	if l.file != nil {
-		return l.file.Close()
+		err := l.file.Close()
+		l.file = nil
+		return err
 	}
 	return nil
 }

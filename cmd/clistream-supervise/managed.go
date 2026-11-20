@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
+	"github.com/specialistvlad/clistream/internal/activity"
 	"github.com/specialistvlad/clistream/internal/client"
 	"github.com/specialistvlad/clistream/internal/driver"
 	"github.com/specialistvlad/clistream/internal/files"
@@ -95,7 +96,8 @@ func (settings launchSettings) validate(cmd [][]byte) ([]string, driver.Profile,
 
 func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wire.Supervisor, path string, args []string, ports map[string]string, root *files.Root, local bool, settings launchSettings) (int, error) {
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	var workers sync.WaitGroup
+	defer func() { cancel(); workers.Wait() }()
 	var current atomic.Pointer[session.Process]
 	var inputEnded atomic.Bool
 
@@ -105,15 +107,16 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 	start := func() {
 		state.Revision++
 		state.Exit = nil
-		p, err := reg.console.start(path, args, state.Info.Mode, ports, root, true, state.Info.Name)
+		runID := uniqueID()
+		p, err := reg.console.start(runID, path, args, state.Info.Mode, ports, root, true, state.Info.Name)
 		state.Failed = err != nil
 		if err != nil {
-			if reg.console.program == nil {
+			if reg.console.program == nil && !reg.console.logOnly {
 				fmt.Fprintln(os.Stderr, "child launch failed")
 			}
 			return
 		}
-		state.Info.ID = uniqueID()
+		state.Info.ID = runID
 		r := &childRun{process: p, ended: make(chan struct{})}
 		run = r
 		ended = r.ended
@@ -133,6 +136,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 		}
 		current.Store(nil)
 		run.close()
+		reg.console.exit(state.Info.ID, run.code)
 		reg.console.stopped(fmt.Sprintf("Stopped · exit %d", run.code))
 		state.Exit = &run.code
 		state.Revision++
@@ -173,7 +177,9 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 	reconnect := func() {
 		ready := make(chan registrationResult)
 		recovered = ready
+		workers.Add(1)
 		go func() {
+			defer workers.Done()
 			var revision uint64
 			c, err := retry(ctx, reg.console, time.Second, func(ctx context.Context) (*quic.Conn, error) {
 				c, err := identity.Dial(ctx, reg.dir, reg.server)
@@ -188,6 +194,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 					c.CloseWithError(1, "publication failed")
 					return nil, err
 				}
+				reg.console.record(activity.Event{Name: "registered", Session: snapshot.Info.ID})
 				return c, nil
 			})
 			select {
@@ -227,6 +234,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 		case <-ctx.Done():
 			return 0, nil
 		case <-lost:
+			reg.console.record(activity.Event{Name: "connection_lost"})
 			cause := context.Cause(conn.Context())
 			conn = nil
 			lost = nil
@@ -279,8 +287,10 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 				}()
 				continue
 			}
+			outcome := "completed"
 			response := wire.Message{Op: "ok"}
 			if m.ID != state.ID || m.Run != state.Info.ID || m.Revision != state.Revision {
+				outcome = "failed"
 				wire.Fail(st, errors.New("stale supervisor"))
 			} else if m.Op == "command" {
 				response.Command = [][]byte{[]byte(path)}
@@ -297,8 +307,10 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 				default:
 				}
 				if m.Revision != state.Revision {
+					outcome = "failed"
 					wire.Fail(st, errors.New("stale supervisor"))
 				} else if err != nil {
+					outcome = "failed"
 					wire.Fail(st, errors.New("invalid command"))
 				} else {
 					if run != nil {
@@ -314,6 +326,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 					start()
 					if state.Failed {
 						path, args, state.Info = oldPath, oldArgs, oldInfo
+						outcome = "failed"
 						response = wire.Message{Op: "error", Error: "child launch failed", Revision: state.Revision}
 					} else {
 						response.Run = state.Info.ID
@@ -339,12 +352,18 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 				publish()
 				if state.Failed {
 					args = previousArgs
+					outcome = "failed"
 					wire.Fail(st, errors.New("child launch failed"))
 				} else {
 					wire.Write(st, response)
 				}
 			} else {
+				outcome = "failed"
 				wire.Fail(st, errors.New("invalid action"))
+			}
+			switch m.Op {
+			case "command", "arguments", "start", "stop", "restart", "apply", "run-command":
+				reg.console.record(activity.Event{Name: "remote_request", Session: m.Run, Operation: m.Op, Outcome: outcome})
 			}
 			st.Close()
 			st.CancelRead(0)

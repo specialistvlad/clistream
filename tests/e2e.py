@@ -65,7 +65,7 @@ class BrokerFixture(unittest.TestCase):
         self.work.mkdir()
         self.address = f"127.0.0.1:{port(socket.SOCK_DGRAM)}"
         self.server = [DAEMON, "-state", self.base / "server", "-qr=false"]
-        self.supervisor = [SUP, "-once", "-state", self.base / "supervisor"]
+        self.supervisor = [SUP, "--interactive", "-once", "-state", self.base / "supervisor"]
         self.a = [CLI, "-state", self.base / "a"]
         self.b = [CLI, "-state", self.base / "b"]
         self.start_server()
@@ -181,7 +181,7 @@ while True:
 
 class Live(BrokerFixture):
     def managed(self, cmd, flags=()):
-        return self.spawn([SUP, "-state", self.base / "supervisor", "-local-input=false", *flags, "--", *cmd],
+        return self.spawn([SUP, "--interactive", "-state", self.base / "supervisor", "-local-input=false", *flags, "--", *cmd],
                           cwd=self.work)
 
     def test_framed_terminal(self):
@@ -223,7 +223,7 @@ class Live(BrokerFixture):
 
     def test_no_remote_restart(self):
         script = 'while read -r word; do echo "received-$word"; done; exit 23'
-        sup = self.spawn([SUP, "-no-remote-restart", "-state", self.base / "supervisor",
+        sup = self.spawn([SUP, "--interactive", "-no-remote-restart", "-state", self.base / "supervisor",
                           "-mode", "pty", "-local-input=false", "--", "/bin/sh", "-c", script])
         sid = status_line(sup.stderr, b"session ").split()[1].decode()
         first = DashboardTerminal(self)
@@ -289,7 +289,7 @@ class Live(BrokerFixture):
         executable = self.work / "codex"
         executable.write_text('#!/bin/sh\nprintf "argc=%s arg=%s\\n" "$#" "$1"\nread value\n')
         executable.chmod(0o700)
-        child = self.spawn([SUP, "-state", self.base / "supervisor", "-local-input=false", "codex"],
+        child = self.spawn([SUP, "--interactive", "-state", self.base / "supervisor", "-local-input=false", "codex"],
                            env={**os.environ, "PATH": str(self.work) + os.pathsep + os.environ["PATH"]})
         before = status_line(child.stderr, b"session ").split()[1]
         ui = DashboardTerminal(self)
@@ -635,7 +635,7 @@ class Live(BrokerFixture):
         shell = shutil.which("zsh") or "/bin/sh"
         fd, viewer = terminal([shell, "-c", 'exec "$@" ' + fresh.decode(), "test", *guest])
         until(fd, b"Waiting for supervisors")
-        shared = self.spawn([SUP, "-once", "-state", self.base / "display-supervisor", fresh, "/bin/sh", "-c", "echo first-ready; while read -r x; do echo reply-$x; done"])
+        shared = self.spawn([SUP, "--interactive", "-once", "-state", self.base / "display-supervisor", fresh, "/bin/sh", "-c", "echo first-ready; while read -r x; do echo reply-$x; done"])
         status_line(shared.stderr, b"session ")
         until(fd, b"Enter Attach")
         os.write(fd, b"\r")
@@ -729,7 +729,7 @@ class Live(BrokerFixture):
         b = self.run_cli(second + ["invite"]).stdout.strip()
         self.run_cli([CLI, "-state", root / "client", a])
         self.run_cli([SUP, "-once", "-state", root / "supervisor", b, "true"])
-        proc = self.spawn([SUP, "-once", "cat"], env=env)
+        proc = self.spawn([SUP, "--interactive", "-once", "cat"], env=env)
         sid = status_line(proc.stderr, b"session ").split()[1].decode()
         self.assertFalse(json.loads(self.run_cli([CLI], env=env).stdout))
         self.assertEqual(json.loads(self.run_cli([CLI, b], env=env).stdout)[0]["ID"], sid)
@@ -738,7 +738,7 @@ class Live(BrokerFixture):
         self.assertEqual(len(self.run_cli(second + ["devices"]).stdout.splitlines()), 1)
 
     def test_supervisor_positional_pair_and_launch(self):
-        sup = [SUP, "-once", "-state", self.base / "new-supervisor"]
+        sup = [SUP, "--interactive", "-once", "-state", self.base / "new-supervisor"]
         missing = self.run_cli(sup + ["/bin/sh"], check=False)
         self.assertIn(b"clistreamd invite", missing.stderr)
         output = self.run_cli([DAEMON, "-state", self.base / "server", "supervisor"]).stdout
@@ -969,12 +969,100 @@ class Live(BrokerFixture):
         self.assertEqual({e["operation"] for e in events if e["event"] == "channel_close"},
                          {"port/tcp", "port/udp"})
 
+    def test_supervisor_activity_default(self):
+        state = self.base / "supervisor"
+        script = ('if (exec 9<>/dev/tty) 2>/dev/null; then exit 8; fi; '
+                  'echo private-output; echo private-error >&2; read value || exit 9; echo "reply-$value"')
+        proc = self.spawn([SUP, "-state", state, "/bin/sh", "-c", script], cwd=self.work)
+        proc.stdin.write(b"private-local-input\n")
+        proc.stdin.close()
+        self.assertIn(b"Activity log", line(proc.stderr))
+        with (self.base / "feed").open("wb") as feed:
+            while True:
+                msg = line(proc.stderr)
+                self.assertTrue(msg)
+                feed.write(msg)
+                if b"Child started" in msg:
+                    break
+        deadline = time.monotonic() + 5
+        while not (sessions := json.loads(self.run_cli(self.a + ["list"]).stdout)):
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.03)
+        sid = sessions[0]["ID"]
+        file = self.work / "private-filename"
+        file.write_bytes(b"private-content")
+        self.run_cli(self.a + ["get", sid, file.name, self.base / "copy"])
+        viewer = self.spawn(self.a + ["attach", sid])
+        out, err = viewer.communicate(b"private-remote-input\n", timeout=8)
+        self.assertEqual(viewer.returncode, 0)
+        self.assertIn(b"private-output", out)
+        self.assertIn(b"reply-private-remote-input", out)
+        self.assertIn(b"private-error", err)
+        proc.terminate()
+        self.assertEqual(proc.wait(8), 0)
+        self.assertEqual(proc.stdout.read(), b"")
+        feed = (self.base / "feed").read_bytes() + proc.stderr.read()
+        self.assertIn(b"File download completed", feed)
+        self.assertIn(b"Child exited (status 0)", feed)
+        journal, = (state / "logs").glob("supervisor-*.log")
+        self.assertEqual(journal.stat().st_mode & 0o777, 0o600)
+        data = journal.read_bytes()
+        self.assertNotIn(b"private-", data + feed)
+        events = [json.loads(row) for row in data.splitlines()]
+        self.assertEqual({e["supervisor_id"] for e in events}, {journal.stem.removeprefix("supervisor-")})
+        self.assertTrue(any(e["event"] == "channel" and e["operation"] == "fs/get" and
+                            e["outcome"] == "completed" and e["session_id"] == sid for e in events))
+
+    def test_concurrent_supervisor_journals(self):
+        state = self.base / "supervisor"
+        procs = [self.spawn([SUP, "-state", state, "-once", "/bin/cat"]) for _ in range(2)]
+        for proc in procs:
+            while b"Child started" not in (msg := line(proc.stderr)):
+                self.assertTrue(msg)
+        self.assertEqual(len(json.loads(self.run_cli(self.a + ["list"]).stdout)), 2)
+        for proc in procs:
+            proc.terminate()
+            proc.wait(8)
+        paths = list((state / "logs").glob("*.log"))
+        self.assertEqual(len(paths), 2)
+        for path in paths:
+            events = [json.loads(row) for row in path.read_text().splitlines()]
+            self.assertEqual({e["supervisor_id"] for e in events}, {path.stem.removeprefix("supervisor-")})
+            self.assertEqual(sum(e["event"] == "child_exited" for e in events), 1)
+
+    def test_supervisor_activity_terminal(self):
+        state = self.base / "supervisor"
+        ui = DashboardTerminal(self, [SUP, "-once", "-state", state, "/bin/sh", "-c",
+                                      'test -t 0 || exit 9; echo private-output; read x; echo "reply-$x"'])
+        start = ui.until(b"Child started")
+        ui.send(b"private-local-input\r")
+        sid, = json.loads(self.run_cli(self.a + ["list"]).stdout)
+        child = self.spawn(self.a + ["attach", sid["ID"]])
+        self.assertIn(b"private-output", line(child.stdout))
+        child.stdin.write(b"remote\n")
+        output, _ = child.communicate(timeout=8)
+        self.assertIn(b"reply-remote", output)
+        self.assertNotIn(b"private-local-input", output)
+        finish = ui.until(b"Child exited")
+        self.assertNotIn(b"private-", start + finish)
+        self.assertNotIn(b"\x1b[?1049h", start + finish)
+        self.assertEqual(ui.process.wait(8), 0)
+
+    def test_supervisor_journal_unavailable(self):
+        state = self.base / "supervisor"
+        (state / "logs").write_text("not a directory")
+        result = self.run_cli([SUP, "-state", state, "-once", "/bin/echo", "private-output"])
+        self.assertEqual(result.stdout, b"")
+        self.assertIn(b"log unavailable", result.stderr)
+        self.assertIn(b"Child exited (status 0)", result.stderr)
+        self.assertNotIn(b"private-output", result.stderr)
+
     def test_supervisor_console_reconnect(self):
         self.daemon.terminate()
         self.daemon.wait(8)
         launches = self.base / "launches"
         script = 'echo $$ >> "$1"; printf "\\033[2J\\033[H"; echo LOCAL-READY; while read v; do [ "$v" = end ] && exit 23; echo "reply:$v"; done'
-        console = DashboardTerminal(self, [SUP, "-state", self.base / "supervisor",
+        console = DashboardTerminal(self, [SUP, "--interactive", "-state", self.base / "supervisor",
                                            "/bin/sh", "-c", script, "sh", launches])
         console.until(b"CLIStream Supervisor")
         console.until(b"Reconnecting")
@@ -1009,6 +1097,10 @@ class Live(BrokerFixture):
                 viewer.wait(8)
             else:
                 self.assertFalse(sessions)
+        journal, = (self.base / "supervisor/logs").glob("*.log")
+        events = [json.loads(row)["event"] for row in journal.read_text().splitlines()]
+        self.assertEqual(events.count("child_started"), 1)
+        self.assertEqual(events.count("registered"), 3)
         self.assertEqual(len(launches.read_text().splitlines()), 1)
         console.send(b"\x03")
         self.assertEqual(console.process.wait(8), 0)
@@ -1034,7 +1126,7 @@ class Live(BrokerFixture):
     def test_supervisor_console_read_only_restart(self):
         seen = self.base / "seen"
         script = 'echo WATCHING; while read word; do echo "$word" >> "$1"; done'
-        local = DashboardTerminal(self, [SUP, "-local-input=false", "-state", self.base / "supervisor",
+        local = DashboardTerminal(self, [SUP, "--interactive", "-local-input=false", "-state", self.base / "supervisor",
                                          "/bin/sh", "-c", script, "sh", seen])
         local.until(b"WATCHING")
         local.send(b"ignored\r")
@@ -1057,6 +1149,14 @@ class Live(BrokerFixture):
         self.assertEqual(viewer.wait(8), 128)
         local.send(b"\x03")
         self.assertEqual(local.process.wait(8), 0)
+        journal, = (self.base / "supervisor/logs").glob("*.log")
+        events = [json.loads(row) for row in journal.read_bytes().splitlines()]
+        runs = {e["session_id"] for e in events if e["event"] == "child_started"}
+        self.assertEqual(len(runs), 2)
+        self.assertIn(sid, runs)
+        self.assertTrue(any(e["event"] == "remote_request" and e["operation"] == "run-command"
+                            and e["outcome"] == "completed" for e in events))
+        self.assertNotIn(b"replacement-visible", journal.read_bytes())
 
     def test_supervisor_refuses_wrong_pin(self):
         path = self.base / "supervisor/server.json"

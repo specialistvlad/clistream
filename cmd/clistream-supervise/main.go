@@ -16,6 +16,7 @@ import (
 	"syscall"
 
 	"github.com/quic-go/quic-go"
+	"github.com/specialistvlad/clistream/internal/activity"
 	"github.com/specialistvlad/clistream/internal/client"
 	"github.com/specialistvlad/clistream/internal/driver"
 	"github.com/specialistvlad/clistream/internal/files"
@@ -42,7 +43,8 @@ func run() (int, error) {
 	addr := flag.String("server", "", "override paired host:port (same pinned key)")
 	once := flag.Bool("once", false, "exit with the first child's status")
 	flag.BoolVar(once, "no-remote-restart", false, "share one attach-only run and exit with its status (alias for -once)")
-	local := flag.Bool("local-input", true, "forward local stdin (pipe EOF closes child stdin)")
+	interactive := flag.Bool("interactive", false, "show the child terminal or use child streams when redirected")
+	local := flag.Bool("local-input", true, "forward local stdin with --interactive (pipe EOF closes child stdin)")
 	ports := map[string]string{}
 	flag.Func("export", "name=tcp:127.0.0.1:port or name=udp:[::1]:port", func(v string) error {
 		k, s, ok := strings.Cut(v, "=")
@@ -119,10 +121,25 @@ func run() (int, error) {
 		return 1, e
 	}
 	defer root.Close()
-	console, closeConsole := startConsole(ctx, cancel, terminal, *local, info.Name, saved.Address)
+	console, closeConsole := startConsole(ctx, cancel, terminal && *interactive, *local, info.Name, saved.Address)
 	reg.console = console
 	defer closeConsole()
-	state := wire.Supervisor{ID: uniqueID(), Revision: 1, Info: info}
+	instance := uniqueID()
+	console.logOnly = !*interactive
+	if console.logOnly {
+		signal.Ignore(syscall.SIGPIPE)
+		if terminal {
+			restore, err := termio.QuietInput()
+			if err != nil {
+				return 1, err
+			}
+			defer restore()
+		}
+	}
+	console.openJournal(directory, instance)
+	defer console.journal.Close()
+	localInput := *interactive && *local
+	state := wire.Supervisor{ID: instance, Revision: 1, Info: info}
 	managed := false
 	c, e := retry(ctx, reg.console, 0, func(ctx context.Context) (*quic.Conn, error) {
 		if !*once {
@@ -137,13 +154,14 @@ func run() (int, error) {
 				err = publishState(probe, state)
 			}
 			if err == nil && managed {
+				console.record(activity.Event{Name: "registered"})
 				return probe, nil
 			}
 			probe.CloseWithError(0, "discovery finished")
 			if err != nil {
 				return nil, err
 			}
-			if reg.console.program == nil {
+			if reg.console.program == nil && !console.logOnly {
 				fmt.Fprintln(os.Stderr, "Server supports attach only. Using one-shot supervision.")
 			}
 		}
@@ -164,17 +182,22 @@ func run() (int, error) {
 		return 0, nil
 	}
 	if e != nil {
+		console.record(activity.Event{Name: "connection_failed"})
 		return 1, e
 	}
 	defer c.CloseWithError(0, "finished")
 	if managed {
-		return supervise(ctx, reg, c, state, path, args[1:], ports, root, *local, launchSettings{*name, *mode, terminal})
+		return supervise(ctx, reg, c, state, path, args[1:], ports, root, localInput, launchSettings{*name, *mode, terminal})
 	}
 	if console.program != nil {
 		console.program.Send(attachOnly{})
 	}
-	p, e := reg.console.start(path, args[1:], profile.Mode, ports, root, false, info.Name)
+	runID := console.lastSession
+	p, e := reg.console.start(runID, path, args[1:], profile.Mode, ports, root, false, info.Name)
 	if e != nil {
+		if console.logOnly {
+			return 1, nil
+		}
 		return 1, e
 	}
 	done := make(chan struct{})
@@ -182,7 +205,7 @@ func run() (int, error) {
 	defer func() { cancel(); <-done }()
 	stop := context.AfterFunc(ctx, func() { p.Cmd.Process.Signal(syscall.SIGTERM) })
 	defer stop()
-	if *local && !terminal {
+	if localInput && !terminal {
 		if profile.Mode == "pty" && term.IsTerminal(int(os.Stdin.Fd())) {
 			defer termio.Setup(func(w, h uint16) { p.Resize(w, h) })()
 		}
@@ -192,5 +215,7 @@ func run() (int, error) {
 			}
 		}()
 	}
-	return p.Wait(), nil
+	code := p.Wait()
+	console.exit(runID, code)
+	return code, nil
 }

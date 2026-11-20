@@ -4,6 +4,12 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Default supervisor activity feed · November 20, 2026
+
+Real terminal and pipe tests verified that plain launches showed readable operations, kept child output off the host console, and left the child available for remote input after local typing and EOF. A foreground Ctrl-C check verified orderly shutdown and terminal restoration. The tests compared a file-download event in the feed and private journal, checked that payload and path markers were absent, verified distinct journals for concurrent supervisors, and continued supervision when the journal directory was unavailable. Interactive replacement and broker reconnects reused the same journal. The shared writer’s rotation and failure cases passed under the race detector.
+
+The Linux deployment and mixed-version Go compatibility suites passed. Both CLI platform suites exercised 48 cases with two optional skips on macOS and five on Linux. Native Apple testing remains deferred.
+
 ## Local supervisor console and connection recovery · November 20, 2026
 
 Real PTYs exercised cold startup with an unavailable broker, cancellation before launch, two broker outages, input while disconnected, reattachment to the same run, and publication of a child’s offline exit. The child’s launch record contained exactly one PID. Other cases verified editable remote restart in a read-only local view, clear and alternate-screen sequences, translated mouse input, paste, Ctrl-C, Ctrl-D, resize, attach-only exit during backoff, and rejection of a wrong server pin. A controlled Go clock checked the retry schedule through the 30-second cap, reset and cancellation.

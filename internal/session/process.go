@@ -28,6 +28,7 @@ type Process struct {
 	ptyDone  chan struct{}
 	ports    map[string]string
 	mu       sync.Mutex
+	observe  func(string, string)
 	managed  bool
 	closing  bool
 	readers  sync.WaitGroup
@@ -36,10 +37,11 @@ type Process struct {
 type LocalOutput struct {
 	Stdout, Stderr io.Writer
 	Cols, Rows     uint16
+	DetachTerminal bool
 }
 
-func Start(path string, args []string, mode string, ports map[string]string, root *files.Root, managed bool, output LocalOutput) (*Process, error) {
-	p := &Process{managed: managed, Root: root, Cmd: exec.Command(path, args...), ports: ports, out: map[string]*history{}}
+func Start(path string, args []string, mode string, ports map[string]string, root *files.Root, managed bool, output LocalOutput, observe func(string, string)) (*Process, error) {
+	p := &Process{observe: observe, managed: managed, Root: root, Cmd: exec.Command(path, args...), ports: ports, out: map[string]*history{}}
 	if mode == "pty" {
 		h := newHistory()
 		p.out["pty"] = h
@@ -55,8 +57,13 @@ func Start(path string, args []string, mode string, ports map[string]string, roo
 	}
 	p.out["stdout"] = newHistory()
 	p.out["stderr"] = newHistory()
-	if managed {
+	if output.DetachTerminal {
+		// A pipe child must not reopen the supervisor's controlling terminal.
+		p.Cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	} else if managed {
 		p.Cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	}
+	if managed {
 		p.Cmd.WaitDelay = time.Second
 	}
 	p.Cmd.Stdout = io.MultiWriter(p.out["stdout"], output.Stdout)
@@ -145,10 +152,37 @@ func (p *Process) handle(s *quic.Stream) error {
 	return p.Handle(s, m)
 }
 func (p *Process) KillGroup() { _ = syscall.Kill(-p.Cmd.Process.Pid, syscall.SIGKILL) }
-func (p *Process) Handle(s *quic.Stream, m wire.Message) error {
-	var e error
+func (p *Process) Handle(s *quic.Stream, m wire.Message) (e error) {
 	if m.Op != "open" {
 		return errors.New("expected open")
+	}
+	if p.observe != nil {
+		op := "unknown"
+		terminal := false
+		switch m.Channel {
+		case "stdin", "stdout", "stderr", "pty":
+			op = m.Channel
+			terminal = true
+		case "fs/get", "fs/put", "fs/list":
+			op = m.Channel
+		default:
+			if dest, ok := p.ports[m.Channel]; ok {
+				network, _, _ := strings.Cut(dest, ":")
+				if network == "tcp" || network == "udp" {
+					op = "port/" + network
+				}
+			}
+		}
+		defer func() {
+			outcome := "completed"
+			if terminal {
+				outcome = "closed"
+			}
+			if e != nil {
+				outcome = "failed"
+			}
+			p.observe(op, outcome)
+		}()
 	}
 	if strings.HasPrefix(m.Channel, "fs/") {
 		return p.Root.Handle(s, m)
@@ -165,6 +199,9 @@ func (p *Process) Handle(s *quic.Stream, m wire.Message) error {
 		defer p.readers.Done()
 		if e = wire.Write(s, ok); e != nil {
 			return e
+		}
+		if p.observe != nil {
+			p.observe(m.Channel, "opened")
 		}
 		if e = h.stream(s.Context(), func(m wire.Message) error { return wire.Write(s, m) }); e != nil {
 			return e
@@ -190,6 +227,9 @@ func (p *Process) Handle(s *quic.Stream, m wire.Message) error {
 	}
 	if e = wire.Write(s, ok); e != nil {
 		return e
+	}
+	if p.observe != nil {
+		p.observe("stdin", "opened")
 	}
 	for {
 		m, e = wire.Read(s)

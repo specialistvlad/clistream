@@ -16,6 +16,12 @@ On Linux and macOS, `clistream-supervise PROGRAM [ARG ...]` keeps the supervisor
 
 A paired supervisor waits for broker registration before launching its first child. After a transient failure it waits 1, 2, 4, 8, 16, then at most 30 seconds between connection attempts. A successful registration resets the delay. An existing child keeps running locally during recovery. A managed child that exits offline is listed as stopped when the broker returns. An attach-only supervisor exits with its child’s status even while reconnecting. A rejected identity or mismatched server key ends automatic retries. Check the server address and pair with a fresh invitation from the intended daemon.
 
+## Supervisor activity logs
+
+Plain `clistream-supervise PROGRAM` runs with a readable stderr feed and empty stdout, including under a service manager. The feed shows registration, connection and retry status, child starts and exits, remote lifecycle requests, terminal channel boundaries, file operations and forwards. Keep using the client for child input and output. Local stdin may close without ending the child. Use `--interactive` before the program name to opt scripts into child streams or a terminal into the framed local view.
+
+Each supervisor process writes UTC JSON lines to `logs/supervisor-<instance-id>.log` under its selected identity directory (`-state DIR` selects `DIR/logs`). The feed shows the location at startup. The interactive view shows it while waiting to start. The same journal follows replacements and broker reconnects. Each file has mode 0600 and rotates at 10 MiB with five backups per instance. Journals from previous supervisor processes remain in the directory. A journal failure appears locally and supervision continues.
+
 ## Server activity logs
 
 The serving daemon writes each activity event as one JSON line to both standard error and `server.log`. Foreground operators see actions as they happen. Under a service manager, the console copy goes to the configured stderr destination. On Linux the default location is `${XDG_CONFIG_HOME:-$HOME/.config}/clistream/server/server.log`. On macOS it is `~/Library/Application Support/clistream/server/server.log`. With `-state DIR`, follow the file with `tail -F "DIR/server.log"`, substituting your state directory. Files have mode 0600. Before the next record would exceed 10 MiB, the daemon rotates the active log to `server.log.1` and keeps up to five previous files.

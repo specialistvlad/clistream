@@ -15,7 +15,7 @@ class Compatibility(BrokerFixture):
         self.daemon.wait(8)
         self.server[0] = self.legacy / "clistreamd"
         self.start_server()
-        child = self.spawn([SUP, "-state", self.base / "supervisor", "/bin/sh", "-c",
+        child = self.spawn([SUP, "--interactive", "-state", self.base / "supervisor", "/bin/sh", "-c",
                             "echo legacy-ready; read value; exit 17"])
         status_line(child.stderr, b"Server supports attach only")
         status_line(child.stderr, b"session ")
@@ -39,7 +39,7 @@ class Compatibility(BrokerFixture):
                     self.server[0] = previous / "clistreamd"
                     self.start_server()
                 supervisor = previous / "clistream-supervise" if old_supervisor else SUP
-                child = self.spawn([supervisor, "-state", self.base / "supervisor", "/bin/cat"])
+                child = self.spawn([supervisor, *([] if old_supervisor else ["--interactive"]), "-state", self.base / "supervisor", "/bin/cat"])
                 old = status_line(child.stderr, b"session ").split()[1]
                 cli = [previous / "clistream", "-state", self.base / "a"] if old_dashboard else self.a
                 dashboard = DashboardTerminal(self, cli)
@@ -68,7 +68,7 @@ class Compatibility(BrokerFixture):
         self.assertEqual(line(child.stdout), b"old-supervisor\n")
         child.terminate()
         child.wait(8)
-        managed = self.spawn([SUP, "-state", self.base / "supervisor", "/bin/cat"])
+        managed = self.spawn([SUP, "--interactive", "-state", self.base / "supervisor", "/bin/cat"])
         sid = status_line(managed.stderr, b"session ").split()[1]
         legacy = [self.legacy / "clistream", "-state", self.base / "a"]
         self.assertEqual(json.loads(self.run_cli(legacy + ["list"]).stdout)[0]["ID"].encode(), sid)

@@ -38,7 +38,7 @@ class SharedAppleSession(BrokerFixture):
         cls.package = APP / "build/accept-ios/Build/Products/Debug-iphonesimulator/CLIStreamSharedTestHost.app"
 
     def test_simultaneous_clients(self):
-        child = self.spawn([SUP, "-state", self.base / "supervisor", "-mode", "pipe", "/bin/sh", "-c",
+        child = self.spawn([SUP, "--interactive", "-state", self.base / "supervisor", "-mode", "pipe", "/bin/sh", "-c",
                             'while IFS= read -r v; do echo "out:$v"; echo "err:$v" >&2; done'])
         first = status_line(child.stderr, b"session ").split()[1].decode()
         dashboard = DashboardTerminal(self)

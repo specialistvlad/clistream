@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
+	"github.com/specialistvlad/clistream/internal/activity"
 	"github.com/specialistvlad/clistream/internal/identity"
 	"github.com/specialistvlad/clistream/internal/session"
 	"github.com/specialistvlad/clistream/internal/wire"
@@ -38,6 +39,7 @@ func (r registration) connect(ctx context.Context) (*quic.Conn, error) {
 		return nil, e
 	}
 	st.Close()
+	r.console.record(activity.Event{Name: "registered", Session: res.ID})
 	r.console.session(res.ID)
 	return c, nil
 }
@@ -50,6 +52,7 @@ func (r registration) serve(ctx context.Context, p *session.Process, c *quic.Con
 		if ctx.Err() != nil {
 			return
 		}
+		r.console.record(activity.Event{Name: "connection_lost"})
 		err := context.Cause(active.Context())
 		if !permanent(err) {
 			c, err = retry(ctx, r.console, time.Second, r.connect)
