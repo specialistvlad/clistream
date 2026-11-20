@@ -52,9 +52,9 @@ jobs:
           mkdir -p results
           for bundle in apple/build/results-*/*.xcresult; do
             [[ -f "$bundle/Info.plist" ]] || continue
-            xcrun xcresulttool get test-results tests --path "$bundle" |
-              jq '[.. | objects | select(.nodeType? == "Test Case") | {test: .nodeIdentifier, result, duration}]' \
-                > "results/$(basename "$bundle" .xcresult).json"
+            report="results/$(basename "$bundle" .xcresult).json"
+            python3 apple/report-tests.py "$bundle" > "$report"
+            cat "$report"
           done
       - uses: actions/upload-artifact@v4
         if: always()

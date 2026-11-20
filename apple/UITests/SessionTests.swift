@@ -1,5 +1,9 @@
 import XCTest
 
+#if os(iOS)
+  import UIKit
+#endif
+
 final class SessionTests: XCTestCase {
   @MainActor func testPairAndUseSession() async throws {
     let env = ProcessInfo.processInfo.environment
@@ -124,6 +128,33 @@ final class SessionTests: XCTestCase {
       input.press(forDuration: 1)
       tap(app.descendants(matching: .any)["Paste"].firstMatch)
       tap(app.buttons["Send"])
+
+      // Use UIKit's text layout for these coordinates, including Dynamic Type
+      // and wrapping in a narrow split view. The OS owns the selection handles.
+      word.press(forDuration: 1)
+      let geometry = UITextView(frame: CGRect(origin: .zero, size: output.frame.size))
+      geometry.font = UIFontMetrics(forTextStyle: .body).scaledFont(
+        for: .monospacedSystemFont(ofSize: 17, weight: .regular),
+        compatibleWith: UITraitCollection(preferredContentSizeCategory: .accessibilityLarge))
+      geometry.text = "copyword selection"
+      geometry.layoutIfNeeded()
+      func point(after offset: Int, handle: Bool) throws -> XCUICoordinate {
+        let pos = try XCTUnwrap(
+          geometry.position(from: geometry.beginningOfDocument, offset: offset))
+        let caret = geometry.caretRect(for: pos)
+        return output.coordinate(withNormalizedOffset: .zero).withOffset(
+          CGVector(dx: caret.midX, dy: handle ? caret.maxY + 3 : caret.midY))
+      }
+      let handle = try point(after: 8, handle: true)
+      handle.press(
+        forDuration: 0.15, thenDragTo: try point(after: 18, handle: false),
+        withVelocity: .slow, thenHoldForDuration: 0.2)
+      let copy = app.descendants(matching: .any)["Copy"].firstMatch
+      if !copy.waitForExistence(timeout: 2) { word.tap() }
+      tap(copy)
+      input.press(forDuration: 1)
+      tap(app.descendants(matching: .any)["Paste"].firstMatch)
+      tap(app.buttons["Send"])
       tap(app.buttons["Files"])
       openEntry("inbox", in: app)
       openEntry("nested", in: app)
@@ -142,7 +173,9 @@ final class SessionTests: XCTestCase {
           withNormalizedOffset:
             CGVector(dx: 0.85, dy: 0.5)), withVelocity: .fast, thenHoldForDuration: 0)
       XCTAssertTrue(app.navigationBars["inbox"].waitForExistence(timeout: 5))
-      try app.performAccessibilityAudit(for: [.sufficientElementDescription, .contrast, .dynamicType])
+      try app.performAccessibilityAudit(for: [
+        .sufficientElementDescription, .contrast, .dynamicType,
+      ])
       tap(app.buttons["Done"])
       tap(app.buttons["Detach"])
     }

@@ -33,6 +33,14 @@ struct WorkspaceBrowser: View {
 
   var body: some View {
     observedNavigation
+      #if os(iOS)
+        .safeAreaInset(edge: .bottom) {
+          HStack {
+            transferActions
+          }.font(.body).buttonStyle(.bordered).padding().frame(maxWidth: .infinity)
+          .background(.bar)
+        }
+      #endif
       .fileImporter(isPresented: $importer, allowedContentTypes: [.data], onCompletion: imported)
       .fileExporter(
         isPresented: $exporter, item: download, contentTypes: [.data],
@@ -154,19 +162,23 @@ struct WorkspaceBrowser: View {
     .navigationTitle(
       folder == "." ? session.Name + " Files" : URL(fileURLWithPath: folder).lastPathComponent
     )
-    .toolbar {
-      #if os(macOS)
+    #if os(macOS)
+      .toolbar {
         Button("Up") { location.path.removeLast() }.keyboardShortcut(.upArrow, modifiers: .command)
-          .disabled(location.path.isEmpty || active)
+        .disabled(location.path.isEmpty || active)
         if let name = location.selections[folder],
           let entry = entries.first(where: { $0.Name == name })
         {
           Button(entry.Directory ? "Open" : "Download") { open(name) }.keyboardShortcut("o")
         }
-      #endif
-      Button("Upload") { importer = true }.disabled(active)
-      Button("Done") { dismiss() }.keyboardShortcut(.cancelAction).disabled(active)
-    }
+        transferActions
+      }
+    #endif
+  }
+
+  @ViewBuilder private var transferActions: some View {
+    Button("Upload") { importer = true }.disabled(active)
+    Button("Done") { dismiss() }.keyboardShortcut(.cancelAction).disabled(active)
   }
 
   private func open(_ name: String) {

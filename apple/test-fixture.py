@@ -268,7 +268,8 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
         assert b"out:echo" in (root / "observer.out").read_bytes()
         assert (work / "inbox/nested" / f"{name}.txt").read_bytes() == sample
     elif suite == "touch":
-        assert b"out:copyword\n" in (root / "observer.out").read_bytes()
+        observed = (root / "observer.out").read_bytes().splitlines()
+        assert b"out:copyword" in observed and b"out:copyword selection" in observed, observed
     elif suite == "terminal":
         received = capture.read_bytes()
         assert b"\x1b[<0;1;1M" in received, (

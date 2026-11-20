@@ -190,7 +190,7 @@ final class ClientTests: XCTestCase {
   @MainActor
   func testPTYRenderingKeyboardResizeAndExit() async throws {
     let model = Connection()
-    let link = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PTY_LINK"])
+    let link = try await testInvitation("PTY")
     await model.pair(link)
     let id = try session("PTY_SESSION")
     let item = try XCTUnwrap(model.sessions.first { $0.id == id })
