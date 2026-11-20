@@ -741,5 +741,17 @@
       "TestActivityLog"
     ],
     "result": "passed"
+  },
+  "pipeClientFrame": {
+    "platforms": [
+      "macOS arm64",
+      "Linux arm64"
+    ],
+    "endToEndCasesPerPlatform": 46,
+    "cases": [
+      "TestPipeOutputKeepsClientFrame",
+      "TestCompletedCommand"
+    ],
+    "result": "passed"
   }
 }

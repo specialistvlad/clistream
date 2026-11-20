@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/textinput"
+	pager "charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 
@@ -31,7 +32,9 @@ type connectionResult struct {
 type dashboardUI struct {
 	result             bool
 	replayRun          string
-	pending            tea.Cmd
+	transcript         string
+	output             pager.Model
+	exitCode           int
 	commandEditor      bool
 	line               textinput.Model
 	width, height      int
@@ -124,6 +127,8 @@ func (d *dashboardUI) detach() {
 		v.close()
 		d.attachment = nil
 	}
+	d.output = pager.Model{}
+	d.transcript = ""
 	d.page = "table"
 }
 func (d *dashboardUI) disconnect(err error) {
@@ -268,10 +273,6 @@ func (d *dashboardUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if before != d.attachment && d.attachment != nil {
 		cmd = tea.Batch(cmd, readViewport(d.attachment))
 	}
-	if d.pending != nil {
-		cmd = tea.Batch(cmd, d.pending)
-		d.pending = nil
-	}
 	return d, cmd
 }
 
@@ -324,10 +325,11 @@ func (d *dashboardUI) update(msg tea.Msg) tea.Cmd {
 					d.code, d.err = rec.code, rec.err
 					return tea.Quit
 				}
-				replay := d.replayRun != "" && d.target.Info.ID == d.replayRun
+				run := d.target.Info.ID
+				replay := d.target.RunResult && (d.replayRun == run || (d.target.Info.Mode == "pipe" && rec.err == nil))
 				d.detach()
 				if replay {
-					d.showResult(d.target, d.replayRun)
+					d.showResult(d.target, run)
 					d.replayRun = ""
 					return nil
 				}
@@ -357,6 +359,9 @@ func (d *dashboardUI) update(msg tea.Msg) tea.Cmd {
 		return d.tick()
 	case tea.WindowSizeMsg:
 		d.width, d.height = max(1, ev.Width), max(1, ev.Height)
+		if d.page == "result" {
+			d.resizeOutput()
+		}
 		if d.attachment != nil {
 			d.attachment.resize(d.width, max(1, d.height-2))
 		}
@@ -390,6 +395,22 @@ func (d *dashboardUI) update(msg tea.Msg) tea.Cmd {
 		key := uv.KeyPressEvent(ev)
 		k := strings.ToLower(ev.String())
 		switch d.page {
+		case "result":
+			switch k {
+			case "ctrl+c":
+				return tea.Quit
+			case "enter", "esc", "ctrl+g":
+				d.detach()
+				if err := d.refresh(); err != nil {
+					d.disconnect(err)
+				}
+			case "home":
+				d.output.GotoTop()
+			case "end":
+				d.output.GotoBottom()
+			default:
+				d.output, _ = d.output.Update(ev)
+			}
 		case "attached":
 			switch {
 			case key.MatchString("ctrl+]") || ev.Code == 0x1d:

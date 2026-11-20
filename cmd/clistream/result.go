@@ -1,17 +1,13 @@
 package main
 
 import (
-	"bufio"
-	"context"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 	"unicode"
 
-	tea "charm.land/bubbletea/v2"
+	pager "charm.land/bubbles/v2/viewport"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/cancelreader"
 	"github.com/specialistvlad/clistream/internal/wire"
 )
 
@@ -19,36 +15,6 @@ func (d *dashboardUI) size() (uint16, uint16) {
 	return uint16(min(65535, max(1, d.width))), uint16(min(65535, max(1, d.height-2)))
 }
 
-type resultPage struct {
-	ctx  context.Context
-	text string
-	code int
-	in   io.Reader
-	out  io.Writer
-}
-
-func (p *resultPage) SetStdin(r io.Reader)  { p.in = r }
-func (p *resultPage) SetStdout(w io.Writer) { p.out = w }
-func (p *resultPage) SetStderr(io.Writer)   {}
-func (p *resultPage) Run() error {
-	if _, err := fmt.Fprintf(p.out, "%s\nExit %d. Press Enter to return to sessions.\n", p.text, p.code); err != nil {
-		return err
-	}
-	reader, err := cancelreader.NewReader(p.in)
-	if err != nil {
-		return err
-	}
-	done := make(chan struct{})
-	stop := context.AfterFunc(p.ctx, func() { reader.Cancel(); close(done) })
-	defer func() {
-		if !stop() {
-			<-done
-		}
-		reader.Close()
-	}()
-	_, err = bufio.NewReader(reader).ReadString('\n')
-	return err
-}
 func (d *dashboardUI) showResult(row wire.Supervisor, run string) {
 	d.page = "table"
 	s, _, err := wire.Open(d.conn, wire.Message{Op: "result", ID: row.ID, Revision: row.Revision, Run: run})
@@ -86,7 +52,12 @@ func (d *dashboardUI) showResult(row wire.Supervisor, run string) {
 			if truncated {
 				text = "[Earlier output was discarded]\n" + text
 			}
-			d.pending = tea.Exec(&resultPage{ctx: d.ctx, text: text, code: m.Code}, nil)
+			d.target = row
+			d.page = "result"
+			d.exitCode = m.Code
+			d.output = pager.New()
+			d.transcript = strings.ReplaceAll(text, "\t", "        ")
+			d.resizeOutput()
 			return
 		}
 		if m.Op != "data" || raw.Len()+len(m.Data) > 2<<20 {
@@ -95,4 +66,14 @@ func (d *dashboardUI) showResult(row wire.Supervisor, run string) {
 		}
 		raw.Write(m.Data)
 	}
+}
+
+func (d *dashboardUI) resizeOutput() {
+	width := max(1, d.width)
+	if d.output.Width() != width {
+		d.output.SetWidth(width)
+		d.output.SetContent(ansi.Hardwrap(d.transcript, width, true))
+	}
+	d.output.SetHeight(max(1, d.height-2))
+	d.output.SetYOffset(d.output.YOffset())
 }

@@ -4,18 +4,19 @@ package e2e
 
 import (
 	"fmt"
-	"golang.org/x/term"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
-
 	"strconv"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/charmbracelet/x/vt"
+	"golang.org/x/term"
 )
 
 // The test executable doubles as a raw terminal child on the supervisor host.
@@ -245,7 +246,7 @@ func TestManagedSupervisors(t *testing.T) {
 	v := attach()
 	first.send("done\r")
 	v.expect(23)
-	first.see("Press Enter")
+	first.see("Exit 23")
 	first.send("\r")
 	first.see("Stopped")
 	f.server.stop()
@@ -399,4 +400,57 @@ func TestInteractivePairingAndReconnect(t *testing.T) {
 	viewer.see("-ready")
 	admin.stop()
 	equal(t, len(f.sessions("guest")), 2)
+}
+
+// Decode the PTY capture because a terminal redraw may update just a few cells.
+func clientScreen(t *testing.T, ui *process) string {
+	t.Helper()
+	emulator := vt.NewEmulator(100, 24)
+	drained := make(chan struct{})
+	go func() { io.Copy(io.Discard, emulator); close(drained) }()
+	defer func() { emulator.InputPipe().(io.Closer).Close(); <-drained; emulator.Close() }()
+	_, err := emulator.Write([]byte(ui.out.contents()))
+	check(t, err)
+	if !emulator.IsAltScreen() {
+		t.Fatal("client left its terminal frame")
+	}
+	return emulator.String()
+}
+
+func expectClientScreen(t *testing.T, ui *process, text ...string) {
+	t.Helper()
+	eventually(t, func() bool {
+		screen := clientScreen(t, ui)
+		for _, want := range text {
+			if !strings.Contains(screen, want) {
+				return false
+			}
+		}
+		return true
+	})
+}
+
+func TestPipeOutputKeepsClientFrame(t *testing.T) {
+	f := setup(t)
+	p := f.managed("--io-mode", "pipe", "sh", "-c", "test ! -t 0 && test ! -t 1 && echo waiting-on-pipes; read value; printf 'pipe line %03d\\n' $(seq 1 60); echo pipe-diagnostic >&2; exit 7")
+	p.sessionID()
+	ui := f.ui("a", client)
+	ui.see("Enter Attach")
+	ui.send("\r")
+	ui.see("waiting-on-pipes")
+	contains(t, clientScreen(t, ui), "CLIStream Client")
+	ui.send("finish\r")
+	expectClientScreen(t, ui, "CLIStream Client", "Exit 7", "pipe line 001")
+	ui.send("\x1b[F")
+	expectClientScreen(t, ui, "CLIStream Client", "Exit 7", "pipe line 060", "pipe-diagnostic")
+	excludes(t, ui.out.contents(), "\x1b[?1049l")
+	ui.send("\r")
+	expectClientScreen(t, ui, "R Start")
+	ui.send("\r")
+	expectClientScreen(t, ui, "Exit 7", "pipe line 001")
+	excludes(t, ui.out.contents(), "\x1b[?1049l")
+	ui.send("\r")
+	expectClientScreen(t, ui, "R Start")
+	ui.send("q")
+	ui.expect(0)
 }

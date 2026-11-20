@@ -63,7 +63,7 @@ clistream "$ID" restart
 clistream "$ID" edit -- codex --help
 ```
 
-`edit` immediately launches the supplied executable and arguments. In the dashboard, press **Enter** on a stopped session to read its latest output in normal terminal scrollback. Press **Enter** again to return, then **R** to edit and launch another command.
+`edit` immediately launches the supplied executable and arguments. In the dashboard, press **Enter** on a stopped session to read its latest output inside the client frame. Use the arrow keys or Page Up and Page Down to scroll. Press **Enter** again to return, then **R** to edit and launch another command.
 
 ## Workspace files and forwarded ports
 

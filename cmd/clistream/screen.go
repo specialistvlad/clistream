@@ -62,6 +62,12 @@ func (d *dashboardUI) View() tea.View {
 		title += " │ Disconnected from " + d.host
 		line(2, d.notice)
 		keys = "R Retry   Q Quit"
+	case "result":
+		title += fmt.Sprintf(" │ %s │ Exit %d", target, d.exitCode)
+		keys = "Enter Home   ↑↓ Scroll   PgUp/PgDn Page   Home/End"
+		if h > 2 {
+			uv.NewStyledString(d.output.View()).Draw(&s, image.Rect(0, 2, w, h))
+		}
 	case "attached":
 		if w < 55 {
 			title += " │ " + target

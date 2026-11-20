@@ -4,6 +4,10 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Interactive client frame with pipe children
+
+On macOS and Linux arm64, `make test e2e` passed the race-enabled package tests, vet and 46 end-to-end cases. A real client PTY attached to a child that verified its stdin and stdout were pipes. The terminal capture showed the client header during streaming, after exit, while scrolling to the final stdout and stderr lines, and when reopening the result. The client stayed in the alternate screen throughout those transitions. The cross-host deployment suite also passed. Native app work and verification remain deferred.
+
 ## Session commands and completed output · November 20, 2026
 
 On macOS arm64 and Linux arm64, `make test e2e` passed the race-enabled package tests, vet, requirements trace and 45 end-to-end cases. Both systems exercised immediate command replacement, stable session IDs, copying and renaming inside the workspace, atomic concurrent replacement, custom logging, and a fast command that produced 120 lines and exited with status 7. The macOS run also launched the installed Codex CLI with `--help`. The dashboard displayed the result and returned to an interactive shell in the same session.
