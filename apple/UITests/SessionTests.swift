@@ -70,7 +70,12 @@ final class SessionTests: XCTestCase {
     #endif
     XCTAssertTrue(app.buttons["Upload"].waitForExistence(timeout: 8))
     tap(app.buttons["Upload"])
-    tap(app.buttons["Cancel"])
+    #if os(macOS)
+      XCTAssertTrue(app.buttons["OKButton"].firstMatch.waitForExistence(timeout: 10))
+      app.typeKey(.escape, modifierFlags: [])
+    #else
+      tap(app.buttons["Cancel"])
+    #endif
     tap(app.buttons["Upload"])
     #if os(macOS)
       choosePath(saved + "/" + name + ".txt", in: app)
@@ -157,6 +162,34 @@ final class SessionTests: XCTestCase {
   }
 
   #if os(iOS)
+    #if compiler(>=6.4)
+      @available(iOS 27.0, *)
+      @MainActor func testVoiceOverWorkspaceOrder() async throws {
+        let app = try await pairedApp(session: "CLISTREAM_SESSION")
+        tap(app.buttons["Files"])
+        openEntry("inbox", in: app)
+        XCTAssertTrue(app.navigationBars["inbox"].waitForExistence(timeout: 8))
+        let voice = XCUIDevice.shared.voiceOverService
+        let enabled = voice.isEnabled
+        if !enabled { try voice.enable() }
+        defer { if !enabled { try? voice.disable() } }
+        var readings = [try voice.currentSpeech().utterance]
+        for _ in 0..<20 {
+          readings.append(try voice.moveForward().utterance)
+          if ["nested", "Upload", "Done"].allSatisfy({ label in
+            readings.contains { $0.localizedCaseInsensitiveContains(label) }
+          }) {
+            break
+          }
+        }
+        for label in ["nested", "Upload", "Done"] {
+          XCTAssertTrue(
+            readings.contains { $0.localizedCaseInsensitiveContains(label) },
+            "Missing \(label) in VoiceOver focus order: \(readings)")
+        }
+      }
+    #endif
+
     @MainActor func testScrollSessionsAndTerminalHistory() async throws {
       let app = try await pairedApp(session: "CLISTREAM_UI_PTY", scrollList: true)
       let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch

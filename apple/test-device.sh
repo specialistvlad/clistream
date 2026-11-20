@@ -26,7 +26,11 @@ case "$platform" in
   iOS) hosted=CLIStream-iOSTests; ui=CLIStream-UITests; test_limits=() ;;
 esac
 suites="hosted files terminal"
-if [[ "$platform" == iOS ]]; then suites+=" touch scroll"; fi
+if [[ "$platform" == iOS ]]; then
+  suites+=" touch scroll"
+  runtime=$(xcrun simctl getenv "$SIMULATOR_ID" SIMULATOR_RUNTIME_VERSION)
+  if (( ${runtime%%.*} >= 27 )); then suites+=" voiceover"; fi
+fi
 results=$(mktemp -d "$PWD/build/results-$platform-XXXXXXXX")
 echo "XCTest results in $results"
 failed=0
@@ -37,6 +41,7 @@ for suite in ${CLISTREAM_TEST_SUITES:-$suites}; do
     terminal) test="$ui/SessionTests/testTerminalInput" ;;
     scroll) test="$ui/SessionTests/testScrollSessionsAndTerminalHistory" ;;
     touch) test="$ui/SessionTests/testTouchNavigationAndEditing" ;;
+    voiceover) test="$ui/SessionTests/testVoiceOverWorkspaceOrder" ;;
     *) echo "Unknown suite $suite" >&2; exit 2 ;;
   esac
   echo "Running $platform $suite"

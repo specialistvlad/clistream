@@ -29,8 +29,13 @@ def report(bundle):
     for failure in summary["testFailures"]:
         identifier = failure.get("testIdentifierString", failure["testName"])
         activities = results("activities", bundle, "--test-id", identifier)
-        steps = [n["title"] for n in nodes(activities)
-                 if re.match(r'^(Waiting .* for "|Tap "|Click "|Double Click "|Type key )', n.get("title", ""))]
+        steps = []
+        for n in nodes(activities):
+            title = n.get("title", "")
+            if re.match(r'^(Waiting .* for "|Find the "|Tap "|Click "|Double Click "|Type key )', title):
+                steps.append(title)
+            if n.get("isAssociatedWithFailure"):
+                break
         # Only selected activity titles and the first line of the issue leave CI.
         # Raw UIKit trees, environment variables and screenshots stay on the runner.
         def clean(s):
