@@ -38,6 +38,11 @@ func run() error {
 	qr := flag.Bool("qr", true, "render invitation QR")
 	var names []string
 	flag.Func("interface", "interface name or loopback (repeatable)", func(name string) error { names = append(names, name); return nil })
+	flag.Usage = func() {
+		fmt.Fprintln(flag.CommandLine.Output(), "Usage: clistreamd [flags] [supervisor | invite ROLE | devices | revoke ID]")
+		fmt.Fprintln(flag.CommandLine.Output(), "Run clistreamd supervisor to print a one-time link for sharing a program.")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 	action, arg := "serve", "client"
 	if flag.NArg() > 0 {
@@ -45,6 +50,13 @@ func run() error {
 	}
 	if flag.NArg() > 1 {
 		arg = flag.Arg(1)
+	}
+	if action == "supervisor" {
+		if flag.NArg() != 1 {
+			return errors.New("usage: clistreamd supervisor")
+		}
+		action, arg = "invite", "supervisor"
+		*qr = false
 	}
 	if e := os.MkdirAll(*dir, 0700); e != nil {
 		return e

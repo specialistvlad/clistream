@@ -195,8 +195,11 @@ class Live(BrokerFixture):
     def test_supervisor_positional_pair_and_launch(self):
         sup = [SUP, "-state", self.base / "new-supervisor"]
         missing = self.run_cli(sup + ["/bin/sh"], check=False)
-        self.assertIn(b"invite supervisor", missing.stderr)
-        link = self.run_cli(self.server + ["invite", "supervisor"]).stdout.strip()
+        self.assertIn(b"clistreamd supervisor", missing.stderr)
+        output = self.run_cli([DAEMON, "-state", self.base / "server", "supervisor"]).stdout
+        self.assertEqual(len(output.splitlines()), 1)
+        link = output.strip()
+        self.assertTrue(link.startswith(b"clistream://pair/v1/"))
         wrong = self.run_cli(self.server + ["invite", "client"]).stdout.strip()
         self.assertNotEqual(self.run_cli(sup + [wrong, "/bin/true"], check=False).returncode, 0)
         self.assertNotEqual(self.run_cli(sup + [link], check=False).returncode, 0)

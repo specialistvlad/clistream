@@ -104,7 +104,7 @@ func display(ctx context.Context, qr bool, issue func() (string, error)) error {
 				expires = i.Expires
 			}
 			fmt.Println("Run the printed command, or open the link in CLIStream and tap Pair device.")
-			fmt.Println("To share a program, get a supervisor link in another terminal with clistreamd -qr=false invite supervisor.")
+			fmt.Println("To share a program, get a supervisor link in another terminal with clistreamd supervisor.")
 			fmt.Printf("Use one link to pair a device before %s. Press p for a fresh link. Ctrl-C exits.\n", expires.Local().Format("15:04:05 MST"))
 			refresh = false
 		}

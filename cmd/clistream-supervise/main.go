@@ -53,7 +53,7 @@ func run() (int, error) {
 		return nil
 	})
 	const usage = "Usage: clistream-supervise [flags] [SUPERVISOR-LINK] PROGRAM [ARG ...]"
-	const inviteHelp = "Get a supervisor link on the server with clistreamd -qr=false invite supervisor."
+	const inviteHelp = "Get a supervisor link on the server with clistreamd supervisor."
 	flag.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), usage)
 		fmt.Fprintln(flag.CommandLine.Output(), inviteHelp)
