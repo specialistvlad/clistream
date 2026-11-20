@@ -64,6 +64,11 @@ struct WorkspaceBrowser: View {
   private var observedNavigation: some View {
     navigation
       .interactiveDismissDisabled(active)
+      .onChange(of: location.path) { old, path in
+        if path.count > old.count, let child = path.last {
+          location.selections[old.last ?? "."] = URL(fileURLWithPath: child).lastPathComponent
+        }
+      }
       .onChange(of: location.folder) { _, folder in
         AccessibilityNotification.Announcement(folder == "." ? session.Name + " Files" : folder)
           .post()
@@ -125,6 +130,7 @@ struct WorkspaceBrowser: View {
             NavigationLink(value: folder == "." ? entry.Name : folder + "/" + entry.Name) {
               Label(entry.Name, systemImage: "folder")
             }.accessibilityIdentifier("entry-" + entry.Name)
+              .accessibilityAddTraits(location.selections[folder] == entry.Name ? .isSelected : [])
           } else {
             Button {
               open(entry.Name)
@@ -138,7 +144,7 @@ struct WorkspaceBrowser: View {
             .accessibilityIdentifier("entry-" + entry.Name)
             .accessibilityAddTraits(location.selections[folder] == entry.Name ? .isSelected : [])
           }
-        }
+        }.disabled(active)
       #endif
       if active { ProgressView("Transferring file") }
       if !message.isEmpty {

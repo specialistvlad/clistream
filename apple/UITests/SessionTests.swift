@@ -43,8 +43,13 @@ final class SessionTests: XCTestCase {
     #endif
     openEntry("inbox", in: app)
     openEntry("nested", in: app)
-    tap(app.buttons["Done"])
-    tap(app.buttons["Files"])
+    #if os(macOS)
+      app.typeKey(.escape, modifierFlags: [])
+      app.typeKey("e", modifierFlags: [.command])
+    #else
+      tap(app.buttons["Done"])
+      tap(app.buttons["Files"])
+    #endif
     XCTAssertTrue(app.buttons["Upload"].waitForExistence(timeout: 8))
     tap(app.buttons["Upload"])
     tap(app.buttons["Cancel"])
@@ -137,7 +142,7 @@ final class SessionTests: XCTestCase {
           withNormalizedOffset:
             CGVector(dx: 0.85, dy: 0.5)), withVelocity: .fast, thenHoldForDuration: 0)
       XCTAssertTrue(app.navigationBars["inbox"].waitForExistence(timeout: 5))
-      try app.performAccessibilityAudit(for: [.sufficientElementDescription])
+      try app.performAccessibilityAudit(for: [.sufficientElementDescription, .contrast, .dynamicType])
       tap(app.buttons["Done"])
       tap(app.buttons["Detach"])
     }
@@ -158,8 +163,20 @@ final class SessionTests: XCTestCase {
     }
     app.launch()
     let invitation = try await testInvitation("QR")
-    app.open(try XCTUnwrap(URL(string: invitation)))
+    let link = try XCTUnwrap(URL(string: invitation))
+    if largeText {
+      app.open(link)
+      tap(app.buttons["Cancel"])
+    }
+    app.open(link)
     tap(app.buttons["Pair device"])
+    if largeText {
+      XCTAssertTrue(
+        app.descendants(matching: .any)["session-" + id].firstMatch.waitForExistence(timeout: 10))
+      app.open(link)
+      tap(app.buttons["Pair device"])
+      tap(app.alerts.buttons["OK"])
+    }
     tap(app.descendants(matching: .any)["session-" + id].firstMatch)
     return app
   }

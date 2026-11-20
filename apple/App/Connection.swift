@@ -47,6 +47,7 @@ enum Core {
 @MainActor
 final class Connection: ObservableObject {
   @Published private(set) var paired = false
+  @Published var pairingError: String?
   @Published private(set) var listError = ""
   var listTitle: String {
     !listError.isEmpty
@@ -91,11 +92,13 @@ final class Connection: ObservableObject {
       if let error = r.Error {
         listError = error + ". Request a fresh invitation from the running server."
         status = listError
+        pairingError = listError
         return
       }
+      pairingError = nil
       leave()
       await refresh()
-    } catch { status = error.localizedDescription }
+    } catch { pairingError = error.localizedDescription }
   }
 
   func refresh() async {

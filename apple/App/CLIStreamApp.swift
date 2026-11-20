@@ -139,6 +139,17 @@ struct BrowserView: View {
     .onOpenURL { url in
       if url.scheme == "clistream", url.host == "pair" { pairing = Pairing(link: url) }
     }
+    .alert(
+      "Couldn’t pair this device",
+      isPresented: Binding(
+        get: { connection.pairingError != nil },
+        set: { if !$0 { connection.pairingError = nil } }
+      )
+    ) {
+      Button("OK") { connection.pairingError = nil }
+    } message: {
+      Text(connection.pairingError ?? "")
+    }
     .sheet(item: $pairing, onDismiss: { invitation = "" }) { request in
       VStack(alignment: .leading, spacing: 16) {
         Text("Pair a server").font(.title2)
@@ -149,14 +160,14 @@ struct BrowserView: View {
           SecureField("Pairing link", text: $invitation).textFieldStyle(.roundedBorder)
         }
         HStack {
-          Button("Cancel") { pairing = nil }
+          Button("Cancel") { pairing = nil }.keyboardShortcut(.cancelAction)
           Button("Pair device") {
             let link =
               request.link?.absoluteString
               ?? invitation.trimmingCharacters(in: .whitespacesAndNewlines)
             pairing = nil
             Task { await connection.pair(link) }
-          }.disabled(request.link == nil && invitation.isEmpty)
+          }.keyboardShortcut(.defaultAction).disabled(request.link == nil && invitation.isEmpty)
         }
       }.padding(24).frame(minWidth: 290).presentationDetents([.medium])
     }
