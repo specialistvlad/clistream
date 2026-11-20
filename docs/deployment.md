@@ -2,18 +2,6 @@
 
 Build with `make build`. Install the three binaries to a directory on PATH. The server needs an inbound UDP route. Supervisors and clients initiate outbound connections. The default is loopback. Select network interfaces by repeating `--interface NAME` (use `loopback` to include localhost). Alternatively use `--listen` with `--advertise` for a reachable address, including a numeric IP. Allow inbound UDP on that port. The local admin socket lives inside the daemon state directory. On Unix systems keep this path short enough for a Unix socket (under roughly 100 bytes).
 
-## Update existing Go launch commands
-
-Replace the executable name `clistream-supervise` with `clistreams` in service definitions and scripts. Use the same OS account to reuse its enrolled identity. The old executable name and option spellings have been retired.
-
-| Previous invocation | Current invocation |
-|---|---|
-| Supervisor `--export`, `--mode`, `--server` | `clistreams --share-port`, `--io-mode`, `--server-address` |
-| Supervisor `--pair`, `--no-remote-restart` | `clistreams --pair-stdin`, `--once` |
-| Client `--eof` | `clistream --send-eof` |
-| Daemon `supervisor`, `invite client`, `invite supervisor` | `clistreamd invite` |
-| Any command `-h` | `--help` |
-
 ## Connect to a running daemon
 
 Run `clistreamd` in a terminal under the service account to display its pairing commands and QR codes. Administration commands use the service account’s configuration directory. Existing custom directories are no longer selected. Before upgrading, stop the old service and back up its private state. To keep its identity and enrollments, move its complete state into an unused account-default server directory with the same owner and private permissions. For a custom client or supervisor identity, pair under the intended OS account or migrate its saved profile into an unused default device directory. Use the localhost link on the daemon host or the network link on a host that can reach that address. For scripts, `clistreamd invite` prints one unquoted `clistream://HOST/?token=TOKEN` link and prefers a network address when available.
