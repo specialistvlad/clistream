@@ -204,6 +204,8 @@ final class ClientTests: XCTestCase {
     let delegate = TerminalDelegate(model)
     view.terminalDelegate = delegate
     model.install(view)
+    delegate.sizeChanged(source: view, newCols: 117, newRows: 0)
+    delegate.sizeChanged(source: view, newCols: 0, newRows: 39)
     delegate.sizeChanged(source: view, newCols: 117, newRows: 39)
     delegate.send(source: view, data: Array("measure\n".utf8)[...])
     try await waitUntil { model.status == "Process exited with status 23" }

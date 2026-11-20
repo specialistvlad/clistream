@@ -11,6 +11,10 @@ final class TerminalDelegate: NSObject, TerminalViewDelegate {
     }
   }
   func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
+    // During rotation UIKit can temporarily allocate less than one text row.
+    // The PTY keeps its last usable size until the layout has a complete cell.
+    let valid = 1...Int(UInt16.max)
+    guard valid.contains(newCols), valid.contains(newRows) else { return }
     MainActor.assumeIsolated {
       connection.send(["Op": "resize", "Cols": newCols, "Rows": newRows])
     }
