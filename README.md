@@ -4,7 +4,7 @@ Share one running terminal between your Mac, Linux machine, iPhone and iPad. A G
 
 ## Build and try it
 
-Install Go 1.27.4 or newer. Linux filesystem transfers require a kernel with openat2 (5.6+). Run `make build` to produce three binaries in `bin/`. Put the absolute bin directory on PATH before changing to a session's working directory.
+Install Go 1.27.4 or newer. Linux filesystem transfers use openat2 or, when unavailable, verify mount IDs through /proc/self/fdinfo. Run `make build` to produce three binaries in `bin/`. Put the absolute bin directory on PATH before changing to a session's working directory.
 
 ```sh
 export PATH="$PWD/bin:$PATH"
