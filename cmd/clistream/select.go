@@ -15,7 +15,7 @@ import (
 
 func chooseSession(c *quic.Conn, items []wire.Session) (wire.Session, error) {
 	if len(items) == 0 {
-		fmt.Fprintln(os.Stderr, "Connected. Waiting for a supervisor. Press Ctrl-C to exit.")
+		fmt.Fprintln(os.Stderr, "Connected. Waiting for a supervisor to share a program. On its machine, run clistream-supervise PROGRAM. Press Ctrl-C to exit.")
 	}
 	for len(items) == 0 {
 		select {

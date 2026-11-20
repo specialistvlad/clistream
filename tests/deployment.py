@@ -111,12 +111,11 @@ def verify(root, resources):
         if host == "viewer":
             run(host, "clistream", link.decode().strip())
         else:
-            run(host, "clistream-supervise", "-pair", data=link)
             run(
                 host,
                 "clistream-supervise",
                 "-local-input=false",
-                "--",
+                link.decode().strip(),
                 "/bin/sh",
                 background=True,
             )

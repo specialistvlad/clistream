@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -51,26 +52,56 @@ func run() (int, error) {
 		ports["port/"+k] = s
 		return nil
 	})
+	const usage = "Usage: clistream-supervise [flags] [SUPERVISOR-LINK] PROGRAM [ARG ...]"
+	const inviteHelp = "Get a supervisor link on the server with clistreamd -qr=false invite supervisor."
+	flag.Usage = func() {
+		fmt.Fprintln(flag.CommandLine.Output(), usage)
+		fmt.Fprintln(flag.CommandLine.Output(), inviteHelp)
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 	if *listDrivers {
 		return 0, json.NewEncoder(os.Stdout).Encode(driver.Catalog())
 	}
 	if *pair {
+		if term.IsTerminal(int(os.Stdin.Fd())) {
+			fmt.Fprintln(os.Stderr, "Paste the supervisor link and press Return.")
+		}
 		var link string
 		if _, e := fmt.Fscanln(os.Stdin, &link); e != nil {
 			return 1, e
 		}
 		return 0, identity.Pair(context.Background(), *dir, link, "supervisor")
 	}
-	if flag.NArg() == 0 {
-		return 1, errors.New("supply executable and arguments after --")
+	args := flag.Args()
+	var link string
+	if len(args) > 0 && strings.HasPrefix(args[0], "clistream://") {
+		link, args = args[0], args[1:]
+		if len(args) > 0 && args[0] == "--" {
+			args = args[1:]
+		}
 	}
-	path := flag.Arg(0)
-	profile, e := driver.Select(path, *name, *mode)
+	if len(args) == 0 {
+		return 1, errors.New(usage + "\nExample: clistream-supervise /bin/sh\n" + inviteHelp)
+	}
+	path := args[0]
+	if _, e := exec.LookPath(path); e != nil {
+		return 1, e
+	}
+	terminal := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+	profile, e := driver.Select(args, *name, *mode, terminal)
 	if e != nil {
 		return 1, e
 	}
+	if link != "" {
+		if e := identity.Pair(context.Background(), *dir, link, "supervisor"); e != nil {
+			return 1, fmt.Errorf("pair supervisor: %w. %s", e, inviteHelp)
+		}
+	}
 	saved, e := identity.Load(*dir)
+	if errors.Is(e, os.ErrNotExist) {
+		return 1, errors.New("This supervisor needs pairing. " + inviteHelp + "\nThen run clistream-supervise SUPERVISOR-LINK PROGRAM.")
+	}
 	if e != nil {
 		return 1, e
 	}
@@ -96,9 +127,12 @@ func run() (int, error) {
 		return 1, e
 	}
 	defer root.Close()
-	p, e := session.Start(path, flag.Args()[1:], profile.Mode, ports, root)
+	p, e := session.Start(path, args[1:], profile.Mode, ports, root)
 	if e != nil {
 		return 1, e
+	}
+	if terminal {
+		fmt.Fprintf(os.Stderr, "Sharing %q through %s (%s). Open clistream to attach.\n", path, saved.Address, profile.Mode)
 	}
 	done := make(chan struct{})
 	go func() { defer close(done); reg.serve(ctx, p, c) }()

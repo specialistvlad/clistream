@@ -192,6 +192,42 @@ class Live(BrokerFixture):
         admin.terminate()
         self.assertEqual(len(json.loads(self.run_cli(guest).stdout)), 2)
 
+    def test_supervisor_positional_pair_and_launch(self):
+        sup = [SUP, "-state", self.base / "new-supervisor"]
+        missing = self.run_cli(sup + ["/bin/sh"], check=False)
+        self.assertIn(b"invite supervisor", missing.stderr)
+        link = self.run_cli(self.server + ["invite", "supervisor"]).stdout.strip()
+        wrong = self.run_cli(self.server + ["invite", "client"]).stdout.strip()
+        self.assertNotEqual(self.run_cli(sup + [wrong, "/bin/true"], check=False).returncode, 0)
+        self.assertNotEqual(self.run_cli(sup + [link], check=False).returncode, 0)
+        self.assertNotEqual(self.run_cli(sup + [link, "/no/such/command"], check=False).returncode, 0)
+        program = 'test ! -t 0 && echo ready; read -r data; echo "$1:$data"; echo error >&2; exit 7'
+        proc = self.spawn(sup + [link, "/bin/sh", "-c", program, "sh", "--child flag"])
+        sid = status_line(proc.stderr, b"session ").split()[1]
+        viewer = self.spawn(self.a + ["attach", sid])
+        self.assertEqual(line(viewer.stdout), b"ready\n")
+        viewer.stdin.write(b"ping\n")
+        self.assertEqual(line(viewer.stdout), b"--child flag:ping\n")
+        self.assertEqual(line(viewer.stderr), b"error\n")
+        self.assertEqual(viewer.wait(8), 7)
+        self.assertEqual(proc.wait(8), 7)
+        self.assertNotEqual(self.run_cli(sup + [link, "/bin/true"], check=False).returncode, 0)
+
+        master, slave = pty.openpty()
+        self.addCleanup(os.close, master)
+        try:
+            proc = self.spawn(sup + ["sh", "-c", "test -t 0 && echo terminal-ready; read reply; echo received-$reply"],
+                              stdin=slave, stdout=slave)
+        finally:
+            os.close(slave)
+        sid = status_line(proc.stderr, b"session ").split()[1]
+        viewer = self.spawn(self.a + ["attach", sid])
+        self.assertEqual(line(viewer.stdout), b"terminal-ready\r\n")
+        viewer.stdin.write(b"hello\n")
+        output, _ = viewer.communicate(timeout=8)
+        self.assertIn(b"received-hello\r\n", output)
+        self.assertEqual(proc.wait(8), 0)
+
     def test_shared_session(self):
         p, sid = self.session(
             [],
@@ -505,7 +541,7 @@ class Live(BrokerFixture):
         executable = shutil.which(name)
         self.assertIsNotNone(executable, name + " installation required")
         proc, sid = self.session(
-            ["-mode", "pipe", "-local-input=false"], [executable, *args], **options
+            ["-local-input=false"], [executable, *args], **options
         )
         items = json.loads(self.run_cli(self.a + ["list"]).stdout)
         self.assertEqual(next(s["Driver"] for s in items if s["ID"] == sid), name)

@@ -57,9 +57,9 @@ func detect(path, name string, releases []Release) (Release, error) {
 	return Release{}, fmt.Errorf("%s driver supports %s; use -driver generic for other versions", name, strings.Join(versions, ", "))
 }
 
-func Select(path, name, mode string) (Profile, error) {
+func Select(command []string, name, mode string, terminal bool) (Profile, error) {
 	if name == "auto" {
-		name = filepath.Base(path)
+		name = filepath.Base(command[0])
 		if _, ok := catalog[name]; !ok {
 			name = "generic"
 		}
@@ -68,12 +68,21 @@ func Select(path, name, mode string) (Profile, error) {
 	if !ok {
 		return Profile{}, fmt.Errorf("unknown driver %q", name)
 	}
-	release, err := detect(path, name, releases)
+	release, err := detect(command[0], name, releases)
 	if err != nil {
 		return Profile{}, err
 	}
 	if mode == "auto" {
 		mode = release.DefaultMode
+		if len(command) > 1 {
+			first := command[1]
+			if (name == "codex" && first == "exec") || (name == "claude" && (first == "-p" || first == "--print")) {
+				mode = "pipe"
+			}
+		}
+		if name == "generic" && terminal {
+			mode = "pty"
+		}
 	}
 	if !slices.Contains(release.Modes, mode) {
 		return Profile{}, fmt.Errorf("unsupported mode %q for %s driver", mode, name)
