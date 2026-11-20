@@ -20,7 +20,9 @@ final class SessionTests: XCTestCase {
       input.typeText("echo\n")
     #else
       tap(input)
-      for letter in "echo" { tap(app.keyboards.keys[String(letter)]) }
+      XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 12))
+      input.typeText("echo")
+      assertText("echo", in: input)
       tap(app.buttons["Send"])
     #endif
     func output(_ title: String) -> XCUIElement {
@@ -112,16 +114,33 @@ final class SessionTests: XCTestCase {
         file = visible(fileMatches)
       }
       let document = try XCTUnwrap(file, "Exported document was absent from the visible Files grid")
-      document.tap()
+      // The middle of a Files grid cell is its editable name. Activate the
+      // document image at its actual screen position after the thumbnail loads.
+      let thumbnail = document.images.firstMatch
+      let anchor = app.coordinate(withNormalizedOffset: .zero)
+      func activationPoint() -> XCUICoordinate {
+        let bounds = thumbnail.exists && !thumbnail.frame.isEmpty ? thumbnail.frame : document.frame
+        return anchor.withOffset(CGVector(
+          dx: bounds.midX - anchor.screenPoint.x, dy: bounds.midY - anchor.screenPoint.y))
+      }
+      var lastPoint: CGPoint?
+      let stable = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+        let point = activationPoint().screenPoint
+        defer { lastPoint = point }
+        return point == lastPoint && grid.frame.contains(point) && document.isEnabled
+      }, object: document)
+      XCTAssertEqual(XCTWaiter.wait(for: [stable], timeout: 12), .completed)
+      activationPoint().tap()
       let open = app.buttons["Open"].firstMatch
       if !cancel.waitForNonExistence(timeout: 3) {
         if open.exists && open.isHittable && open.isEnabled {
           open.tap()
-        } else if let settled = visible(fileMatches) {
-          settled.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+        } else if visible(fileMatches) != nil {
+          activationPoint().doubleTap()
           if open.exists && open.isHittable && open.isEnabled { open.tap() }
         }
-        XCTAssertTrue(cancel.waitForNonExistence(timeout: 8), "Files did not return the document")
+        XCTAssertTrue(cancel.waitForNonExistence(timeout: 15),
+          "Files did not return the document (selected: \(document.exists && document.isSelected), open: \(open.exists), alert: \(app.alerts.firstMatch.exists))")
       }
     #endif
     XCTAssertTrue(
@@ -291,7 +310,7 @@ final class SessionTests: XCTestCase {
     @MainActor func testTouchNavigationAndEditing() async throws {
       let app = try await pairedApp(session: "CLISTREAM_SESSION", largeText: true)
       let output = app.textViews["Standard output"]
-      XCTAssertTrue(output.waitForExistence(timeout: 10))
+      assertText("copyword selection", in: output)
       let word = output.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 37, dy: 20))
       word.press(forDuration: 1)
       tap(app.descendants(matching: .any)["Copy"].firstMatch)

@@ -57,14 +57,17 @@ jobs:
         run: |
           simulator() {
             xcrun simctl list devices available --json | jq -er --arg device "$1" '
-              [.devices | to_entries[] | select(.key | contains("SimRuntime.iOS-")) |
-               .value[] | select(.name | startswith($device))][0].udid // error("missing simulator")'
+              [.devices["com.apple.CoreSimulator.SimRuntime.iOS-26-4"][] |
+               select(.name == $device)][0].udid // error("missing iOS 26.4 simulator")'
           }
+          phone="iPhone 17 Pro"
+          pad="iPad Pro 13-inch (M5)"
           case "$DEVICE" in
             macOS) apple/test-device.sh macOS ;;
             shared)
-              IPHONE_SIMULATOR_ID="$(simulator iPhone)" IPAD_SIMULATOR_ID="$(simulator iPad)" python3 apple/test-shared.py ;;
-            *) SIMULATOR_ID="$(simulator "$DEVICE")" apple/test-device.sh ;;
+              IPHONE_SIMULATOR_ID="$(simulator "$phone")" IPAD_SIMULATOR_ID="$(simulator "$pad")" python3 apple/test-shared.py ;;
+            iPhone) SIMULATOR_ID="$(simulator "$phone")" apple/test-device.sh ;;
+            iPad) SIMULATOR_ID="$(simulator "$pad")" apple/test-device.sh ;;
           esac
       - name: Record individual XCTest outcomes
         if: always()

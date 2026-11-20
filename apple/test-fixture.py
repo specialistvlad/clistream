@@ -50,7 +50,7 @@ def run(root, stack, suite, command):
     name = f"CLITest-{os.urandom(4).hex()}"
     saved = root / "saved"
     saved.mkdir()
-    sample = os.urandom(150013)
+    sample = os.urandom(75007).hex()[:150013].encode("ascii")
     (work / f"{name}.txt").write_bytes(sample)
     (work / "fixture.txt").touch()
     if suite == "touch":
