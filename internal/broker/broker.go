@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -396,7 +397,7 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 		}
 	}
 	switch m.Op {
-	case "arguments", "start", "stop", "restart", "apply":
+	case "command", "run-command", "arguments", "start", "stop", "restart", "apply":
 		ev.Name = "supervisor_request"
 		ev.Operation = m.Op
 		ev.Role = "client"
@@ -416,10 +417,13 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 	case "capabilities":
 		ev.Name = "capabilities"
 		s.mu.Unlock()
-		return wire.Write(st, wire.Message{Op: "ok", Capabilities: []string{wire.ManagedSupervisors}})
+		return wire.Write(st, wire.Message{Op: "ok", Capabilities: []string{wire.ManagedSupervisors, wire.EditCommand}})
 	case "publish":
 		ev.Name = "supervisor_publish"
 		ev.Role = "supervisor"
+		if m.Supervisor != nil {
+			m.Supervisor.EditableCommand = slices.Contains(m.Capabilities, wire.EditCommand)
+		}
 		err := s.publish(c, m.Supervisor)
 		s.mu.Unlock()
 		if err != nil {
@@ -428,19 +432,28 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 		ev.Supervisor = m.Supervisor.ID
 		ev.Session = m.Supervisor.Info.ID
 		return wire.Write(st, wire.Message{Op: "ok"})
-	case "supervisors":
+	case "command-supervisors", "supervisors":
 		ev.Name = "supervisor_list"
 		ev.Role = "client"
 		clientRole.Store(true)
 		rows := s.supervisors()
+		if m.Op == "supervisors" {
+			for i := range rows {
+				rows[i].EditableCommand = false
+			}
+		}
 		s.mu.Unlock()
 		sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })
 		return wire.Write(st, wire.Message{Op: "ok", Supervisors: rows})
-	case "arguments", "start", "stop", "restart", "apply":
+	case "command", "run-command", "arguments", "start", "stop", "restart", "apply":
 		target, ok := s.controllers[m.ID]
 		if !ok || s.devices[s.peers[target.conn]] == "" {
 			s.mu.Unlock()
 			return errors.New("supervisor unavailable")
+		}
+		if (m.Op == "command" || m.Op == "run-command") && !target.state.EditableCommand {
+			s.mu.Unlock()
+			return errors.New("command editing unavailable")
 		}
 		if m.Revision != target.state.Revision || m.Run != target.state.Info.ID {
 			s.mu.Unlock()
@@ -451,6 +464,10 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 		if e != nil {
 			if response.Op == "" {
 				ev.Outcome = "unconfirmed"
+			}
+			if m.Op == "run-command" && (response.Error == "invalid command" || response.Error == "child launch failed") {
+				ev.Outcome = "failed"
+				return wire.Write(st, wire.Message{Op: "error", Error: response.Error, Revision: response.Revision})
 			}
 			if response.Error == "stale supervisor" {
 				return errors.New("stale supervisor")

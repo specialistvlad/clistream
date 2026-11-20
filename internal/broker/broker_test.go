@@ -115,7 +115,7 @@ func TestEnrollmentAndCompressedStreams(t *testing.T) {
 		if err != nil || registered.ID == "" {
 			t.Fatal("register one-shot session", err)
 		}
-		for _, op := range []string{"arguments", "stop", "start", "restart", "apply"} {
+		for _, op := range []string{"command", "run-command", "arguments", "stop", "start", "restart", "apply"} {
 			res, err := wire.Request(conn, wire.Message{Op: op, ID: registered.ID, Run: registered.ID})
 			if err == nil || res.Error != "supervisor unavailable" {
 				t.Fatalf("%s returned %+v, %v", op, res, err)

@@ -241,19 +241,19 @@
       "iPad Pro 11-inch (M5) simulator",
       "Go CLI"
     ],
-    "trigger": "Go dashboard restart",
+    "trigger": "Go dashboard submitted the prefilled command and attached to the replacement",
     "runs": [
       {
         "distinctEnrolledViewers": 4,
         "allWritersObserved": true,
         "exitStatus": 128,
-        "localResultBundle": "apple/build/shared-bbdgm5bo/mac.xcresult"
+        "localResultBundle": "apple/build/shared-uhy4_9at/mac.xcresult"
       },
       {
         "distinctEnrolledViewers": 4,
         "allWritersObserved": true,
         "exitStatus": 0,
-        "localResultBundle": "apple/build/shared-6l0goen0/mac.xcresult"
+        "localResultBundle": "apple/build/shared-s7e5f4mz/mac.xcresult"
       }
     ],
     "result": "passed"

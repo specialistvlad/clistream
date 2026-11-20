@@ -78,3 +78,22 @@ func TestCompactSupervisorRows(t *testing.T) {
 		}
 	}
 }
+
+func TestCommandScrollAndResize(t *testing.T) {
+	screen := uv.NewTerminalScreen(io.Discard, nil)
+	d := dashboardUI{screen: screen, page: "command"}
+	d.line.insert("worker " + strings.Repeat("界", 30) + " last")
+	for _, width := range []int{24, 80} {
+		screen.Resize(width, 10)
+		if err := d.draw(); err != nil {
+			t.Fatal(err)
+		}
+		var row strings.Builder
+		for x := 0; x < width; x++ {
+			row.WriteString(screen.CellAt(x, 4).Content)
+		}
+		if !strings.Contains(row.String(), "last") || strings.Contains(row.String(), "worker") != (width == 80) {
+			t.Errorf("width %d: %q", width, row.String())
+		}
+	}
+}

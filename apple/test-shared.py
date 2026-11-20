@@ -152,8 +152,11 @@ class SharedAppleSession(BrokerFixture):
                     verified.add(observed)
         if dashboard:
             dashboard.send(b"r")
-            dashboard.until(b"[Cancel]")
-            dashboard.send(b"\t\r")
+            dashboard.until(b"Enter Restart & attach")
+            dashboard.send(b"\r")
+            dashboard.until(b"Ctrl-G Home")
+            dashboard.send(b"\x07q")
+            self.assertEqual(dashboard.process.wait(8), 0)
         else:
             child.stdin.close()
         self.assertEqual(observer.wait(10), 128 if dashboard else 0)
@@ -184,7 +187,7 @@ class SharedAppleSession(BrokerFixture):
         events = [json.loads(row) for row in (self.base / "server/server.log").read_text().splitlines()]
         attachments = {e["connection_id"]: e["device"] for e in events
                        if e["event"] == "channel_open" and e["session_id"] == sid and e["operation"] == "stdin"}
-        self.assertEqual(len(attachments), 4)
+        self.assertEqual(len(attachments), 4 if dashboard else 5)
         self.assertEqual(len(set(attachments.values())), 4)
         closed = {e["connection_id"] for e in events if e["event"] == "connection_close" and e["role"] == "client"}
         self.assertTrue(attachments.keys() <= closed)

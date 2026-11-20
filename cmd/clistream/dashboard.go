@@ -22,11 +22,14 @@ import (
 )
 
 type connectionResult struct {
-	conn    *quic.Conn
-	managed bool
-	err     error
+	commandEditor bool
+	conn          *quic.Conn
+	managed       bool
+	err           error
 }
 type dashboardUI struct {
+	commandEditor      bool
+	line               commandLine
 	screen             *uv.TerminalScreen
 	page, host, notice string
 	frame              int
@@ -45,7 +48,11 @@ type dashboardUI struct {
 func (d *dashboardUI) refresh() error {
 	var rows []wire.Supervisor
 	if d.managed {
-		res, err := wire.Request(d.conn, wire.Message{Op: "supervisors"})
+		op := "supervisors"
+		if d.commandEditor {
+			op = "command-supervisors"
+		}
+		res, err := wire.Request(d.conn, wire.Message{Op: op})
 		if err != nil {
 			return err
 		}
@@ -108,6 +115,7 @@ func (d *dashboardUI) disconnect(err error) {
 	}
 	d.page = "lost"
 	d.notice = err.Error()
+	d.line = commandLine{}
 	d.rows = nil
 	d.args = nil
 }
@@ -223,7 +231,10 @@ func dashboard(dir, link, direct string) (int, error) {
 				result.conn, err = identity.Dial(ctx, directory, p)
 			}
 			if err == nil {
-				result.managed, err = wire.Managed(result.conn)
+				var caps []string
+				caps, err = wire.Capabilities(result.conn)
+				result.managed = slices.Contains(caps, wire.ManagedSupervisors)
+				result.commandEditor = slices.Contains(caps, wire.EditCommand)
 			}
 			if errors.Is(err, os.ErrNotExist) {
 				err = errors.New("No saved server. Run clistream PAIRING-LINK using the link from clistreamd.")
@@ -266,6 +277,7 @@ func dashboard(dir, link, direct string) (int, error) {
 				break
 			}
 			link = ""
+			d.commandEditor = result.commandEditor
 			d.managed = result.managed
 			d.page = "table"
 			if err := d.refresh(); err != nil {
@@ -343,6 +355,9 @@ func dashboard(dir, link, direct string) (int, error) {
 				if d.page == "attached" {
 					d.attachment.term.Paste(ev.Content)
 					continue
+				} else if d.page == "command" {
+					d.line.insert(strings.NewReplacer("\r\n", " ", "\r", " ", "\n", " ").Replace(ev.Content))
+					d.notice = ""
 				} else if d.page == "edit" {
 					d.appendText(ev.Content)
 				}
@@ -396,6 +411,18 @@ func dashboard(dir, link, direct string) (int, error) {
 							d.page = "table"
 						}
 					}
+				case "command":
+					switch k {
+					case "esc":
+						d.page = "table"
+						d.line = commandLine{}
+						d.notice = ""
+					case "enter":
+						d.submitCommand()
+					default:
+						d.line.key(ev)
+						d.notice = ""
+					}
 				case "edit":
 					d.editKey(ev)
 				case "table":
@@ -437,6 +464,10 @@ func (d *dashboardUI) tableKey(k string) {
 		}
 		d.confirm = false
 		d.notice = ""
+		if k != "s" && d.target.EditableCommand {
+			d.openCommand()
+			return
+		}
 		if k == "e" {
 			res, err := d.request("arguments")
 			if err != nil {

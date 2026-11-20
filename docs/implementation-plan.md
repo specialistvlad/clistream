@@ -33,4 +33,8 @@ Run `make test e2e` on Linux and macOS, the four-host Linux deployment suite, an
 
 The header and app-switching update is shared Go CLI code on Linux and macOS. Each switch uses the existing discovery and attachment operations, so the daemon, supervisor and native Apple apps require no changes. Run the renderer checks and the real-PTY `test_cycle_running_apps` in both platform suites. Verify next, previous, wraparound, input destination, Escape and return to the supervisor table.
 
-The single-run flag aliases `-once` in the shared Linux and macOS supervisor. The Go client labels its detach action **Disconnect** for attach-only rows. The broker and native Mac, iPhone and iPad clients use existing session operations. Verify two viewers, reconnect to the same run, child EOF and status, and rejection of lifecycle requests. The managed Start/Restart command editor is deferred to a separate design.
+The single-run flag aliases `-once` in the shared Linux and macOS supervisor. The Go client labels its detach action **Disconnect** for attach-only rows. The broker and native Mac, iPhone and iPad clients use existing session operations. Verify two viewers, reconnect to the same run, child EOF and status, and rejection of lifecycle requests. The following command editor extends managed Start and Restart.
+
+## Editable restart command
+
+Deliver the single-line editor in the shared Linux and macOS Go dashboard. Negotiate support in the broker and supervisor, validate the executable and driver on the supervisor host, and bind automatic attachment to the acknowledged run. Retain legacy managed actions and single-run disconnect behavior. Native macOS, iPhone and iPad use their existing run-bound attachments. Verify quoting, cursor editing, stale requests, launch errors and recovery, mixed-version peers, both Go platform suites, Linux multi-host deployment and four-client replacement on Apple.

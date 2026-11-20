@@ -17,7 +17,7 @@ The table can show running and stopped programs together.
 
 ```text
 CLIStream Client │ Supervisors │ Connected to devbox:7443
-↑↓ Select   Enter Attach   R Restart   S Stop   E Edit arguments   Q Quit
+↑↓ Select   Enter Attach   R Restart   S Stop   E Edit command   Q Quit
   Program     Host          State             Mode    ID
 › codex       build-mac     Running           PTY     4a91bc
   worker      linux-01      Stopped · exit 0  Pipe    97bd20
@@ -33,8 +33,7 @@ The client requests distinct keyboard codes for Ctrl-[ and Escape. On terminals 
 |---|---|
 | **Attach** | Open the selected running child. Inside the terminal, ordinary letters, arrows, function keys, paste, and `Ctrl-C` go to that child. Dashboard shortcuts apply only on the dashboard. |
 | **Stop** | Ask `Stop PROGRAM on HOST?` with **Cancel** selected. On confirmation, stop the child, end its attachments, and keep the supervisor available in the table. |
-| **Restart / Start** | Restart a running child with its current arguments, or start a stopped child. Confirm replacement of a running child and identify the affected program and host. Existing viewers receive the end of the old run. |
-| **Edit arguments + restart** | Fetch the arguments only when the editor opens. Present one editable entry per argument, including empty entries and arguments containing spaces. Keep the executable fixed. Show **Restart with these arguments** or **Start with these arguments** according to state. Cancel leaves the current run intact. |
+| **Restart / Start / Edit command** | R or E opens one horizontally scrolling line with the current executable and all arguments. The header identifies the target. Enter validates, submits and attaches to the acknowledged run. Escape discards edits. A preflight error preserves the running child. A launch failure after stopping keeps the draft available for correction. |
 
 **Managed operation becomes the supervisor default.** A natural exit, failed launch, or remote Stop leaves the supervisor available for another start. A local termination signal shuts down the supervisor and its child. Add `clistream-supervise -once` for scripts that need today’s behavior of exiting with the child’s status. Edited arguments last for the lifetime of that supervisor, including broker reconnects. Launching the supervisor afresh uses the arguments supplied locally.
 
@@ -52,4 +51,6 @@ The client requests distinct keyboard codes for Ctrl-[ and Escape. On terminals 
 
 Use `clistream-supervise /bin/sh` to keep a shell available for another start after exit. Use `clistream-supervise -no-remote-restart /bin/sh` (alias `-once`) to share a single shell. Its row reads **Attach only**. **Ctrl-G Disconnect** returns one viewer to the table while the shell keeps running. Ctrl-D reaches the shell. If it exits, all attachments end, the row disappears, and the supervisor exits with the shell’s status. A new run requires a local launch.
 
-In the argument editor, ↑ and ↓ select entries, ← and → move the cursor, Enter inserts an empty argument, and Ctrl-D removes the selected entry. Ctrl-R opens the start or restart confirmation. Tab selects the action, Enter confirms, and Escape cancels.
+In the command line, arrows move by character, Ctrl-A/E move to either end, Ctrl-W erases a word, and Ctrl-U/K erase to the beginning or end. Paste inserts text. Separate arguments with spaces, use single or double quotes for grouping, and use `""` for an empty argument. Double quotes accept escapes such as `\n` and `\xFF`. Shell metacharacters are literal.
+
+On older managed peers, R retains its original lifecycle action and E opens the argument editor. In that editor, ↑ and ↓ select entries, ← and → move the cursor, Enter inserts an empty argument, and Ctrl-D removes the selected entry. Ctrl-R opens the start or restart confirmation. Tab selects the action, Enter confirms, and Escape cancels.

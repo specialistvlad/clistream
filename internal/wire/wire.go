@@ -31,16 +31,19 @@ type FileEntry struct {
 
 // Supervisor describes a controller and its currently attachable run.
 type Supervisor struct {
-	ID       string
-	Info     Session
-	Revision uint64
-	Exit     *int `json:",omitempty"`
-	Failed   bool `json:",omitempty"`
+	EditableCommand bool `json:",omitempty"`
+	ID              string
+	Info            Session
+	Revision        uint64
+	Exit            *int `json:",omitempty"`
+	Failed          bool `json:",omitempty"`
 }
 
+const EditCommand = "edit-command-v1"
 const ManagedSupervisors = "managed-supervisors-v1"
 
 type Message struct {
+	Command                   [][]byte     `json:",omitempty"`
 	Capabilities              []string     `json:",omitempty"`
 	Supervisor                *Supervisor  `json:",omitempty"`
 	Supervisors               []Supervisor `json:",omitempty"`
@@ -144,9 +147,13 @@ func Request(c *quic.Conn, m Message) (Message, error) {
 
 // Managed probes using a record older strict decoders already understand.
 func Managed(c *quic.Conn) (bool, error) {
+	caps, err := Capabilities(c)
+	return slices.Contains(caps, ManagedSupervisors), err
+}
+func Capabilities(c *quic.Conn) ([]string, error) {
 	res, err := Request(c, Message{Op: "capabilities"})
 	if res.Error == "unknown session or operation" || res.Error == "client authorization required" {
-		return false, nil
+		return nil, nil
 	}
-	return slices.Contains(res.Capabilities, ManagedSupervisors), err
+	return res.Capabilities, err
 }

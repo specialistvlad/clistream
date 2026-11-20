@@ -4,6 +4,12 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Single-line Start and Restart · November 20, 2026
+
+The macOS and Linux `make test e2e` runs passed, including the Go race tests and vet. The CLI suite ran 37 cases per platform with two optional skips on macOS and five on Linux. The dashboard tests changed the executable, preserved empty and spaced arguments, reloaded the last command after broker reconnection, rejected a stale concurrent request and attached to the acknowledged replacement. Invalid syntax and a missing executable left the current run available. An executable with a missing interpreter failed after the old run ended, and correcting the draft successfully started another run.
+
+The Linux multi-host deployment passed. Compatibility tests passed with pre-managed binaries from `bd2d7ab` and managed binaries from `50cbcaa`, exercising an older dashboard, supervisor and daemon independently. The four-client Apple harness observed the old exit on native macOS, iPhone and iPad simulators, and the Go CLI. The dashboard attached automatically and all four devices exchanged input on the replacement. [Apple execution record](test-results/acceptance.json)
+
 ## Single-run supervision · November 20, 2026
 
 `make test e2e` passed on macOS arm64 and Debian Linux arm64. Of 37 CLI cases, macOS passed 35 with two optional provider skips, and Linux passed 32 with five optional driver or provider skips. The new two-viewer PTY case launched a shell with `-no-remote-restart`. One viewer disconnected, the other continued sending input, and the first reattached to the same run. Ctrl-D then ended the shell, both attachments ended, the supervisor returned status 23, and the session disappeared. A broker test verified that enrolled-device lifecycle requests against a single-run registration are rejected. Both previous-binary compatibility cases passed on macOS.

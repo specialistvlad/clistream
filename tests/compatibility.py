@@ -1,4 +1,4 @@
-"""Exercise the previous release's binaries supplied in CLISTREAM_LEGACY_BIN."""
+"""Exercise pre-managed binaries in CLISTREAM_LEGACY_BIN and managed v1 in CLISTREAM_MANAGED_V1_BIN."""
 import json
 import os
 import unittest
@@ -26,6 +26,35 @@ class Compatibility(BrokerFixture):
         screen.send(b"done\r")
         self.assertEqual(child.wait(8), 17)
         screen.until(b"exit 17")
+
+    @unittest.skipUnless(os.environ.get("CLISTREAM_MANAGED_V1_BIN"), "requires managed v1 binaries")
+    def test_previous_managed_peers(self):
+        previous = Path(os.environ["CLISTREAM_MANAGED_V1_BIN"])
+        for old_daemon, old_supervisor, old_dashboard in (
+                (False, True, False), (False, False, True), (True, False, False)):
+            with self.subTest(daemon=old_daemon, supervisor=old_supervisor, dashboard=old_dashboard):
+                if old_daemon:
+                    self.daemon.terminate()
+                    self.daemon.wait(8)
+                    self.server[0] = previous / "clistreamd"
+                    self.start_server()
+                supervisor = previous / "clistream-supervise" if old_supervisor else SUP
+                child = self.spawn([supervisor, "-state", self.base / "supervisor", "/bin/cat"])
+                old = status_line(child.stderr, b"session ").split()[1]
+                cli = [previous / "clistream", "-state", self.base / "a"] if old_dashboard else self.a
+                dashboard = DashboardTerminal(self, cli)
+                dashboard.until(b"R Restart")
+                dashboard.send(b"e")
+                dashboard.until(b"Executable")
+                dashboard.send(b"\x12")
+                dashboard.until(b"[Cancel]")
+                dashboard.send(b"\t\r")
+                new = status_line(child.stderr, b"session ").split()[1]
+                self.assertNotEqual(old, new)
+                dashboard.process.terminate()
+                dashboard.process.wait(8)
+                child.terminate()
+                child.wait(8)
 
     def test_previous_tools(self):
         child = self.spawn([self.legacy / "clistream-supervise", "-state", self.base / "supervisor",

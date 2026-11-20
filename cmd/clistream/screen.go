@@ -125,6 +125,25 @@ func (d *dashboardUI) draw() error {
 		if w < 40 {
 			keys = "Tab Select  ↵ Confirm  Esc Cancel"
 		}
+	case "command":
+		verb := "Start"
+		if d.target.Info.ID != "" {
+			verb = "Restart"
+		}
+		title += " │ " + verb + " " + target
+		keys = "Enter " + verb + " & attach   Esc Cancel"
+		if s.StringWidth(keys) > w {
+			keys = "↵ " + verb + "   Esc Cancel"
+		}
+		line(3, "Command")
+		before := printable(d.line.text[:d.line.pos])
+		before = ansi.TruncateLeft(before, max(0, s.StringWidth(before)-max(0, w-3)), "")
+		line(4, "› "+before+d.line.text[d.line.pos:])
+		if h > 4 {
+			s.SetCursorPosition(min(w-1, 2+s.StringWidth(before)), 4)
+			s.ShowCursor()
+		}
+		line(6, d.notice)
 	case "edit":
 		title += " │ Edit arguments │ " + target
 		line(2, "Executable   "+d.target.Info.Name)
@@ -231,11 +250,15 @@ func (d *dashboardUI) draw() error {
 			} else {
 				keys += "   R Start"
 			}
-			keys += "   E Edit arguments"
+			if v.EditableCommand {
+				keys += "   E Edit command"
+			} else {
+				keys += "   E Edit arguments"
+			}
 		}
 		keys += "   Q Quit"
 		if s.StringWidth(keys) > w {
-			keys = strings.NewReplacer("   ", " ", "↑↓ Select", "↑↓", " Edit arguments", " Edit").Replace(keys)
+			keys = strings.NewReplacer("   ", " ", "↑↓ Select", "↑↓", " Edit arguments", " Edit", " Edit command", " Edit").Replace(keys)
 		}
 		if s.StringWidth(keys) > w {
 			keys = strings.NewReplacer("Enter Attach", "↵", "R Restart", "R", "R Start", "R", "S Stop", "S", "E Edit", "E", "Q Quit", "Q").Replace(keys)

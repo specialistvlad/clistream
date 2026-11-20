@@ -7,12 +7,16 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/quic-go/quic-go"
 	"github.com/specialistvlad/clistream/internal/client"
+	"github.com/specialistvlad/clistream/internal/driver"
 	"github.com/specialistvlad/clistream/internal/files"
 	"github.com/specialistvlad/clistream/internal/identity"
 	"github.com/specialistvlad/clistream/internal/session"
@@ -65,11 +69,34 @@ func listenManaged(c *quic.Conn, requests chan<- incoming) {
 	}
 }
 
-func supervise(ctx context.Context, reg registration, conn *quic.Conn, path string, args []string, ports map[string]string, root *files.Root, local bool) (int, error) {
+type launchSettings struct {
+	driver, mode string
+	terminal     bool
+}
+
+func (settings launchSettings) validate(cmd [][]byte) ([]string, driver.Profile, error) {
+	var argv []string
+	for _, arg := range cmd {
+		if strings.IndexByte(string(arg), 0) >= 0 {
+			return nil, driver.Profile{}, errors.New("invalid command")
+		}
+		argv = append(argv, string(arg))
+	}
+	if len(argv) == 0 || argv[0] == "" {
+		return nil, driver.Profile{}, errors.New("invalid command")
+	}
+	if _, err := exec.LookPath(argv[0]); err != nil {
+		return nil, driver.Profile{}, err
+	}
+	profile, err := driver.Select(argv, settings.driver, settings.mode, settings.terminal)
+	return argv, profile, err
+}
+
+func supervise(ctx context.Context, reg registration, conn *quic.Conn, path string, args []string, ports map[string]string, root *files.Root, local bool, settings launchSettings) (int, error) {
 	state := wire.Supervisor{ID: uniqueID(), Info: reg.info}
 	var current atomic.Pointer[session.Process]
 	var inputEnded atomic.Bool
-	var dimensions atomic.Uint32
+	var restore func()
 	var run *childRun
 	var ended <-chan struct{}
 	start := func() {
@@ -86,8 +113,8 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, path stri
 		run = r
 		ended = r.ended
 		current.Store(p)
-		if size := dimensions.Load(); size != 0 {
-			p.Resize(uint16(size>>16), uint16(size))
+		if local && state.Info.Mode == "pty" {
+			restore = termio.Setup(func(w, h uint16) { p.Resize(w, h) })
 		}
 		if inputEnded.Load() {
 			p.EndInput()
@@ -95,6 +122,10 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, path stri
 		go func() { r.code = p.Wait(); close(r.ended) }()
 	}
 	finish := func() {
+		if restore != nil {
+			restore()
+			restore = nil
+		}
 		current.Store(nil)
 		run.close()
 		state.Exit = &run.code
@@ -111,14 +142,6 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, path stri
 		}
 	}()
 	if local {
-		if state.Info.Mode == "pty" {
-			defer termio.Setup(func(w, h uint16) {
-				dimensions.Store(uint32(w)<<16 | uint32(h))
-				if p := current.Load(); p != nil {
-					p.Resize(w, h)
-				}
-			})()
-		}
 		go func() {
 			client.CopyInput(os.Stdin, func(data []byte) error {
 				if p := current.Load(); p != nil {
@@ -139,7 +162,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, path stri
 		if conn == nil {
 			return
 		}
-		_, err := wire.Request(conn, wire.Message{Op: "publish", Supervisor: &state})
+		_, err := wire.Request(conn, wire.Message{Op: "publish", Supervisor: &state, Capabilities: []string{wire.EditCommand}})
 		if err != nil {
 			conn.CloseWithError(1, "publication failed")
 			return
@@ -206,6 +229,45 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, path stri
 			response := wire.Message{Op: "ok"}
 			if m.ID != state.ID || m.Run != state.Info.ID || m.Revision != state.Revision {
 				wire.Fail(st, errors.New("stale supervisor"))
+			} else if m.Op == "command" {
+				response.Command = [][]byte{[]byte(path)}
+				for _, arg := range args {
+					response.Command = append(response.Command, []byte(arg))
+				}
+				wire.Write(st, response)
+			} else if m.Op == "run-command" {
+				argv, profile, err := settings.validate(m.Command)
+				select {
+				case <-ended:
+					finish()
+					publish()
+				default:
+				}
+				if m.Revision != state.Revision {
+					wire.Fail(st, errors.New("stale supervisor"))
+				} else if err != nil {
+					wire.Fail(st, errors.New("invalid command"))
+				} else {
+					if run != nil {
+						run.process.KillGroup()
+						finish()
+					}
+					oldPath, oldArgs, oldInfo := path, args, state.Info
+					path, args = argv[0], argv[1:]
+					state.Info.Name = filepath.Base(path)
+					state.Info.Mode = profile.Mode
+					state.Info.Version = profile.Version
+					state.Info.Driver = profile.Name
+					start()
+					if state.Failed {
+						path, args, state.Info = oldPath, oldArgs, oldInfo
+						response = wire.Message{Op: "error", Error: "child launch failed", Revision: state.Revision}
+					} else {
+						response.Run = state.Info.ID
+					}
+					publish()
+					wire.Write(st, response)
+				}
 			} else if m.Op == "arguments" {
 				response.Args = args
 				wire.Write(st, response)
@@ -214,6 +276,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, path stri
 					run.process.KillGroup()
 					finish()
 				}
+				previousArgs := args
 				if m.Op == "apply" {
 					args = m.Args
 				}
@@ -222,6 +285,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, path stri
 				}
 				publish()
 				if state.Failed {
+					args = previousArgs
 					wire.Fail(st, errors.New("child launch failed"))
 				} else {
 					wire.Write(st, response)

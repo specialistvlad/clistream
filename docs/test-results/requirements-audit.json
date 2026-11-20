@@ -703,5 +703,21 @@
       ]
     },
     "appleEvidence": "acceptance.json#managedSupervisorRestart"
+  },
+  "commandEditor": {
+    "platforms": [
+      "macOS arm64",
+      "Linux arm64"
+    ],
+    "managedCompatibilityRevision": "50cbcaa",
+    "tests": [
+      "TestCommandRoundTrip",
+      "TestCommandCursor",
+      "TestCommandScrollAndResize",
+      "test_managed_supervisors",
+      "test_previous_managed_peers"
+    ],
+    "appleEvidence": "acceptance.json#managedSupervisorRestart",
+    "result": "passed"
   }
 }

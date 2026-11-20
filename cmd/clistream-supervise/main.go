@@ -133,7 +133,7 @@ func run() (int, error) {
 		}
 		if managed {
 			defer probe.CloseWithError(0, "finished")
-			return supervise(ctx, reg, probe, path, args[1:], ports, root, *local)
+			return supervise(ctx, reg, probe, path, args[1:], ports, root, *local, launchSettings{*name, *mode, terminal})
 		}
 		probe.CloseWithError(0, "legacy")
 		fmt.Fprintln(os.Stderr, "Server supports attach only. Using one-shot supervision.")

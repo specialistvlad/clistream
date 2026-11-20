@@ -18,7 +18,7 @@ After pairing, show all sessions registered on that server. Use the CLI name as 
 
 Apple’s Food Truck sample demonstrates how a SwiftUI split view and navigation stack can share a selection across form factors. Use that pattern for sessions and their detail. [Apple multiplatform sample](https://developer.apple.com/documentation/swiftui/food-truck-building-a-swiftui-multiplatform-app) · [Designing for macOS](https://developer.apple.com/design/human-interface-guidelines/designing-for-macos)
 
-A stop or restart from the Go dashboard ends the current native attachment on Mac, iPhone and iPad. Each viewer receives the old run’s exit status. Refresh Sessions and select the replacement to open it. A stopped supervisor has no running session to display. [Supervisor actions](terminal-client-design.md)
+A stop or restart from the Go dashboard ends the current native attachment on Mac, iPhone and iPad. Each viewer receives the old run’s exit status. The requesting Go dashboard attaches automatically. On native clients, refresh Sessions and select the replacement to open it. A stopped supervisor has no running session to display. [Supervisor actions](terminal-client-design.md)
 
 ## Interact with a running CLI
 
