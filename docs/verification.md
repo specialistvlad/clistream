@@ -4,6 +4,17 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Server activity logging on November 20, 2026
+
+| Environment | Executed checks and outcomes |
+|---|---|
+| macOS arm64, Go 1.27.4 | `make test e2e` passed the race-enabled Go suites, vet, requirements trace and 29 of 31 CLI cases. The two optional live-provider cases were skipped. |
+| Linux arm64, Go 1.27.4, Debian Bookworm container | The same command passed the Go suites, vet, requirements trace and 26 of 31 CLI cases. Five optional cases require installed model CLIs or live provider access. |
+| Four Linux containers | `make test-deployment` passed. The broker log identified two distinct supervisor keys and connections. Confirmed download events carried the session ID of the supervisor that served each host's file. |
+| Native Mac, iPhone 17 Pro and iPad mini simulators, and CLI | `apple/test-shared.py` passed. Four distinct enrolled keys opened input channels on the same child and the log recorded a client disconnect for each connection. The hosted Mac case also exercised repeat redemption of the v2 invitation. The mobile pairing UI and physical-camera checks remain separate. |
+
+File tests verified append across restart, mode 0600, concurrent JSON records, five-backup rotation, and fallback on open, write and rotation failure. CLI tests exercised live file and terminal operations with a failed log destination, stderr opt-out with and without an existing log, and private values on both output destinations. Connection tests covered busy refusal, enrollment timeout, peer error, active revocation, reconnect under the same fingerprint, exit status and orderly shutdown. [Executable checks for F11](test-results/requirements-audit.md)
+
 ## Folder selection update on November 20, 2026
 
 The recorded file-transfer tests exercised the supervisor's startup working directory. Revised F9 also allows an explicit folder at startup. Implementation and testing of that option are pending. The acceptance check will launch two sessions from one directory, give one session a different folder, and compare what the CLI and Apple clients list, download and upload against the contents of each host folder. [Revised requirement](requirements.md#session-folder-selection)
@@ -12,7 +23,7 @@ The recorded file-transfer tests exercised the supervisor's startup working dire
 
 At commit `4571796`, the local Go race tests and vet passed. The CLI suite passed 25 of 27 cases. The two skipped cases require live Claude or Codex provider access. The Go race tests exercised concurrent enrollment on multiple listeners, signature tampering, server-clock expiry and replacement. The CLI suite used the exact link from the daemon terminal to publish a process and exchange input and output from a separate identity. Tests also covered revocation, re-enrollment, restart, both pairing directions, concurrent first use, legacy migration, conflicting servers and explicit state directories.
 
-A separate upgrade check enrolled the previous client and supervisor, restarted the upgraded daemon on the same state and reconnected both original binaries. The updated Go tools also paired against the previous daemon under its role-specific, single-use rules. Apple acceptance for v2 is pending. The Apple UI pairing case still expects a v1 URL and a rejection on its second redemption. The hosted enrollment test also expects reuse to fail. The historical results below cover the earlier invitation rules.
+A separate upgrade check enrolled the previous client and supervisor, restarted the upgraded daemon on the same state and reconnected both original binaries. The updated Go tools also paired against the previous daemon under its role-specific, single-use rules. Apple acceptance for v2 is pending. The Apple UI pairing case still expects a v1 URL and a rejection on its second redemption. At that revision the hosted enrollment test also expected reuse to fail. The server logging run above verifies the updated Mac assertion. The historical results below cover the earlier invitation rules.
 
 The hosted Go jobs passed on Ubuntu and macOS for the same commit. The four Apple jobs were still running when this record was updated on November 20. [CI run for 4571796](https://github.com/specialistvlad/clistream/actions/runs/44800568684)
 

@@ -8,6 +8,8 @@ The interactive server terminal issues signed invitations for any device. The Un
 
 **Upgrade permissions.** Previously enrolled supervisors gain permission to list and control all sessions, access their shared files and use their exported ports. Review enrolled keys with `clistreamd devices` and revoke untrusted keys before upgrading.
 
+Activity logs contain device key fingerprints, network endpoints, session and connection IDs, operation categories, UTC timestamps and outcomes. These fields can identify a device and when it used a session. Only the state-directory owner should have access. The daemon records metadata at connection and channel boundaries. It omits keys, invitations, commands, program names, file paths and contents, terminal input and output, export names, forwarded data and peer-supplied error text. With stderr logging, access and retention depend on the collecting service. [Retention and destination](deployment.md#server-activity-logs)
+
 ## Workspace service
 
 The shared folder determines which files the file service presents to enrolled clients. The supervised program, including commands entered through its terminal, uses the host account's normal filesystem permissions. Services reached through port forwarding have their own access rules.

@@ -11,11 +11,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/quic-go/quic-go"
 
+	"github.com/specialistvlad/clistream/internal/activity"
 	"github.com/specialistvlad/clistream/internal/broker"
 	"github.com/specialistvlad/clistream/internal/identity"
 	"github.com/specialistvlad/clistream/internal/wire"
@@ -31,10 +33,11 @@ func main() {
 		os.Exit(1)
 	}
 }
-func run() error {
+func run() (err error) {
 	dir := flag.String("state", identity.Default("server"), "private state directory")
 	listen := flag.String("listen", "127.0.0.1:7443", "UDP listener")
 	addr := flag.String("advertise", "", "host:port clients can reach")
+	noFile := flag.Bool("no-log-file", false, "write server activity to stderr instead of server.log")
 	qr := flag.Bool("qr", true, "render invitation QR")
 	var names []string
 	flag.Func("interface", "interface name or loopback (repeatable)", func(name string) error { names = append(names, name); return nil })
@@ -66,7 +69,7 @@ func run() error {
 		action, arg = "invite", "supervisor"
 		inviteQR = false
 	}
-	if e := os.MkdirAll(*dir, 0700); e != nil {
+	if e := identity.EnsurePrivateDir(*dir); e != nil {
 		return e
 	}
 	sock := filepath.Join(*dir, "admin.sock")
@@ -103,6 +106,16 @@ func run() error {
 	if action != "serve" {
 		return errors.New("start clistreamd first")
 	}
+	log := activity.Open(*dir, *noFile, os.Stderr)
+	defer log.Close()
+	log.Record(activity.Event{Name: "daemon_start"})
+	defer func() {
+		outcome := "ok"
+		if err != nil {
+			outcome = "failed"
+		}
+		log.Record(activity.Event{Name: "daemon_stop", Outcome: outcome})
+	}()
 	configs, e := endpoints(names, *listen, *addr)
 	if e != nil {
 		return e
@@ -127,7 +140,7 @@ func run() error {
 		}
 		addresses = append(addresses, adv)
 	}
-	s, t, e := broker.New(*dir, addresses, identity.DeviceKeys{})
+	s, t, e := broker.New(*dir, addresses, identity.DeviceKeys{}, log)
 	if e != nil {
 		return e
 	}
@@ -145,20 +158,26 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	defer admin.Close()
+	var admins sync.WaitGroup
+	defer func() { admin.Close(); admins.Wait() }()
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer cancel()
+	admins.Add(1)
 	go func() {
+		defer admins.Done()
 		for {
 			c, e := admin.Accept()
 			if e != nil {
 				return
 			}
+			admins.Add(1)
 			go func() {
+				defer admins.Done()
 				defer c.Close()
 				c.SetDeadline(time.Now().Add(5 * time.Second))
 				var r request
 				if json.NewDecoder(bufio.NewReader(c)).Decode(&r) != nil {
+					log.Record(activity.Event{Name: "admin_request", Operation: "unknown", Outcome: "invalid_record"})
 					return
 				}
 				result, e := s.Admin(r.Action, r.Arg)
@@ -172,6 +191,7 @@ func run() error {
 	}()
 	for _, l := range listeners {
 		fmt.Fprintln(os.Stderr, "serving QUIC on", l.Addr())
+		log.Record(activity.Event{Name: "listener_ready", Address: l.Addr().String()})
 	}
 	if interactive() {
 		done := make(chan error, 1)

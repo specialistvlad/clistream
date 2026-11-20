@@ -33,3 +33,11 @@ Every application record, including enrollment, filesystem and tunnel data, is U
 - **fs/list** streams entry metadata followed by end. **fs/get** streams data followed by end. **fs/put** accepts data followed by explicit end, then replies ok after publishing the file. FIN alone aborts an incomplete upload. A destination must be new. All three use paths relative to the session's shared folder. The supervisor determines that folder locally. A client sends `.` to list its contents in either startup mode. [Session folder selection](requirements.md#session-folder-selection)
 
 An error on one logical stream can end that operation independently. Disconnecting a client detaches its streams. A supervisor connection owns its registration. Broker restart removes live registrations. The supervisor reconnects with backoff, registers a fresh session ID and keeps its child process alive. Refresh the client list and attach again.
+
+## Broker activity events
+
+Logging uses information already visible to the v1 broker. Each accepted QUIC connection gets a random `connection_id` and an initial role of `unknown`. A successful registration identifies a supervisor, and a list or open request identifies client activity. Pairing alone leaves the role unknown. A shared device key can therefore appear on concurrent connections with different roles. Connections rejected during the TLS handshake precede broker acceptance.
+
+`daemon_start`, `listener_ready` and `daemon_stop` bound daemon activity. `admin_request` records the action and outcome, including invitation issuance (`invite`) and replacement (`display`). The broker records `pair`, `session_register`, `session_list`, `session_removed`, and `request_rejected` for malformed or unknown requests. Failed channel opens generate `channel_rejected`. Successful opens generate `channel_open` and `channel_close` with a QUIC stream ID scoped to the connection.
+
+A file-channel outcome of `confirmed` means the broker observed the supervisor's final acknowledgement or end record. It makes no claim about saving a download on the client. Output channels report `exited` and the child’s `exit_code` when the supervisor sends an exit record. Other channel outcomes include `closed`, `interrupted` and `failed`. Named exports are described only as TCP or UDP. No logging metadata is transmitted on the wire.

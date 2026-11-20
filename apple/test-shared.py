@@ -156,6 +156,15 @@ class SharedAppleSession(BrokerFixture):
         errors = {entry.replace(b"out:", b"err:", 1) for entry in expected}
         self.assertCountEqual(stderr.splitlines(keepends=True), errors)
         self.assertCountEqual(child.stderr.read().splitlines(keepends=True), errors)
+        self.daemon.terminate()
+        self.assertEqual(self.daemon.wait(8), 0)
+        events = [json.loads(row) for row in (self.base / "server/server.log").read_text().splitlines()]
+        attachments = {e["connection_id"]: e["device"] for e in events
+                       if e["event"] == "channel_open" and e["session_id"] == sid and e["operation"] == "stdin"}
+        self.assertEqual(len(attachments), 4)
+        self.assertEqual(len(set(attachments.values())), 4)
+        closed = {e["connection_id"] for e in events if e["event"] == "connection_close" and e["role"] == "client"}
+        self.assertTrue(attachments.keys() <= closed)
         print("Verified four simultaneous clients. Results in", reports, flush=True)
 
 

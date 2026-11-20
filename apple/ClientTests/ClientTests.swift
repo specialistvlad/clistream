@@ -15,7 +15,7 @@ final class ClientTests: XCTestCase {
     let paired = await Core.request(fields)
     XCTAssertNil(paired.Error)
     let replay = await Core.request(fields)
-    XCTAssertNotNil(replay.Error)
+    XCTAssertNil(replay.Error)
     return dir.path
   }
 

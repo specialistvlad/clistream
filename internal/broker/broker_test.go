@@ -1,14 +1,18 @@
 package broker
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/quic-go/quic-go"
+	"github.com/specialistvlad/clistream/internal/activity"
 	"github.com/specialistvlad/clistream/internal/identity"
 	"github.com/specialistvlad/clistream/internal/wire"
 )
@@ -16,7 +20,7 @@ import (
 // Exercise the two enrollment outcomes and mandatory compression over a real
 // listener. Rejecting a raw list request must leave other streams usable.
 func TestEnrollmentAndCompressedStreams(t *testing.T) {
-	server, tlsConfig, err := New(filepath.Join(t.TempDir(), "server"), nil, identity.DeviceKeys{})
+	server, tlsConfig, err := New(filepath.Join(t.TempDir(), "server"), nil, identity.DeviceKeys{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +98,7 @@ func TestEnrollmentAndCompressedStreams(t *testing.T) {
 }
 
 func TestDisplayedInvitesShareRedemptionAcrossListeners(t *testing.T) {
-	server, config, err := New(filepath.Join(t.TempDir(), "server"), nil, identity.DeviceKeys{})
+	server, config, err := New(filepath.Join(t.TempDir(), "server"), nil, identity.DeviceKeys{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,4 +164,98 @@ func TestDisplayedInvitesShareRedemptionAcrossListeners(t *testing.T) {
 		t.Fatal(e)
 	}
 	st.Close()
+}
+
+func TestConnectionActivity(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "server")
+	var output bytes.Buffer
+	log := activity.Open(dir, true, &output)
+	server, config, err := New(dir, nil, identity.DeviceKeys{}, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := quic.ListenAddr("127.0.0.1:0", config, wire.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	server.slots = make(chan struct{}, 1)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() { defer close(done); server.Serve(ctx, listener) }()
+	stop := sync.OnceFunc(func() { cancel(); <-done })
+	defer stop()
+	profile := identity.Profile{Address: listener.Addr().String(), Pin: server.pin}
+	device := filepath.Join(t.TempDir(), "device")
+	dial := func() *quic.Conn {
+		t.Helper()
+		c, err := identity.Dial(ctx, device, profile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	first := dial()
+	if _, _, err := wire.Open(first, wire.Message{Op: "pair", Token: "private-token-marker"}); err == nil {
+		t.Fatal("invalid pairing accepted")
+	}
+	wait := func(c *quic.Conn) {
+		t.Helper()
+		select {
+		case <-c.Context().Done():
+		case <-time.After(12 * time.Second):
+			t.Fatal("expected disconnect")
+		}
+	}
+	wait(dial()) // First unpaired connection occupies the only slot.
+	wait(first)  // Enrollment deadline.
+	// The remote can observe the close before the handler releases its slot.
+	deadline := time.Now().Add(5 * time.Second)
+	for len(server.slots) > 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	third := dial()
+	if _, _, err := wire.Open(third, wire.Message{Op: "private-operation-marker"}); err == nil {
+		t.Fatal("unknown request accepted")
+	}
+	third.CloseWithError(42, "private-reason-marker")
+	// Wait for the remote close to reach the broker before stopping the daemon.
+	deadline = time.Now().Add(5 * time.Second)
+	for {
+		server.mu.Lock()
+		n := len(server.peers)
+		server.mu.Unlock()
+		if n == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("connection did not close")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	stop()
+	if strings.Contains(output.String(), "private-") {
+		t.Fatal("private marker leaked")
+	}
+	opens := map[string]bool{}
+	reasons := map[string]int{}
+	for _, line := range strings.Split(strings.TrimSpace(output.String()), "\n") {
+		var ev activity.Event
+		if err := json.Unmarshal([]byte(line), &ev); err != nil {
+			t.Fatal(err)
+		}
+		switch ev.Name {
+		case "connection_open":
+			opens[ev.Connection] = true
+		case "connection_close":
+			if !opens[ev.Connection] || ev.Device == "" || ev.Duration == nil {
+				t.Fatal("unmatched disconnect")
+			}
+			delete(opens, ev.Connection)
+			reasons[ev.Outcome]++
+		}
+	}
+	if len(opens) != 0 || reasons["busy"] != 1 || reasons["enrollment_required"] != 1 || reasons["peer_error"] != 1 {
+		t.Fatalf("disconnects: %v", reasons)
+	}
 }

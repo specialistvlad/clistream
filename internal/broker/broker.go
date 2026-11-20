@@ -16,9 +16,11 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/quic-go/quic-go"
+	"github.com/specialistvlad/clistream/internal/activity"
 	"github.com/specialistvlad/clistream/internal/identity"
 	"github.com/specialistvlad/clistream/internal/wire"
 )
@@ -28,6 +30,8 @@ type entry struct {
 	conn *quic.Conn
 }
 type Server struct {
+	log        *activity.Log
+	workers    sync.WaitGroup
 	auth       identity.Authenticator
 	mu         sync.Mutex
 	dir, pin   string
@@ -41,13 +45,13 @@ type Server struct {
 	peers      map[*quic.Conn]string
 }
 
-func New(dir string, addresses []string, auth identity.Authenticator) (*Server, *tls.Config, error) {
+func New(dir string, addresses []string, auth identity.Authenticator, log *activity.Log) (*Server, *tls.Config, error) {
 	cert, e := identity.Key(dir)
 	if e != nil {
 		return nil, nil, e
 	}
 	s := &Server{
-		auth: auth, dir: dir, addresses: addresses, pin: identity.Pin(cert.Leaf),
+		log: log, auth: auth, dir: dir, addresses: addresses, pin: identity.Pin(cert.Leaf),
 		signingKey: cert.PrivateKey.(ed25519.PrivateKey), now: time.Now,
 		slots: make(chan struct{}, 128), devices: map[string]string{},
 		invites: map[string]time.Time{}, sessions: map[string]entry{}, peers: map[*quic.Conn]string{},
@@ -73,6 +77,21 @@ func New(dir string, addresses []string, auth identity.Authenticator) (*Server, 
 }
 func randomID(n int) string { b := make([]byte, n); rand.Read(b); return hex.EncodeToString(b) }
 func (s *Server) Admin(action, arg string) (string, error) {
+	event := activity.Event{Name: "admin_request", Outcome: "ok", Operation: "unknown"}
+	switch action {
+	case "display", "invite", "devices", "revoke":
+		event.Operation = action
+	}
+	result, err := s.admin(action, arg)
+	if err != nil {
+		event.Outcome = "failed"
+	} else if action == "revoke" {
+		event.Device = arg
+	}
+	s.log.Record(event)
+	return result, err
+}
+func (s *Server) admin(action, arg string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch action {
@@ -148,6 +167,8 @@ func (s *Server) Admin(action, arg string) (string, error) {
 }
 func (s *Server) save() error { return identity.Save(filepath.Join(s.dir, "devices.json"), s.devices) }
 func (s *Server) Serve(ctx context.Context, listeners ...*quic.Listener) error {
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
 	results := make(chan error, len(listeners))
 	for _, l := range listeners {
 		go func() { results <- s.accept(ctx, l) }()
@@ -157,11 +178,8 @@ func (s *Server) Serve(ctx context.Context, listeners ...*quic.Listener) error {
 		err = <-results
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for peer := range s.peers {
-		peer.CloseWithError(0, "daemon stopping")
-	}
+	stop()
+	s.workers.Wait()
 	return err
 }
 func (s *Server) accept(ctx context.Context, l *quic.Listener) error {
@@ -170,20 +188,65 @@ func (s *Server) accept(ctx context.Context, l *quic.Listener) error {
 		if e != nil {
 			return e
 		}
-		select {
-		case s.slots <- struct{}{}:
-			go func() { defer func() { <-s.slots }(); s.connection(c) }()
-		default:
-			c.CloseWithError(2, "busy")
+		start := time.Now()
+		pin, authErr := s.auth.Principal(c.ConnectionState().TLS)
+		peer := activity.Event{Name: "connection_open", Connection: randomID(12), Address: c.RemoteAddr().String(), Device: pin, Role: "unknown"}
+		s.log.Record(peer)
+		reason := "busy"
+		if authErr == nil {
+			select {
+			case s.slots <- struct{}{}:
+				s.workers.Add(1)
+				go func() {
+					defer s.workers.Done()
+					defer func() { <-s.slots }()
+					stop := context.AfterFunc(ctx, func() { c.CloseWithError(0, "daemon stopping") })
+					defer stop()
+					s.connection(c, peer, start)
+				}()
+				continue
+			default:
+				c.CloseWithError(2, "busy")
+			}
+		} else {
+			reason = "invalid_identity"
+			c.CloseWithError(3, "invalid identity")
 		}
+		peer.Name, peer.Outcome, peer.Duration = "connection_close", reason, activity.Since(start)
+		s.log.Record(peer)
 	}
 }
-func (s *Server) connection(c *quic.Conn) {
-	pin, e := s.auth.Principal(c.ConnectionState().TLS)
-	if e != nil {
-		c.CloseWithError(3, "invalid identity")
-		return
+
+func disconnectReason(err error) string {
+	var app *quic.ApplicationError
+	if errors.As(err, &app) {
+		if app.Remote {
+			if app.ErrorCode == 0 {
+				return "peer_closed"
+			}
+			return "peer_error"
+		}
+		switch app.ErrorMessage {
+		case "daemon stopping":
+			return "shutdown"
+		case "revoked":
+			return "revoked"
+		case "enrollment required":
+			return "enrollment_required"
+		}
 	}
+	var timeout net.Error
+	if errors.As(err, &timeout) && timeout.Timeout() {
+		return "timeout"
+	}
+	return "transport_closed"
+}
+
+func (s *Server) connection(c *quic.Conn, peer activity.Event, start time.Time) {
+	pin := peer.Device
+	var closeErr error
+	var clientRole atomic.Bool
+	var streams sync.WaitGroup
 	s.mu.Lock()
 	if s.devices[pin] == "" {
 		timer := time.AfterFunc(8*time.Second, func() {
@@ -200,27 +263,46 @@ func (s *Server) connection(c *quic.Conn) {
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
-		defer s.mu.Unlock()
 		delete(s.peers, c)
 		for id, v := range s.sessions {
 			if v.conn == c {
 				delete(s.sessions, id)
+				peer.Session = id
 			}
 		}
+		s.mu.Unlock()
+		if peer.Session != "" {
+			peer.Role = "supervisor"
+			peer.Name = "session_removed"
+			s.log.Record(peer)
+		} else if clientRole.Load() {
+			peer.Role = "client"
+		}
+		peer.Name, peer.Outcome, peer.Duration = "connection_close", disconnectReason(closeErr), activity.Since(start)
+		s.log.Record(peer)
 	}()
+	defer streams.Wait()
 	for {
-		st, e := c.AcceptStream(c.Context())
+		st, e := c.AcceptStream(context.Background())
 		if e != nil {
+			closeErr = e
 			return
 		}
+		streams.Add(1)
 		go func() {
+			defer streams.Done()
 			defer st.Close()
 			defer st.CancelRead(0)
 			st.SetReadDeadline(time.Now().Add(5 * time.Second))
 			m, e := wire.Read(st)
 			st.SetReadDeadline(time.Time{})
 			if e == nil {
-				e = s.handle(c, st, pin, m)
+				e = s.handle(c, st, peer, m, &clientRole)
+			} else {
+				ev := peer
+				ev.Name = "request_rejected"
+				ev.Outcome = "invalid_record"
+				s.log.Record(ev)
 			}
 			if e != nil {
 				wire.Fail(st, e)
@@ -228,11 +310,26 @@ func (s *Server) connection(c *quic.Conn) {
 		}()
 	}
 }
-func (s *Server) handle(c *quic.Conn, st *quic.Stream, pin string, m wire.Message) error {
+func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire.Message, clientRole *atomic.Bool) (err error) {
+	pin := ev.Device
+	start := time.Now()
+	id := int64(st.StreamID())
+	ev.Stream = &id
+	ev.Name = "request_rejected"
+	defer func() {
+		if err != nil {
+			ev.Outcome = "failed"
+		} else if ev.Outcome == "" {
+			ev.Outcome = "ok"
+		}
+		ev.Duration = activity.Since(start)
+		s.log.Record(ev)
+	}()
 	s.mu.Lock()
 	_, enrolled := s.devices[pin]
 	switch m.Op {
 	case "pair":
+		ev.Name = "pair"
 		defer s.mu.Unlock()
 		i, e := identity.ParseInvitation(m.Token)
 		if e != nil || i.Pin != s.pin || i.Version != 2 {
@@ -251,6 +348,7 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, pin string, m wire.Messag
 		}
 		return wire.Write(st, wire.Message{Op: "ok"})
 	case "register":
+		ev.Name = "session_register"
 		defer s.mu.Unlock()
 		if !enrolled {
 			return errors.New("device enrollment required")
@@ -267,7 +365,18 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, pin string, m wire.Messag
 		info := *m.Info
 		info.ID = id
 		s.sessions[id] = entry{info, c}
+		ev.Session, ev.Role = id, "supervisor"
 		return wire.Write(st, wire.Message{Op: "ok", ID: id})
+	}
+	if m.Op == "list" || m.Op == "open" {
+		clientRole.Store(true)
+		ev.Role = "client"
+		if m.Op == "list" {
+			ev.Name = "session_list"
+		} else {
+			ev.Name = "channel_rejected"
+			ev.Operation = channelOperation(m.Channel, nil)
+		}
 	}
 	if !enrolled {
 		s.mu.Unlock()
@@ -287,6 +396,8 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, pin string, m wire.Messag
 	if !ok || m.Op != "open" {
 		return errors.New("unknown session or operation")
 	}
+	ev.Session = v.info.ID
+	ev.Operation = channelOperation(m.Channel, v.info.Ports)
 	up, response, e := wire.Open(v.conn, m)
 	if e != nil {
 		return e
@@ -296,10 +407,54 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, pin string, m wire.Messag
 		wire.Abort(up)
 		return e
 	}
-	relay(st, up)
+	ev.Name = "channel_open"
+	s.log.Record(ev)
+	ev.Name = "channel_close"
+	relay(st, up, &ev)
 	return nil
 }
-func relay(a, b *quic.Stream) {
+func channelOperation(channel string, ports map[string]string) string {
+	switch channel {
+	case "stdin", "stdout", "stderr", "pty", "fs/list", "fs/get", "fs/put":
+		return channel
+	}
+	if name, ok := strings.CutPrefix(channel, "port/"); ok {
+		switch ports[name] {
+		case "tcp":
+			return "port/tcp"
+		case "udp":
+			return "port/udp"
+		}
+		return "port"
+	}
+	return "unknown"
+}
+
+// Only the supervisor-to-client copy observes application results. A clean FIN
+// by itself does not confirm a file transfer or establish a process exit code.
+func observeResult(ev *activity.Event, m wire.Message) {
+	switch m.Op {
+	case "error":
+		ev.Outcome = "failed"
+	case "end":
+		if ev.Operation == "fs/list" || ev.Operation == "fs/get" {
+			ev.Outcome = "confirmed"
+		}
+	case "ok":
+		if ev.Operation == "fs/put" {
+			ev.Outcome = "confirmed"
+		}
+	case "exit":
+		switch ev.Operation {
+		case "stdout", "stderr", "pty":
+			ev.Outcome = "exited"
+			code := m.Code
+			ev.ExitCode = &code
+		}
+	}
+}
+
+func relay(a, b *quic.Stream, ev *activity.Event) {
 	stopOnReset := func(source, other *quic.Stream) func() bool {
 		return context.AfterFunc(source.Context(), func() {
 			if !errors.Is(context.Cause(source.Context()), quic.ErrStreamClosed) {
@@ -309,10 +464,13 @@ func relay(a, b *quic.Stream) {
 	}
 	defer stopOnReset(a, b)()
 	defer stopOnReset(b, a)()
-	copySide := func(dst, src *quic.Stream) {
+	copySide := func(dst, src *quic.Stream) bool {
 		for {
 			m, e := wire.Read(src)
 			if e == nil {
+				if src == b {
+					observeResult(ev, m)
+				}
 				e = wire.Write(dst, m)
 			}
 			if e != nil {
@@ -322,12 +480,18 @@ func relay(a, b *quic.Stream) {
 					dst.CancelWrite(1)
 					src.CancelRead(1)
 				}
-				return
+				return e == io.EOF
 			}
 		}
 	}
-	done := make(chan struct{})
-	go func() { copySide(b, a); close(done) }()
-	copySide(a, b)
-	<-done
+	done := make(chan bool, 1)
+	go func() { done <- copySide(b, a) }()
+	outputEOF := copySide(a, b)
+	inputEOF := <-done
+	if ev.Outcome == "" {
+		ev.Outcome = "interrupted"
+		if inputEOF && outputEOF {
+			ev.Outcome = "closed"
+		}
+	}
 }

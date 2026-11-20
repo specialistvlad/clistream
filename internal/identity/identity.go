@@ -53,17 +53,25 @@ func Save(path string, v any) error {
 	}
 	return os.Rename(f.Name(), path)
 }
-func Key(dir string) (tls.Certificate, error) {
-	var zero tls.Certificate
-	if e := os.MkdirAll(dir, 0700); e != nil {
-		return zero, e
+
+// EnsurePrivateDir creates the state directory or verifies its existing mode.
+func EnsurePrivateDir(dir string) error {
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
 	}
-	info, e := os.Lstat(dir)
-	if e != nil {
-		return zero, e
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return err
 	}
 	if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
-		return zero, errors.New("identity directory must be private (0700)")
+		return errors.New("identity directory must be private (0700)")
+	}
+	return nil
+}
+func Key(dir string) (tls.Certificate, error) {
+	var zero tls.Certificate
+	if e := EnsurePrivateDir(dir); e != nil {
+		return zero, e
 	}
 	path := filepath.Join(dir, "key.pem")
 	b, e := os.ReadFile(path)

@@ -8,6 +8,14 @@ Run `clistreamd` in a terminal under the service account to display its pairing 
 
 On the program host, run `clistream-supervise LINK PROGRAM [ARG ...]`. On the same OS account, `clistream` then connects with the saved key. On a second host, run `clistream LINK` within three minutes. Press **p** at the daemon terminal to replace outstanding links across all interfaces. For an upgrade, review previously enrolled supervisor keys before restarting the service, since those keys will gain control of every session. [Upgrade permissions](security.md)
 
+## Server activity logs
+
+The serving daemon appends one JSON object per line to `server.log`. On Linux the default location is `${XDG_CONFIG_HOME:-$HOME/.config}/clistream/server/server.log`. On macOS it is `~/Library/Application Support/clistream/server/server.log`. With `-state DIR`, follow the file with `tail -F "DIR/server.log"`, substituting your state directory. Files have mode 0600. Before the next record would exceed 10 MiB, the daemon rotates the active log to `server.log.1` and keeps up to five previous files.
+
+Use `clistreamd -no-log-file` to send activity events to standard error. Set the flag on the serving process. For systemd append it to `ExecStart` and read events with `journalctl --user -u clistream`. For launchd add `<string>-no-log-file</string>` to `ProgramArguments` and configure `StandardErrorPath` if you want launchd to collect the output. If the daemon cannot open, write or rotate its own file, it reports the error and uses standard error for the rest of that run. Normal startup and diagnostic text can share standard error with JSON events.
+
+To follow one connection, select its `connection_id` from `connection_open` and find the matching `connection_close`. The close event includes the observed role, reason (`outcome`) and `duration_ms`. Use the device fingerprint to follow a reconnect, and `session_id` to find clients of the same supervisor. An orderly daemon stop drains connection and channel events before `daemon_stop`. An abrupt daemon kill or host power loss can leave an open event without a close.
+
 ## Linux user service
 
 For binaries installed in /usr/local/bin, save this as ~/.config/systemd/user/clistream.service and substitute the endpoint. Run `systemctl --user daemon-reload` and `systemctl --user enable --now clistream`. Use `journalctl --user -u clistream` for diagnostics.
@@ -53,7 +61,7 @@ The optional Docker test, `make test-deployment`, starts a broker, two independe
 
 ## Apple client and TestFlight
 
-Fresh enrollment requires a client build that accepts the daemon’s signed `clistream://pair/v2/` links. Existing enrolled devices can reconnect with their saved keys. The Go CLIs also accept invitations from older daemons. Native Apple v2 enrollment still needs acceptance testing. When upgrading a running daemon, restart the process to activate the new terminal display. If the saved network address changes, enroll with a link containing a reachable address.
+Fresh enrollment requires a client build that accepts the daemon’s signed `clistream://pair/v2/` links. Existing enrolled devices can reconnect with their saved keys. The Go CLIs also accept invitations from older daemons. The shared-session suite covers native Apple v2 enrollment. Mobile pairing UI acceptance is pending. When upgrading a running daemon, restart the process to activate the new terminal display. If the saved network address changes, enroll with a link containing a reachable address.
 
 Install full Xcode, Go and XcodeGen. Run `make apple` and open apple/CLIStream.xcodeproj. Select CLIStream-iOS for iPhone and iPad, or CLIStream-macOS for Mac. The static Go library contains arm64 device, arm64/x86_64 simulator, and universal macOS slices. Simulator and local builds can use separate signing settings. The application uses SwiftTerm for PTY rendering.
 

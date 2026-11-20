@@ -130,6 +130,100 @@ class BrokerFixture(unittest.TestCase):
 
 
 class Live(BrokerFixture):
+    def test_activity_log(self):
+        log = self.base / "server/server.log"
+        self.check_activity(log)
+
+    def test_log_file_unavailable(self):
+        self.daemon.terminate()
+        self.daemon.wait(8)
+        path = self.base / "server/server.log"
+        path.rename(path.with_suffix(".saved"))
+        path.mkdir()
+        self.check_stderr_activity(fallback=True)
+
+    def test_activity_stderr(self):
+        self.daemon.terminate()
+        self.daemon.wait(8)
+        self.check_stderr_activity(fallback=False)
+
+    def check_stderr_activity(self, fallback):
+        flags = [] if fallback else ["-no-log-file"]
+        log = self.base / "stderr.log"
+        with log.open("wb") as output:
+            self.daemon = self.spawn(self.server + flags + ["-listen", self.address], stderr=output)
+        deadline = time.monotonic() + 8
+        while b"serving QUIC" not in log.read_bytes():
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.02)
+        self.check_activity(log)
+        self.assertEqual(b"writing events to stderr" in log.read_bytes(), fallback)
+
+    def check_activity(self, log):
+        link = self.run_cli(self.server + ["invite"]).stdout.strip()
+        private = "private-audit-marker"
+        executable = self.work / (private + "-program")
+        executable.symlink_to("/bin/cat")
+        _, sid = self.session([], [str(executable)])
+        # Attach with the supervisor's identity to exercise role attribution.
+        viewer = self.spawn([CLI, "-state", self.base / "supervisor", "attach", sid])
+        viewer.stdin.write((private + "-terminal\n").encode())
+        self.assertEqual(line(viewer.stdout), (private + "-terminal\n").encode())
+        source = self.base / "upload"
+        source.write_text(private + "-contents")
+        name = private + "-file"
+        self.run_cli(self.a + ["put", sid, source, name])
+        self.run_cli(self.a + ["get", sid, name, self.base / "download"])
+        self.run_cli(self.a + ["ls", sid, "."])
+        self.assertNotEqual(self.run_cli(self.a + ["put", sid, source, name], check=False).returncode, 0)
+        self.run_cli(self.server + [private], check=False)
+        self.daemon.terminate()
+        self.assertEqual(self.daemon.wait(8), 0)
+        data = log.read_bytes()
+        self.assertNotIn(private.encode(), data)
+        self.assertNotIn(link, data)
+        diagnostics = (b"serving QUIC ", b"clistreamd: activity log unavailable")
+        events = [json.loads(row) for row in data.splitlines() if not row.startswith(diagnostics)]
+        self.assertEqual(events[-1]["event"], "daemon_stop")
+        opened = [e["connection_id"] for e in events if e["event"] == "connection_open"]
+        closed = [e for e in events if e["event"] == "connection_close"]
+        self.assertCountEqual(opened, {e["connection_id"] for e in closed})
+        self.assertEqual(len(opened), len(closed))
+        supervisor, = [e for e in closed if e["role"] == "supervisor"]
+        self.assertEqual((supervisor["session_id"], supervisor["outcome"]), (sid, "shutdown"))
+        self.assertTrue(any(e["device"] == supervisor["device"] and e["role"] == "client"
+                            and e["connection_id"] != supervisor["connection_id"] for e in closed))
+        channels = [e for e in events if e["event"] == "channel_close" and e["session_id"] == sid]
+        self.assertTrue({"fs/get", "fs/list", "fs/put"} <=
+                        {e["operation"] for e in channels if e["outcome"] == "confirmed"})
+        self.assertIn(("fs/put", "failed"), [(e["operation"], e["outcome"]) for e in channels])
+        def stream(event):
+            return event["connection_id"], event["stream_id"]
+        self.assertCountEqual([stream(e) for e in channels],
+                              [stream(e) for e in events if e["event"] == "channel_open"])
+
+    def test_no_log_file(self):
+        self.daemon.terminate()
+        self.daemon.wait(5)
+        path = self.base / "server/server.log"
+        previous = path.read_bytes()
+        for existing in (True, False):
+            if not existing:
+                path.unlink()
+            self.daemon = self.spawn(self.server + ["-no-log-file", "-listen", self.address])
+            status_line(self.daemon.stderr, b"serving QUIC")
+            link = self.run_cli(self.server + ["invite"]).stdout.strip()
+            self.run_cli(self.a + ["pair"], data=link)
+            self.run_cli(self.server + ["private-stderr-marker"], check=False)
+            self.daemon.terminate()
+            output = self.daemon.communicate(timeout=8)[1]
+            self.assertNotIn(link, output)
+            self.assertNotIn(b"private-stderr-marker", output)
+            self.assertIn("pair", [json.loads(row)["event"] for row in output.splitlines()])
+            self.assertEqual(path.exists(), existing)
+            if existing:
+                self.assertEqual(path.read_bytes(), previous)
+
     def test_interactive_pairing_and_reconnect(self):
         def terminal(args):
             master, slave = pty.openpty()
@@ -343,6 +437,12 @@ class Live(BrokerFixture):
         for v in viewers:
             self.assertEqual(v.wait(10), 7, v.stderr.read())
         self.assertEqual(p.wait(10), 7)
+        self.daemon.terminate()
+        self.daemon.wait(8)
+        events = [json.loads(row) for row in (self.base / "server/server.log").read_text().splitlines()]
+        exits = [e for e in events if e.get("outcome") == "exited"]
+        self.assertCountEqual([(e["operation"], e["exit_code"]) for e in exits],
+                              [("stdout", 7), ("stderr", 7)] * 2)
 
     def test_pty(self):
         _, sid = self.session(
@@ -448,7 +548,7 @@ class Live(BrokerFixture):
                 s.bind(("127.0.0.1", 0))
                 exports += [
                     "-export",
-                    f"{proto}={proto}:127.0.0.1:{s.getsockname()[1]}",
+                    f"private-export-{proto}={proto}:127.0.0.1:{s.getsockname()[1]}",
                 ]
                 socks[proto] = s
             tcp = socks["tcp"]
@@ -478,7 +578,7 @@ class Live(BrokerFixture):
                 ("tcp", socket.SOCK_STREAM),
                 ("udp", socket.SOCK_DGRAM),
             ]:
-                v = self.spawn(self.a + ["forward", sid, proto, "127.0.0.1:0"])
+                v = self.spawn(self.a + ["forward", sid, "private-export-" + proto, "127.0.0.1:0"])
                 addr = (
                     status_line(v.stderr, b"forwarding ")
                     .decode()
@@ -496,6 +596,14 @@ class Live(BrokerFixture):
                         for data in [b"", b"x", os.urandom(1400)]:
                             sock.send(data)
                             self.assertEqual(sock.recv(65535), data)
+
+        self.daemon.terminate()
+        self.assertEqual(self.daemon.wait(8), 0)
+        data = (self.base / "server/server.log").read_text()
+        self.assertNotIn("private-export-", data)
+        events = [json.loads(row) for row in data.splitlines()]
+        self.assertEqual({e["operation"] for e in events if e["event"] == "channel_close"},
+                         {"port/tcp", "port/udp"})
 
     def test_reconnect(self):
         target, old_id = self.session([], ["/bin/cat"])
@@ -521,6 +629,13 @@ class Live(BrokerFixture):
         self.assertNotEqual(new_id, old_id)
         remote = self.spawn(self.a + ["attach", new_id])
         self.assertEqual(line(remote.stdout), b"before-restart\n")
+        self.daemon.terminate()
+        self.daemon.wait(8)
+        events = [json.loads(row) for row in (self.base / "server/server.log").read_text().splitlines()]
+        registrations = [e for e in events if e["event"] == "session_register" and e["outcome"] == "ok"]
+        self.assertEqual([e["session_id"] for e in registrations], [old_id, new_id])
+        self.assertEqual(len({e["device"] for e in registrations}), 1)
+        self.assertEqual(len({e["connection_id"] for e in registrations}), 2)
 
     def supported_executable(self, name):
         banners = {"claude": b"2.1.329 (Claude Code)", "codex": b"codex-cli 0.170.0"}
@@ -793,6 +908,10 @@ class Live(BrokerFixture):
         self.run_cli(guest + ["list"])
         retained.stdin.write(b"still-enrolled\n")
         self.assertEqual(line(retained.stdout), b"still-enrolled\n")
+        self.daemon.terminate()
+        self.daemon.wait(8)
+        events = [json.loads(row) for row in (self.base / "server/server.log").read_text().splitlines()]
+        self.assertTrue(any(e["event"] == "connection_close" and e["outcome"] == "revoked" for e in events))
 
     def test_concurrent_uploads(self):
         _, sid = self.session([], ["/bin/cat"])

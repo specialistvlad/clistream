@@ -66,6 +66,8 @@ Transfers stream in chunks and preserve existing destination files. In the Apple
 
 ## Administration and development
 
+The daemon automatically appends JSON activity events to `server.log` in its private state directory. Follow it with `tail -F /path/to/state/server.log`. Start the daemon with `clistreamd -no-log-file` to send events to standard error. The log records connections, disconnects, sessions, file operations and forwards. Terminal and file contents stay private. [Server activity logs](docs/deployment.md#server-activity-logs)
+
 `clistreamd devices` lists enrolled key fingerprints. `clistreamd revoke FINGERPRINT` removes that device and closes active connections. On upgrade, previously enrolled supervisors gain permission to control every session. A holder of a valid invitation can enroll again after revocation. Press **p** to replace outstanding invitations. Global flags precede subcommands. `-state DIR` chooses a separate private identity directory for any binary.
 
 On upgrade, the Go tools reuse the sole saved profile, or the client profile when both legacy profiles have the same address and server pin. If the servers differ, each tool keeps its existing connection until you explicitly pair with the shared server. Older daemons retain their original enrollment rules.

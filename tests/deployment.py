@@ -124,7 +124,8 @@ def verify(root, resources):
         items = json.loads(run("viewer", "clistream", "list").stdout) or []
         return items if len(items) == 2 else None
 
-    for item in until(sessions):
+    registered = until(sessions)
+    for item in registered:
         host = item["Host"]
         assert host in ("alpha", "beta")
         sid = item["ID"]
@@ -149,6 +150,13 @@ def verify(root, resources):
             ).encode(),
         )
         assert response.stdout == (host + "confined\n").encode(), response.stdout
+    log = docker("exec", prefix + "-broker", "cat", "/state/identity/server.log").stdout
+    events = [json.loads(line) for line in log.splitlines()]
+    published = [e for e in events if e["event"] == "session_register" and e["outcome"] == "ok"]
+    assert {e["session_id"] for e in published} == {item["ID"] for item in registered}
+    assert len({e["device"] for e in published}) == len({e["connection_id"] for e in published}) == 2
+    assert {e["session_id"] for e in events if e["event"] == "channel_close"
+            and e["operation"] == "fs/get" and e["outcome"] == "confirmed"} == {item["ID"] for item in registered}
     assert sentinel.read_text() == "host-only"
     print(
         "PASS: remote registration, independent session I/O and workspace roots, host sentinel isolation"
