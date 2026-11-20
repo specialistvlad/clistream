@@ -291,9 +291,15 @@ class Live(unittest.TestCase):
         self.daemon.terminate()
         self.daemon.wait(5)
         self.start_server()
-        deadline = time.monotonic() + 15
+        # A lost close packet can defer recovery until QUIC's one-minute idle timeout.
+        deadline = time.monotonic() + 75
+        sessions = []
         while time.monotonic() < deadline:
-            sessions = json.loads(self.run_cli(self.a + ["list"]).stdout) or []
+            result = self.run_cli(self.a + ["list"], check=False)
+            if result.returncode:
+                self.assertIn(b"timeout", result.stderr)
+                continue
+            sessions = json.loads(result.stdout) or []
             if sessions:
                 break
             time.sleep(0.1)
