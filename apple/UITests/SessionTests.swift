@@ -83,38 +83,45 @@ final class SessionTests: XCTestCase {
       choosePath(saved + "/" + name + ".txt", in: app)
       tap(app.buttons["OKButton"])
     #else
-      let fileView = app.collectionViews["File View"].firstMatch
-      let pickerFile = fileView.cells.matching(
-        NSPredicate(format: "label BEGINSWITH %@", name)
-      ).firstMatch
-      if usedSidebar {
-        tap(storageRow)
-      } else if !pickerFile.waitForExistence(timeout: 2) {
-        let browse = app.buttons["Browse"].firstMatch
-        if browse.waitForExistence(timeout: 4) { browse.tap() }
-        if !pickerFile.waitForExistence(timeout: 2) {
-          if !storageRow.exists && browse.isHittable { browse.tap() }
-          tap(storageRow)
+      let browser = app.collectionViews.matching(identifier: "File View")
+      let fileMatches = app.cells.matching(NSPredicate(format: "label BEGINSWITH %@", name))
+      func visible(_ query: XCUIElementQuery) -> XCUIElement? {
+        query.allElementsBoundByIndex.first { element in
+          let frame = element.frame
+          return !frame.isEmpty && app.frame.contains(CGPoint(x: frame.midX, y: frame.midY))
+            && element.isHittable
         }
       }
-      let ready = XCTNSPredicateExpectation(
-        predicate: NSPredicate(format: "hittable == true"), object: pickerFile)
-      XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 12), .completed)
-      // Files supplies the cell's activation point for both list and icon layouts.
-      pickerFile.tap()
-      let open = app.buttons["Open"].firstMatch
-      func finishedSelecting() -> Bool {
-        if open.exists && open.isEnabled && open.isHittable { open.tap() }
-        return fileView.waitForNonExistence(timeout: 4)
+      let cancel = app.buttons["Cancel"].firstMatch
+      XCTAssertTrue(cancel.waitForExistence(timeout: 12))
+      if usedSidebar {
+        tap(storageRow)
+      } else if visible(fileMatches) == nil {
+        let browse = app.buttons["Browse"].firstMatch
+        if browse.exists && browse.isHittable { browse.tap() }
+        if !storageRow.exists && browse.exists && browse.isHittable { browse.tap() }
+        if storageRow.exists && storageRow.isHittable { storageRow.tap() }
       }
-      if !finishedSelecting() {
-        // Files can expose an item before it finishes changing location.
-        // Activate the name in the settled view, then handle the confirmation.
-        let label = pickerFile.staticTexts.matching(
-          NSPredicate(format: "label BEGINSWITH %@", name)
-        ).firstMatch
-        if label.exists && label.isHittable { label.tap() } else { pickerFile.doubleTap() }
-        XCTAssertTrue(finishedSelecting(), "Files did not return the selected document")
+      // Files retains offscreen pages and cells in its accessibility hierarchy.
+      // Resolve the visible result after navigation, scrolling the active grid
+      // when the same simulator has accumulated earlier exports.
+      let grid = try XCTUnwrap(visible(browser), "Files did not show a document grid")
+      var file = visible(fileMatches)
+      for _ in 0..<12 where file == nil {
+        grid.swipeUp()
+        file = visible(fileMatches)
+      }
+      let document = try XCTUnwrap(file, "Exported document was absent from the visible Files grid")
+      document.tap()
+      let open = app.buttons["Open"].firstMatch
+      if !cancel.waitForNonExistence(timeout: 3) {
+        if open.exists && open.isHittable && open.isEnabled {
+          open.tap()
+        } else if let settled = visible(fileMatches) {
+          settled.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).tap()
+          if open.exists && open.isHittable && open.isEnabled { open.tap() }
+        }
+        XCTAssertTrue(cancel.waitForNonExistence(timeout: 8), "Files did not return the document")
       }
     #endif
     XCTAssertTrue(
@@ -221,9 +228,23 @@ final class SessionTests: XCTestCase {
         // the folder heading, then use the screen reader's next action.
         app.navigationBars["inbox"].staticTexts["inbox"].firstMatch.tap()
         var readings = [String]()
-        if let initial = try? voice.currentSpeech() { readings.append(initial.utterance) }
+        let focus = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+          guard let speech = try? voice.currentSpeech() else { return false }
+          return !speech.utterance.isEmpty
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [focus], timeout: 12), .completed)
+        readings.append(try voice.currentSpeech().utterance)
+        var deliveryRetries = 0
         for _ in 0..<20 {
-          readings.append(try voice.moveForward().utterance)
+          do {
+            readings.append(try voice.moveForward().utterance)
+          } catch let error as NSError where error.domain == "AXVoiceOverAutomationErrorDomain"
+            && error.code == 3 && deliveryRetries < 3
+          {
+            deliveryRetries += 1
+            try await Task.sleep(for: .milliseconds(500))
+            continue
+          }
           if ["nested", "Upload", "Done"].allSatisfy({ label in
             readings.contains { $0.localizedCaseInsensitiveContains(label) }
           }) {
