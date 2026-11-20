@@ -1,6 +1,6 @@
 # Requirements audit
 
-Use the case names below to trace a product requirement to the executable that verifies it. The Apple UI suites launch the shipping interface under a separate bundle identifier. The fixture verifies output on the supervisor side, including terminal bytes and the contents of uploaded files. A green UI assertion alone cannot pass a fixture.
+Use the case names below to trace a product requirement to the executable that verifies it. The Apple UI suites launch the shipping interface under a separate bundle identifier. The fixture verifies output on the supervisor side, including terminal bytes and the contents of uploaded files. The fixture must pass its independent checks before the run counts as verified. The machine-readable record includes the case names, outcomes and skipped checks for each environment. [Execution evidence](requirements-audit.json)
 
 | Requirement | Automated evidence | What the check establishes |
 |---|---|---|
@@ -13,7 +13,7 @@ Use the case names below to trace a product requirement to the executable that v
 | F7. Compressed multiplexed QUIC | `TestRecords`, `TestReject`, `TestEnrollmentAndCompressedStreams`, `test_files` | Record limits, mandatory compression on an authenticated stream and continued operation on another stream. A CLI stays attached across upload, download and observation of a local file change. |
 | F8. Named TCP and UDP services | `test_ports`, `testPortForwarding`, `testPairAndUseSession` | Both protocols carry actual payloads. TCP supports half-close, UDP preserves datagrams, undeclared exports fail, and the Apple UI starts and stops listeners. |
 | F9. Confined workspace transfers | `test_files`, `test_concurrent_uploads`, `TestPartialUploadIsRemoved`, `TestRootFollowsOriginalDirectory`, `testWorkspaceTransfers`, `make test-deployment` | Binary equality, no overwrites, interrupted transfer cleanup, distinct roots, descriptor anchoring, and rejection of escaping paths and links. The deployment test also probes the child shell inside an isolated Linux container. |
-| F10. Native Apple interaction | `testPairAndUseSession`, `testTerminalInput`, `testTouchNavigationAndEditing` | Files and port controls, restoring a nested folder, picker cancellation, output from another viewer, touch selection and paste, folder back gestures, accessibility labels and PTY input. Consult the platform outcomes for individual executions. |
+| F10. Native Apple interaction | `testPairAndUseSession`, `testTerminalInput`, `testTouchNavigationAndEditing`, `testScrollSessionsAndTerminalHistory`, `testVoiceOverWorkspaceOrder` | Files and port controls, restoring a nested folder, picker cancellation, output from another viewer, touch selection and paste, folder back gestures, session-list scrolling, terminal scrollback, accessibility labels and PTY input. Consult the platform outcomes for individual executions. |
 
 ## Engineering checks
 
@@ -33,4 +33,4 @@ Run `python3 tests/distribution.py dist/ARCHIVE.tar.gz` on a compatible host to 
 
 Run `make test e2e` for Go and CLI coverage and `make test-deployment` for the four-container deployment. On a Mac, run `make apple` once. Set `SIMULATOR_ID` to the iPhone or iPad simulator and run `apple/test-device.sh`. Use `apple/test-device.sh macOS` on a Mac desktop. Each suite starts its own broker, devices and child processes. The script prints a new result directory and checks the actual workspace files separately from XCTest.
 
-To isolate a failing scenario set `CLISTREAM_TEST_SUITES` to `hosted`, `files`, `terminal` or, on iOS, `touch`. Set `CLISTREAM_APP_DRIVERS=1` to include the installed model clients. The four-client harness and live-provider options are documented in the [verification record](../verification.md).
+To isolate a failing scenario set `CLISTREAM_TEST_SUITES` to `hosted`, `files`, `terminal` or, on iOS, `touch` or `scroll`. Xcode 27 and iOS 27 also support `voiceover`. Pass space-separated names to run several suites. The iPad terminal suite uses AXe to send a hardware keyboard chord to the simulator and waits for byte 0x04 at the child. Set `CLISTREAM_APP_DRIVERS=1` to include the installed model clients. The four-client harness and live-provider options are documented in the [verification record](../verification.md).
