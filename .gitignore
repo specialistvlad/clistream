@@ -1,0 +1,7 @@
+/bin/
+/apple/build/
+/apple/*.xcodeproj/
+.DS_Store
+*.p8
+*.xcuserstate
+

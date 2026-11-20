@@ -1,0 +1,16 @@
+# Trust and security model
+
+The server operator and enrolled client devices are trusted to interact with all sessions belonging to that daemon. The server decrypts and relays each stream. Keep its state under a dedicated OS user in a private directory outside every exported workspace. Tunnel destinations are numeric loopback addresses configured by the supervisor operator. Clients select an export by name.
+
+Each enrollment uses a locally generated Ed25519 key. Protect the device profile directory as a credential. The Go and Apple clients store private key files with mode 0600. The Apple client uses its sandboxed Application Support directory and excludes it from backup. The private key is software-backed. Losing a device requires revocation on each server where it was enrolled.
+
+Only the local Unix administration socket can issue invitations or revoke keys. Its containing directory is private. A QR or link is a bearer enrollment capability until used or expired. Display invitations in a trusted terminal. Stop and rotate the server identity and enroll devices again if the server private key is compromised.
+
+## Workspace service
+
+The supervisor opens the launch directory once. Directory lookup walks pinned descriptors with no-follow opens. The Linux implementation uses openat2 with BENEATH, NO_SYMLINKS and NO_XDEV. macOS also compares the device of every opened descriptor. Transfers accept regular, single-link files. Uploads stage private temporary files in the destination directory, require an explicit end record and publish with an atomic, no-replace link. An interrupted transfer removes its staging file during normal process cleanup. A supervisor crash can leave a hidden staging file that the service refuses to expose.
+
+Use a dedicated workspace without credentials, sensitive files, mounted volumes or concurrent privileged administrators moving directory trees. The file service constrains its own filesystem operations. The terminal runs the command under the supervisor user's OS permissions. Commands typed into it and services reached through port forwarding have their own access rules. For a process-level boundary, run the entire supervisor and target inside a dedicated VM or container with only the intended workspace mounted.
+
+Compression runs inside encrypted QUIC and uses a fresh Snappy block for each record. This avoids a shared compression dictionary across devices, files, invitations or keystrokes. A single record can still expose its approximate compressed size. TLS negotiates its standard TLS 1.3 AEAD suite. The implementation has not undergone an independent security audit.
+
