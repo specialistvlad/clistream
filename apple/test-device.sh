@@ -13,6 +13,7 @@ bin="$PWD/bin"
 make build
 cd apple
 xcodebuild -quiet build-for-testing -scheme "CLIStream-$platform" -destination "$dest" -derivedDataPath "$dd"
+if [[ "$platform" == iOS ]]; then xcrun simctl bootstatus "$SIMULATOR_ID" -b; fi
 state=$(mktemp -d /tmp/clistream-ui.XXXXXXXX)
 daemon_pid= supervisor_pid= viewer_pid=
 cleanup() {
@@ -36,6 +37,7 @@ supervisor_pid=$!
 sid=$("$bin/clistream" -state "$state/client" list | python3 -c 'import json,sys;print(json.load(sys.stdin)[0]["ID"])')
 "$bin/clistream" -state "$state/client" attach "$sid" </dev/null >"$state/viewer" &
 viewer_pid=$!
+export TEST_RUNNER_CLISTREAM_SESSION="$sid"
 export TEST_RUNNER_CLISTREAM_LINK
 TEST_RUNNER_CLISTREAM_LINK=$("$bin/clistreamd" -state "$state/server" -qr=false invite client)
 xcodebuild -quiet test-without-building -scheme "CLIStream-$platform" -parallel-testing-enabled NO -destination "$dest" -derivedDataPath "$dd"

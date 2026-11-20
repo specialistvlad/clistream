@@ -9,6 +9,7 @@ case "$platform" in iOS|macOS) ;; *) echo "expected iOS or macOS" >&2; exit 2;; 
 archive="build/release/$platform-$build_number.xcarchive"
 export GITHUB_ACTIONS=true
 xcodebuild -quiet archive -scheme "CLIStream-$platform" -destination "generic/platform=$platform" -archivePath "$archive" -derivedDataPath build/dd "DEVELOPMENT_TEAM=$DEVELOPMENT_TEAM" "CURRENT_PROJECT_VERSION=$build_number" "${auth[@]}"
+if [[ ${ARCHIVE_ONLY:-0} == 1 ]]; then echo "$archive"; exit 0; fi
 plist="build/release/options-$platform.plist"
 cat > "$plist" <<EOF
 <plist version="1.0"><dict><key>method</key><string>app-store-connect</string><key>destination</key><string>upload</string><key>signingStyle</key><string>automatic</string><key>teamID</key><string>$DEVELOPMENT_TEAM</string><key>manageAppVersionAndBuildNumber</key><false/></dict></plist>

@@ -22,7 +22,7 @@ struct BrowserView: View {
                         stream("Standard output", connection.stdout)
                         stream("Standard error", connection.stderr)
                         HStack {
-                            TextField("Input", text: $line).onSubmit(submit)
+                            TextField("Input", text: $line).accessibilityIdentifier("session-input").onSubmit(submit)
                             Button("Send", action: submit)
                             Button("EOF") { connection.send(["Op":"eof"]) }
                         }.padding()
@@ -45,8 +45,8 @@ struct BrowserView: View {
                             VStack(alignment: .leading) {
                                 Text(item.Name).font(.headline)
                                 Text("\(item.Host) · \(item.Mode.uppercased()) · \(item.Driver) \(item.Version)").font(.caption)
-                            }
-                        }.buttonStyle(.plain)
+                            }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                        }.buttonStyle(.plain).accessibilityIdentifier("session-" + item.id)
                     }.overlay { if connection.sessions.isEmpty {
                         ContentUnavailableView("No sessions", systemImage: "terminal", description: Text("Pair with your server, then start a supervisor."))
                     } }

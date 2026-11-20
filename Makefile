@@ -9,3 +9,7 @@ e2e: build
 apple:
 	apple/build-core.sh
 	cd apple && xcodegen generate
+
+.PHONY: dist
+dist:
+	python3 scripts/dist.py

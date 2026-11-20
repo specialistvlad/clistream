@@ -36,3 +36,5 @@ Save the property list below as ~/Library/LaunchAgents/com.vlk.clistreamd.plist.
 Install full Xcode, Go and XcodeGen. Run `make apple` and open apple/CLIStream.xcodeproj. Select CLIStream-iOS for iPhone and iPad, or CLIStream-macOS for Mac. The static Go library contains arm64 device, arm64/x86_64 simulator, and universal macOS slices. Simulator and local builds can use separate signing settings. The application uses SwiftTerm for PTY rendering.
 
 Create or select an App Store Connect record matching the bundle identifier and platforms in apple/project.yml. Configure ASC_KEY_PATH, ASC_KEY_ID, ASC_ISSUER_ID and DEVELOPMENT_TEAM in the release environment. Run `apple/testflight.sh iOS` and `apple/testflight.sh macOS` to archive and upload. Build processing, encryption-compliance declarations and internal tester assignment take place in App Store Connect. Keep signing keys, profiles, invitation links and TestFlight credentials outside this repository.
+
+Use `ARCHIVE_ONLY=1` to create a signed local archive. The native Mac app is inside its Products/Applications directory.

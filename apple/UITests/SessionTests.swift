@@ -10,10 +10,11 @@ final class SessionTests: XCTestCase {
         let pair = app.buttons["Pair device"]
         XCTAssertTrue(pair.waitForExistence(timeout: 12))
         pair.tap()
-        let session = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "cat")).firstMatch
+        let id = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_SESSION"])
+        let session = app.buttons["session-" + id]
         XCTAssertTrue(session.waitForExistence(timeout: 15))
         session.tap()
-        let input = app.textFields["Input"]
+        let input = app.textFields["session-input"]
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         input.tap()
         input.typeText("apple-client-echo\n")

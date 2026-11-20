@@ -23,6 +23,8 @@ clistream-supervise -mode pty -- /bin/sh
 
 From a third terminal run `clistream list`, copy the session ID and run `clistream attach ID`. Type into either terminal. The shell exits for everyone when you run `exit`. To detach a remote CLI without affecting the shared process, press Ctrl-] in an interactive PTY attachment. In pipe mode, `clistream -eof attach ID` closes the child's shared stdin when the client's input ends.
 
+With Python 3.11+, `make dist` builds checksummed CLI archives in `dist/` for Linux and macOS on amd64 and arm64. Extract the matching archive on each host.
+
 ## Connect another machine
 
 Start the daemon with a reachable advertised hostname and allow inbound UDP on the selected port. For example, replace `server.example.org` with your server.
