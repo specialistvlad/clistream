@@ -90,8 +90,8 @@ class BrokerFixture(unittest.TestCase):
         p = subprocess.Popen(
             args,
             stdin=kw.pop("stdin", subprocess.PIPE),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=kw.pop("stdout", subprocess.PIPE),
+            stderr=kw.pop("stderr", subprocess.PIPE),
             bufsize=0,
             **kw,
         )
