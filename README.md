@@ -38,13 +38,13 @@ clistreamd -interface loopback -interface en0
 Use a network link printed for an IP address reachable from the phone. The default loopback link works only on the server machine. Scan the QR code, open the link in CLIStream, or paste it into **Pair**, then tap **Pair device**. Each device can redeem the invitation during its three-minute lifetime. Fresh enrollment requires software that understands v2 invitations. With a background daemon, run `clistreamd` as the same user in a terminal to open the pairing display. Start supervisors on the machines where the target executables are installed.
 
 ```sh
-clistream-supervise claude
+clistream-supervise LINK claude
 clistream-supervise codex
 clistream-supervise -mode pipe -- your-command --your-option
 clistream-supervise -local-input=false -- /bin/cat
 ```
 
-By default, the supervisor runs the supplied program directly and passes through its arguments. It uses a PTY when both input and output are terminals and pipes when either is redirected. Any version can run this way, including Claude and Codex. Use `-mode pipe` or `-mode pty` to override I/O selection.
+Use the first command to pair a new account and launch Claude. Later launches on that account can omit the link. By default, the supervisor runs the supplied program directly and passes through its arguments. It uses a PTY when both input and output are terminals and pipes when either is redirected. Any version can run this way, including Claude and Codex. Use `-mode pipe` or `-mode pty` to override I/O selection.
 
 For application-specific behavior, opt in with `clistream-supervise -driver claude claude` or `clistream-supervise -driver codex codex`. These drivers recognize Claude Code **2.1.329** and Codex CLI **0.170.0**. They default to PTY and select pipes for commands beginning with `claude -p`, `claude --print` or `codex exec`. Terminal and process credentials come from the machine running the supervisor.
 
@@ -60,7 +60,9 @@ clistream-supervise -export web=tcp:127.0.0.1:8080 -export echo=udp:127.0.0.1:90
 clistream forward ID web 127.0.0.1:8081
 ```
 
-The file service roots paths at the directory where the supervisor started. Transfers stream in chunks and preserve existing destination files. In the Apple app, attach and select **Files** to browse, upload or save a file. The visible directory refreshes every two seconds. A session's **Forward** button displays the loopback address where an exported service is available on that device.
+The current supervisor shares the contents of its working directory at startup. In the example above, `clistream ls ID .` lists the contents of `~/clistream-demo`. To share a different folder with this build, change into that folder before starting the supervisor. The revised requirements also allow the operator to supply the folder directly at startup. That option is planned. [Session folder selection](docs/requirements.md#session-folder-selection)
+
+Transfers stream in chunks and preserve existing destination files. In the Apple app, attach and select **Files** to browse, upload or save a file. On iPhone and iPad, Upload imports a copy of the selected local document. Canceling the picker keeps the current remote folder. The visible directory refreshes every two seconds. A session's **Forward** button displays the loopback address where an exported service is available on that device.
 
 ## Administration and development
 
@@ -71,7 +73,7 @@ On upgrade, the Go tools reuse the sole saved profile, or the client profile whe
 - [Product requirements and acceptance criteria](docs/requirements.md)
 - [Apple client interaction design](docs/apple-client-design.md)
 - [Deployment and Apple build instructions](docs/deployment.md)
-- [Security model and workspace boundary](docs/security.md)
+- [Security model and file-service permissions](docs/security.md)
 - [Wire protocol](docs/protocol.md)
 - [Implementation plan](docs/implementation-plan.md) and [verification record](docs/verification.md)
 

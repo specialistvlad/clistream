@@ -2,13 +2,19 @@
 
 The acceptance suites launch the compiled daemon, supervisor and client with temporary device keys, a private administration socket and real QUIC connections. The Apple tests run the built app and its linked Go client. Test processes use a separate bundle identifier.
 
-Each requirement has an executable check and a recorded outcome for the environments exercised. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
+The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
+
+## Folder selection update on November 20, 2026
+
+The recorded file-transfer tests exercised the supervisor's startup working directory. Revised F9 also allows an explicit folder at startup. Implementation and testing of that option are pending. The acceptance check will launch two sessions from one directory, give one session a different folder, and compare what the CLI and Apple clients list, download and upload against the contents of each host folder. [Revised requirement](requirements.md#session-folder-selection)
 
 ## Shared pairing links on November 20, 2026
 
-The Go race tests exercised concurrent enrollment on multiple listeners, signature tampering, server-clock expiry and replacement. The CLI suite used the exact link from the daemon terminal to publish a process and exchange input and output from a separate identity. Tests also covered revocation, re-enrollment, restart, both pairing directions, concurrent first use, legacy migration, conflicting servers and explicit state directories.
+At commit `4571796`, the local Go race tests and vet passed. The CLI suite passed 25 of 27 cases. The two skipped cases require live Claude or Codex provider access. The Go race tests exercised concurrent enrollment on multiple listeners, signature tampering, server-clock expiry and replacement. The CLI suite used the exact link from the daemon terminal to publish a process and exchange input and output from a separate identity. Tests also covered revocation, re-enrollment, restart, both pairing directions, concurrent first use, legacy migration, conflicting servers and explicit state directories.
 
-A separate upgrade check enrolled the previous client and supervisor, restarted the upgraded daemon on the same state and reconnected both original binaries. The updated Go tools also paired against the previous daemon under its role-specific, single-use rules. Apple acceptance for v2 is pending.
+A separate upgrade check enrolled the previous client and supervisor, restarted the upgraded daemon on the same state and reconnected both original binaries. The updated Go tools also paired against the previous daemon under its role-specific, single-use rules. Apple acceptance for v2 is pending. The Apple UI pairing case still expects a v1 URL and a rejection on its second redemption. The hosted enrollment test also expects reuse to fail. The historical results below cover the earlier invitation rules.
+
+The hosted Go jobs passed on Ubuntu and macOS for the same commit. The four Apple jobs were still running when this record was updated on November 20. [CI run for 4571796](https://github.com/specialistvlad/clistream/actions/runs/44800568684)
 
 ## Previous v1 pairing checks on November 20, 2026
 
@@ -19,7 +25,7 @@ A separate upgrade check enrolled the previous client and supervisor, restarted 
 | iPhone 17 Pro and iPad mini simulators, iOS 26.4.1 | XCTest opened a link decoded from the daemon’s QR code, checked the displayed server address, canceled, pasted the same link and paired. Reusing the link failed. A separate test waited out the full three-minute lifetime before attempting enrollment with an unused link. |
 | Native macOS | App-hosted XCTest exercised the Go bridge and device enrollment against a running daemon. |
 
-Run `make test e2e` for the Go and CLI checks and `make test-deployment` for Linux. For each mobile form factor, run `make apple` and then `SIMULATOR_ID="$DEVICE_ID" CLISTREAM_TEST_SUITES="pairing pairing-expiry" apple/test-device.sh iOS`. Use `CLISTREAM_TEST_SUITES=hosted apple/test-device.sh macOS` for the native Mac checks.
+Run `make test e2e` for current Go and CLI checks and `make test-deployment` for Linux. To reproduce the v1 mobile checks, check out the v1 pairing revision (`a633846`). For each mobile form factor, run `make apple` and then `SIMULATOR_ID="$DEVICE_ID" CLISTREAM_TEST_SUITES="pairing pairing-expiry" apple/test-device.sh iOS`. Use `CLISTREAM_TEST_SUITES=hosted apple/test-device.sh macOS` for the native Mac checks.
 
 Opening a custom link directly on a simulator exercises the app’s URL handler. Tapping a message containing that link and scanning with a physical camera still require a device with the updated app installed.
 
@@ -31,7 +37,7 @@ Opening a custom link directly on a simulator exercises the app’s URL handler.
 | Real daemon, supervisor and CLI on macOS | 20 of 21 passed. The live Anthropic case was skipped in this run. A separate real provider request reached the account's weekly usage limit. Both interactive CLI executables, the emulated Claude exchange and live Codex passed. |
 | Packaged executables | Each Darwin architecture passed 19 cases and skipped the two live-provider cases. Each Linux architecture passed 16 and skipped five optional model-client cases. All four archives matched SHA-256 and carried the MIT notice. Linux amd64 ran under emulation. |
 | Network interference | 2,232 verified round trips in 120 seconds with 450 intentionally dropped datagrams and a mid-session source-port change. The separate loopback test measured a median key echo of 2.31 ms. |
-| Four Linux containers | Two supervisors registered independently. Each returned its own workspace data. File-service traversal failed, the isolated shells could neither read nor modify the host sentinel, and the original bytes survived. |
+| Four Linux containers | Two supervisors registered independently and each returned the files in its working directory. The fixture also verified that its container mounts protected a host sentinel. That check describes the test deployment. |
 | Native Mac app on macOS 27.2 | All seven cases passed across targeted runs. The driver case used the installed Claude Code and Codex executables. The two desktop UI cases exercised keyboard-only attachment, return from Files, native Open/Save panels, pointer input and window resizing. |
 | Four simultaneous clients | Mac, iPhone, iPad and CLI each sent a distinct line to the same child. All clients observed each line on both output channels. This passed locally on the audit revision and on a GitHub-hosted Mac. [Hosted execution](https://github.com/specialistvlad/clistream/actions/runs/44677340259/job/136092198839) |
 | Dependency scan | `govulncheck` reported zero reachable known vulnerabilities. It identified 11 module-level advisories outside the application's call paths. |
@@ -43,7 +49,7 @@ On iOS 27.0, XCTest also enabled VoiceOver on iPhone and iPad and read the spoke
 
 The Mac UI suite opens the pairing form with Command-K, enters the decoded invitation into its secure field, selects the first pipe from the sidebar using Command-1 and the down arrow, then sends a command. The supervisor receives a second command after Files is dismissed. A separate test opens the pairing link directly, clicks the PTY, resizes the window and checks the cell received by the child.
 
-The iPhone and iPad scenarios use real system UI for copy/paste, keyboard input, file pickers and navigation. The touch test extends a selection using the system handle, sends the pasted text to the remote process, cancels a partial back swipe, completes a second swipe and runs Apple's accessibility audit. The fixture compares the two distinct pasted strings at the child. The terminal fixture checks the reported cell and records window sizes in the child process. The permissions of an ordinary supervised host process and those of the isolated Linux deployment differ as described in the [security model](security.md).
+The iPhone and iPad scenarios use real system UI for copy/paste, keyboard input, file pickers and navigation. The touch test extends a selection using the system handle, sends the pasted text to the remote process, cancels a partial back swipe, completes a second swipe and runs Apple's accessibility audit. The fixture compares the two distinct pasted strings at the child. The terminal fixture checks the reported cell and records window sizes in the child process.
 
 ## Earlier baseline on November 19, 2026
 
@@ -66,7 +72,7 @@ A fresh Go vulnerability scan reported zero reachable known vulnerabilities. The
 
 | Feature | Evidence |
 |---|---|
-| Pairing and authentication | The suite enrolls unique keys through role-specific invitations. It checks single use, expiration, server pin mismatch, unregistered keys, role restrictions, durable enrollment, and revocation during an active session while another viewer continues. Apple Core Image decodes the daemon's rendered QR, and the UI tests open that decoded URL and tap **Pair device**. |
+| Pairing and authentication | The Go suite redeems one v2 link from independent devices, checks expiry and replacement, rejects mismatched pins and unknown keys, and verifies durable enrollment. Revoking an attached viewer disconnects it while another viewer continues. The November 20 v1 record above covers Apple QR decoding and confirmation. |
 | Pipe and PTY | The local terminal and remote clients exchange input, stdout and stderr with one child. The suite checks exit status, a 4 MiB binary round trip, PTY escape sequences, remote resize, detach, replay and reconnection after a broker restart. Loopback median single-key echo was 0.37 ms in one 21-sample run. |
 | Compression | Negative tests exercise mandatory compression during TLS negotiation and again on an enrolled connection. A raw list request receives an error, then a compressed list succeeds on a different stream of the same connection. Codec tests also reject malformed, oversized and unknown-field messages. A 30,800-byte repetitive log sample used 2,047 application wire bytes. |
 | Network interruption | For 120 seconds a UDP relay varied per-packet delay between 12 and 22 ms, dropped every 23rd datagram and changed the source port mid-session. The run checked 2,376 request/echo pairs byte-for-byte with 474 datagrams dropped. A separate test discarded all packets from the first handshake socket and verified recovery on a fresh socket. |
@@ -75,7 +81,7 @@ A fresh Go vulnerability scan reported zero reachable known vulnerabilities. The
 | Target-specific drivers | Claude Code 2.1.329 and Codex CLI 0.170.0 were detected by version. Remote clients supplied prompts, closed stdin, collected output and checked child exit status. Codex completed a live arithmetic request in a read-only ephemeral session. The real Claude executable completed nonce-based exchanges with a loopback Messages API emulator. A separate live Anthropic attempt reached the account's weekly usage limit. |
 | Apple terminal and files | App-hosted tests drive SwiftTerm input and resize, inspect its rendered terminal buffer, and check exit status 23. A 240,019-byte upload/download is compared in the app and on the supervisor. The UI exports a random 150,013-byte file through the system picker and imports it into another directory. A separate CLI client verifies the Apple session output. |
 
-The workspace boundary applies to file-service operations. The supervised command runs with its OS user's permissions. Use a VM or container with only the workspace mounted when the child process also requires filesystem isolation. The network results above describe an emulated path. QR decoding and deep-link handling were exercised without a physical camera.
+The network results above describe an emulated path. QR decoding and deep-link handling were exercised without a physical camera.
 
 ## Reproduction
 
@@ -104,6 +110,8 @@ IPHONE_SIMULATOR_ID="$IPHONE_SIMULATOR_ID" IPAD_SIMULATOR_ID="$IPAD_SIMULATOR_ID
 ```
 
 GitHub Actions selects the iPhone 17 Pro and 13-inch iPad Pro (M5) on the iOS 26.4 runtime for the device UI suites. The simultaneous-client job uses the iPhone and iPad mini (A17 Pro) to reduce the graphics memory required by two live simulators.
+
+The terminal fixture reads the grid size from the child PTY before and after a resize. The hosted detach case checks that the child receives the final queued input. The transfer fixture compares files on the supervisor after native picker operations.
 
 The device suite prints its result directory under `apple/build/results-*`. Each scenario has its own XCTest bundle. The simultaneous-client harness launches a test-only build of the app on both simulators. Each mobile app writes to the same session and records the stdout and stderr received by its view model. The harness checks all four writers on both channels and saves one JSON report per mobile device alongside the Mac XCTest bundle under `apple/build/shared-*`. Open the bundle with Xcode or run `xcrun xcresulttool get test-results tests --path PATH.xcresult` for the individual outcomes.
 

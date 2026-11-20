@@ -2,6 +2,12 @@
 
 Build with `make build`. Install the three binaries to a directory on PATH. The server needs an inbound UDP route. Supervisors and clients initiate outbound connections. The default is loopback. Select network interfaces by repeating `-interface NAME` (use `loopback` to include localhost). Alternatively use `-listen` with `-advertise` for a reachable address, including a numeric IP. Allow inbound UDP on that port. The local admin socket lives inside the daemon state directory. On Unix systems keep this path short enough for a Unix socket (under roughly 100 bytes).
 
+## Connect to a running daemon
+
+Run `clistreamd` in a terminal under the service account to display its pairing commands and QR codes. If the service uses a custom state directory, pass the same `-state DIR` to its administration commands. Use the localhost link on the daemon host or the network link on a host that can reach that address. For scripts, `clistreamd invite` prints one link and prefers a network address when available.
+
+On the program host, run `clistream-supervise LINK PROGRAM [ARG ...]`. On the same OS account, `clistream` then connects with the saved key. On a second host, run `clistream LINK` within three minutes. Press **p** at the daemon terminal to replace outstanding links across all interfaces. For an upgrade, review previously enrolled supervisor keys before restarting the service, since those keys will gain control of every session. [Upgrade permissions](security.md)
+
 ## Linux user service
 
 For binaries installed in /usr/local/bin, save this as ~/.config/systemd/user/clistream.service and substitute the endpoint. Run `systemctl --user daemon-reload` and `systemctl --user enable --now clistream`. Use `journalctl --user -u clistream` for diagnostics.
@@ -31,15 +37,23 @@ Save the property list below as ~/Library/LaunchAgents/com.vlk.clistreamd.plist.
 </dict></plist>
 ```
 
-## Isolated supervisor deployment
+## Choose the folder a supervisor shares
 
-When the target is a shell or any utility that can open arbitrary files, its operating-system environment determines which host data the operator can reach. Put the supervisor and target in a dedicated VM or container. Mount the intended workspace at `/workspace`, make that the working directory, and put the supervisor identity in a separate private state directory. Give the container a read-only root, drop capabilities and enable `no-new-privileges`. Keep the host home directory, Docker socket, broker credentials and unrelated volumes outside the container.
+Start the current supervisor in the folder whose contents clients should see. For example, with the supervisor enrolled and on PATH, this shares `~/clistream-demo` and runs the shell installed at `/bin/sh`.
 
-Run `make test-deployment` with Docker available for a working example. The test starts a broker, two independent supervisors and a viewer on a private network. Its temporary deployment uses in-memory identities and cleans up its own containers and network. Production supervisors need private persistent state or re-enrollment after replacement. [Deployment test](../tests/deployment.py)
+```sh
+mkdir -p ~/clistream-demo
+cd ~/clistream-demo
+clistream-supervise -mode pty -- /bin/sh
+```
+
+The planned startup option lets the operator select a folder directly. Omitting it keeps the behavior shown above. The child uses the host account's normal permissions. [Session folder selection](requirements.md#session-folder-selection)
+
+The optional Docker test, `make test-deployment`, starts a broker, two independent supervisors with different working directories, and a viewer on a private network. Its temporary deployment uses in-memory identities and cleans up its own containers and network. Production supervisors need private persistent state or re-enrollment after replacement. [Deployment test](../tests/deployment.py)
 
 ## Apple client and TestFlight
 
-Fresh enrollment requires a client build that accepts the daemon’s signed `clistream://pair/v2/` links. Existing enrolled devices can reconnect with their saved keys. The updated app and CLI also accept invitations from older daemons. When upgrading a running daemon, restart the process to activate the new terminal display. If the saved network address changes, enroll with a link containing a reachable address.
+Fresh enrollment requires a client build that accepts the daemon’s signed `clistream://pair/v2/` links. Existing enrolled devices can reconnect with their saved keys. The Go CLIs also accept invitations from older daemons. Native Apple v2 enrollment still needs acceptance testing. When upgrading a running daemon, restart the process to activate the new terminal display. If the saved network address changes, enroll with a link containing a reachable address.
 
 Install full Xcode, Go and XcodeGen. Run `make apple` and open apple/CLIStream.xcodeproj. Select CLIStream-iOS for iPhone and iPad, or CLIStream-macOS for Mac. The static Go library contains arm64 device, arm64/x86_64 simulator, and universal macOS slices. Simulator and local builds can use separate signing settings. The application uses SwiftTerm for PTY rendering.
 

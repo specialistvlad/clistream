@@ -20,11 +20,11 @@ Apple’s Food Truck sample demonstrates how a SwiftUI split view and navigation
 
 ## Interact with a running CLI
 
-- **Keyboard.** Focus the terminal on attach. On Mac, Command-1 focuses Sessions, the arrow keys select a session, Command-E opens Files and Escape returns to the session. In PTY mode, send text, arrows, Escape and control keys to the running program. For example, Control-C goes to the child while Command-C copies a local text selection. Keep app commands available through standard menus. In pipe mode, provide a labeled input field and distinct, selectable stdout and stderr.
+- **Keyboard.** On iPhone and iPad, opening a pipe session leaves the software keyboard hidden so output is readable. Tap the input field to type. On Mac, Command-K opens Pair, Command-1 focuses Sessions, the arrow keys select a session, Command-E opens Files and Escape returns to the session. In PTY mode, send text, arrows, Escape and control keys to the running program. For example, Control-C goes to the child while Command-C copies a local text selection. Keep app commands available through standard menus. In pipe mode, provide a labeled input field and distinct, selectable stdout and stderr.
 - **Mouse and trackpad.** In an ordinary terminal, clicking focuses the view, dragging selects text and scrolling moves through output. When a terminal application enables mouse reporting, translate supported clicks, drags and wheel events into terminal input at the correct row and column. A click in a full-screen CLI’s list should select the item the user pointed at. Keep toolbar and file-browser events local.
 - **Touch and focus.** Tapping the terminal on iPhone or iPad should bring up the keyboard. Make terminal-specific keys such as Escape and Control reachable from the onscreen keyboard. Opening Files moves focus into the browser. Returning to Terminal restores input focus and shows output received while the user was browsing.
 
-Switching views keeps the attachment alive. **Detach** leaves the session and its child running for other clients. [Apple keyboard guidance](https://developer.apple.com/design/human-interface-guidelines/keyboards/) · [Apple pointing-device guidance](https://developer.apple.com/design/human-interface-guidelines/pointing-devices)
+During rotation or keyboard transitions, the child PTY keeps its last usable grid until the view can report a positive row and column count. Detaching drains queued keystrokes and pointer reports before closing the input stream. Switching views keeps the attachment alive. **Detach** leaves the session and its child running for other clients. [Apple keyboard guidance](https://developer.apple.com/design/human-interface-guidelines/keyboards/) · [Apple pointing-device guidance](https://developer.apple.com/design/human-interface-guidelines/pointing-devices)
 
 ## Touch-only operation on iPhone and iPad
 
@@ -39,13 +39,15 @@ Every user-facing action offered on iPhone or iPad must be reachable and usable 
 
 ## Browse the session workspace
 
-**Files** opens at the supervisor’s workspace root on the first visit. Keep the current folder and selection on later visits to the same session. Show the session name and current folder so the user can identify the remote destination before transferring a file.
+The shipped supervisor shares its startup working directory. Explicit folder selection is planned. [Session folder selection](requirements.md#session-folder-selection)
+
+**Files** initially shows the contents of the folder the operator chose when starting the supervisor. If the operator omitted the folder, show the contents of the supervisor's startup working directory. Keep the current folder and selection on later visits to the same session. Show the session name and current folder so the user can identify the remote destination before transferring a file.
 
 | Task | Mac, following Finder | iPhone and iPad, following Files |
 |---|---|---|
 | Navigate | Use a native list or table. Single-click selects, double-click opens a folder, and arrow keys move the selection. Offer keyboard commands to open the selected folder and go to its parent. | Use folder rows with standard symbols. Tap to enter a folder and use Back to return to its parent. A wider iPad window can keep the folder hierarchy visible. |
-| Identify an item | Show the name and, where space permits, size and modification date in aligned columns. Preserve selection as directory contents refresh. | Prioritize the filename and folder indicator. Show secondary metadata where it fits and allow larger text to reflow. |
-| Transfer | **Upload** opens the system Open panel. **Download** on a selected remote file opens the Save panel with its filename filled in. | **Upload** uses the system document picker. **Download** lets the user choose where to save through the system export interface. Keep both actions discoverable by touch. |
+| Identify an item | Show the name and, where space permits, size and modification date in aligned columns. Preserve selection as directory contents refresh. | Give file rows an accessible filename and size value. Use primary text for the size when increased contrast is enabled. Show secondary metadata where it fits and allow larger text to reflow. |
+| Transfer | **Upload** opens the system Open panel. **Download** on a selected remote file opens the Save panel with its filename filled in. | **Upload** imports an independent copy through the system document picker. The app removes its temporary copy after the transfer attempt. **Download** lets the user choose where to save through the system export interface. Keep both actions discoverable by touch. |
 
 Parent navigation ends at the workspace root. Keep the local picker’s location separate from the remote folder. Show transfer activity, report completion only after success and leave the user in the same remote folder after an error or picker cancellation. [Finder user guide](https://support.apple.com/guide/mac-help/organize-your-files-in-the-finder-mchle9f0a1b2/mac) · [Files user guide](https://support.apple.com/guide/iphone/find-and-view-files-and-folders-iphe4bff8827/ios)
 
@@ -56,7 +58,7 @@ Use native SwiftUI, AppKit or UIKit lists, toolbars, menus, sheets and pickers. 
 ## Design acceptance
 
 1. On Mac, complete pairing, select a registered session, enter a command, open Files and return to Terminal using only the keyboard. Repeat with a mouse or trackpad. Verify a mouse-aware test CLI receives a click at the selected cell after resizing the window.
-2. On iPhone and iPad simulators, navigate into two nested folders, download a file, upload it to the other folder and compare its contents on the supervisor. Cancel a second transfer in the picker and verify the current folder and selection. At the root, verify parent navigation cannot expose host files.
+2. On iPhone and iPad simulators, verify that Files and the CLI show the same top-level entries for both an explicitly selected folder and the default folder. Navigate into two nested folders, download a file, upload it to the other folder and compare its contents on the supervisor. Cancel a second transfer in the picker and verify the current folder and selection. Navigate back to the shared folder.
 3. Keep a second client attached. While the Apple user browses Files, send output from the running child. On return to Terminal, verify the same session shows that output and accepts the next keystroke.
 4. Review the session list, terminal and file browser in light and dark appearances, at large text sizes and in a narrow window. Check keyboard focus and VoiceOver labels and reading order. Record outcomes by platform, including which interactions were checked manually.
 5. On **both iPhone and iPad simulators**, disconnect hardware keyboard input and exercise the touch-only workflows above through the visible UI. Include swipes, a cancelled back gesture, long-press selection, handle dragging, copy/paste, onscreen terminal keys, port controls and picker cancellation. Check the resulting screen state and the input received by the child. Repeat terminal-cell targeting after a layout change. Record each workflow’s outcome separately on each device, including any gesture requiring manual verification.
