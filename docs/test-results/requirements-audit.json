@@ -89,7 +89,7 @@
         "model": "iPhone 17 Pro",
         "platform": "iOS Simulator",
         "os": "26.4.1",
-        "startedAt": "2026-11-20T05:00:05.116000+00:00",
+        "startedAt": "2026-11-20T06:41:16.091000+00:00",
         "passed": 1,
         "failed": 0,
         "skipped": 0,
@@ -105,7 +105,7 @@
         "model": "iPhone 17 Pro",
         "platform": "iOS Simulator",
         "os": "26.4.1",
-        "startedAt": "2026-11-20T05:13:32.815000+00:00",
+        "startedAt": "2026-11-20T06:44:50.250000+00:00",
         "passed": 1,
         "failed": 0,
         "skipped": 0,
@@ -121,7 +121,7 @@
         "model": "iPhone 17 Pro",
         "platform": "iOS Simulator",
         "os": "26.4.1",
-        "startedAt": "2026-11-20T05:06:49.939000+00:00",
+        "startedAt": "2026-11-20T06:12:43.696000+00:00",
         "passed": 1,
         "failed": 0,
         "skipped": 0,
@@ -137,7 +137,7 @@
         "model": "iPhone 17 Pro",
         "platform": "iOS Simulator",
         "os": "26.4.1",
-        "startedAt": "2026-11-20T04:53:44.606000+00:00",
+        "startedAt": "2026-11-20T06:12:15.878000+00:00",
         "passed": 5,
         "failed": 0,
         "skipped": 0,
@@ -187,7 +187,7 @@
         "model": "iPad mini (A17 Pro)",
         "platform": "iOS Simulator",
         "os": "26.4.1",
-        "startedAt": "2026-11-20T04:57:57.850000+00:00",
+        "startedAt": "2026-11-20T06:14:20.070000+00:00",
         "passed": 1,
         "failed": 0,
         "skipped": 0,
@@ -203,7 +203,7 @@
         "model": "iPad mini (A17 Pro)",
         "platform": "iOS Simulator",
         "os": "26.4.1",
-        "startedAt": "2026-11-20T04:51:18.919000+00:00",
+        "startedAt": "2026-11-20T06:13:55.728000+00:00",
         "passed": 5,
         "failed": 0,
         "skipped": 0,
@@ -251,7 +251,7 @@
         "model": "iPad mini (A17 Pro)",
         "platform": "iOS Simulator",
         "os": "26.4.1",
-        "startedAt": "2026-11-20T05:25:00.602000+00:00",
+        "startedAt": "2026-11-20T06:12:22.190000+00:00",
         "passed": 1,
         "failed": 0,
         "skipped": 0,
@@ -333,7 +333,7 @@
         "model": "iPhone 17 Pro",
         "platform": "iOS Simulator",
         "os": "27.0",
-        "startedAt": "2026-11-20T06:01:01.279000+00:00",
+        "startedAt": "2026-11-20T06:09:45.404000+00:00",
         "passed": 5,
         "failed": 0,
         "skipped": 0,
@@ -360,6 +360,136 @@
           }
         ],
         "fixturePassed": true
+      },
+      "scroll": {
+        "model": "iPhone 17 Pro",
+        "platform": "iOS Simulator",
+        "os": "27.0",
+        "startedAt": "2026-11-20T06:02:36.554000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testScrollSessionsAndTerminalHistory()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "terminal": {
+        "model": "iPhone 17 Pro",
+        "platform": "iOS Simulator",
+        "os": "27.0",
+        "startedAt": "2026-11-20T06:08:21.701000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testTerminalInput()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      }
+    },
+    "iPad-Pro-26": {
+      "hosted": {
+        "model": "iPad Pro 13-inch (M5)",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T06:19:51.651000+00:00",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "ClientTests/testCLISpecificDrivers()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testPortForwarding()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testPTYRenderingKeyboardResizeAndExit()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testSharedPipe()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testWorkspaceTransfers()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "terminal": {
+        "model": "iPad Pro 13-inch (M5)",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T06:18:38.384000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testTerminalInput()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "scroll": {
+        "model": "iPad Pro 13-inch (M5)",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T06:22:24.569000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testScrollSessionsAndTerminalHistory()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "touch": {
+        "model": "iPad Pro 13-inch (M5)",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T06:40:07.058000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testTouchNavigationAndEditing()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "files": {
+        "model": "iPad Pro 13-inch (M5)",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T06:40:53.738000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testPairAndUseSession()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
       }
     },
     "macOS-local": {
@@ -367,7 +497,7 @@
         "model": "MacBook Pro",
         "platform": "macOS",
         "os": "27.2",
-        "startedAt": "2026-11-20T05:28:57.315000+00:00",
+        "startedAt": "2026-11-20T06:08:21.692000+00:00",
         "passed": 5,
         "failed": 0,
         "skipped": 0,
@@ -433,7 +563,7 @@
         "model": "iPad mini (A17 Pro)",
         "platform": "iOS Simulator",
         "os": "27.0",
-        "startedAt": "2026-11-20T04:47:15.159000+00:00",
+        "startedAt": "2026-11-20T06:09:04.240000+00:00",
         "passed": 5,
         "failed": 0,
         "skipped": 0,
@@ -497,7 +627,7 @@
         "model": "iPad mini (A17 Pro)",
         "platform": "iOS Simulator",
         "os": "27.0",
-        "startedAt": "2026-11-20T05:28:55.094000+00:00",
+        "startedAt": "2026-11-20T06:09:23.660000+00:00",
         "passed": 1,
         "failed": 0,
         "skipped": 0,
@@ -544,14 +674,14 @@
     }
   },
   "executionScope": "Targeted runs during the requirements audit. Each Apple scenario is counted only after both XCTest and the independent fixture finish successfully.",
-  "currentTestSuiteRevision": "2be23a4",
+  "currentTestSuiteRevision": "854a357",
   "unixSource": "6164d5e",
   "testReferenceCoverage": {
     "functional": 10,
     "engineering": 7
   },
   "signedBuild": {
-    "number": "2611200557",
+    "number": "2611200642",
     "platforms": [
       "iOS",
       "macOS"
@@ -592,14 +722,14 @@
     }
   },
   "localSharedSession": {
-    "revision": "9c182dc",
+    "revision": "2be23a4",
     "cliAndSupervisorValidated": true,
     "appleCases": {
       "ipad": {
         "model": "iPad mini (A17 Pro)",
         "platform": "iOS Simulator",
-        "os": "26.4.1",
-        "startedAt": "2026-11-20T05:30:32.365000+00:00",
+        "os": "27.0",
+        "startedAt": "2026-11-20T06:04:02.091000+00:00",
         "passed": 1,
         "failed": 0,
         "skipped": 0,
@@ -613,8 +743,8 @@
       "iphone": {
         "model": "iPhone 17 Pro",
         "platform": "iOS Simulator",
-        "os": "26.4.1",
-        "startedAt": "2026-11-20T05:30:32.372000+00:00",
+        "os": "27.0",
+        "startedAt": "2026-11-20T06:04:02.121000+00:00",
         "passed": 1,
         "failed": 0,
         "skipped": 0,
@@ -629,7 +759,7 @@
         "model": "MacBook Pro",
         "platform": "macOS",
         "os": "27.2",
-        "startedAt": "2026-11-20T05:30:32.362000+00:00",
+        "startedAt": "2026-11-20T06:04:02.086000+00:00",
         "passed": 1,
         "failed": 0,
         "skipped": 0,
@@ -642,6 +772,27 @@
       }
     }
   },
+  "appleDistribution": {
+    "checkedUTC": "2026-11-20T06:57:00Z",
+    "iOS": {
+      "version": "0.1.0",
+      "build": "2611200610",
+      "processing": "VALID",
+      "audience": "INTERNAL_ONLY",
+      "internalState": "IN_BETA_TESTING",
+      "internalGroups": 1
+    },
+    "macOS": {
+      "version": "0.1.0",
+      "build": "2611200642",
+      "processing": "VALID",
+      "audience": "APP_STORE_ELIGIBLE",
+      "internalState": "MISSING_EXPORT_COMPLIANCE",
+      "internalGroups": 0,
+      "uploadErrors": 0,
+      "uploadWarnings": 0
+    }
+  },
   "license": {
     "spdx": "MIT",
     "publicRepository": true,
@@ -649,7 +800,7 @@
   },
   "releaseGates": {
     "liveAnthropic": "Separate provider request reached the account's weekly limit.",
-    "testFlight": "Last upload returned FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED. Installation unverified.",
+    "testFlight": "iOS 0.1.0 (2611200610) is VALID and IN_BETA_TESTING with one internal testing group. Apple processed Mac archive 0.1.0 (2611200642) as VALID and APP_STORE_ELIGIBLE; its export compliance and internal group assignment were pending. Physical installation unverified.",
     "physicalCamera": "Simulator verified QR decoding and installed-app URL handoff. Physical camera untested."
   }
 }
