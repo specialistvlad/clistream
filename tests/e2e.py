@@ -163,13 +163,7 @@ class DashboardTerminal:
         return data
 
 
-class Live(BrokerFixture):
-    def managed(self, cmd, flags=()):
-        return self.spawn([SUP, "-state", self.base / "supervisor", "-local-input=false", *flags, "--", *cmd],
-                          cwd=self.work)
-
-    def test_framed_terminal(self):
-        script = """
+PTY_INPUT_PROBE = """
 import os, tty
 tty.setraw(0)
 os.write(1, b'\\x1b[?1049h' + b'fast output\\r\\n' * 400 + b'\\x1b[2J\\x1b[H\\x1b[?1000h\\x1b[?1006hVIEWPORT')
@@ -183,7 +177,15 @@ while True:
     else:
         os.write(1, ('[%02x]' % b[0]).encode())
 """
-        p = self.managed([sys.executable, "-c", script], ["-mode", "pty"])
+
+
+class Live(BrokerFixture):
+    def managed(self, cmd, flags=()):
+        return self.spawn([SUP, "-state", self.base / "supervisor", "-local-input=false", *flags, "--", *cmd],
+                          cwd=self.work)
+
+    def test_framed_terminal(self):
+        p = self.managed([sys.executable, "-c", PTY_INPUT_PROBE], ["-mode", "pty"])
         sid = status_line(p.stderr, b"session ").split()[1]
         t = DashboardTerminal(self)
         t.until(b"R Restart")
@@ -966,6 +968,121 @@ while True:
         events = [json.loads(row) for row in data.splitlines()]
         self.assertEqual({e["operation"] for e in events if e["event"] == "channel_close"},
                          {"port/tcp", "port/udp"})
+
+    def test_supervisor_console_reconnect(self):
+        self.daemon.terminate()
+        self.daemon.wait(8)
+        launches = self.base / "launches"
+        script = 'echo $$ >> "$1"; printf "\\033[2J\\033[H"; echo LOCAL-READY; while read v; do [ "$v" = end ] && exit 23; echo "reply:$v"; done'
+        console = DashboardTerminal(self, [SUP, "-state", self.base / "supervisor",
+                                           "/bin/sh", "-c", script, "sh", launches])
+        console.until(b"CLIStream Supervisor")
+        console.until(b"Reconnecting")
+        self.assertFalse(launches.exists())
+        self.start_server()
+        console.until(b"LOCAL-READY")
+        first, = json.loads(self.run_cli(self.a + ["list"]).stdout)
+        for attempt in range(2):
+            self.daemon.terminate()
+            self.daemon.wait(8)
+            console.until(b"Reconnecting")
+            word = f"offline-{attempt}".encode()
+            console.send(word + b"\r")
+            console.until(b"reply:" + word)
+            if attempt == 1:
+                console.send(b"end\r")
+                console.until(b"exit 23")
+            journal = self.base / "server/server.log"
+            offset = journal.stat().st_size
+            self.start_server()
+            deadline = time.monotonic() + 15
+            while b'"event":"supervisor_publish"' not in journal.read_bytes()[offset:]:
+                self.assertLess(time.monotonic(), deadline, "supervisor failed to republish")
+                time.sleep(0.05)
+            sessions = json.loads(self.run_cli(self.a + ["list"]).stdout) or []
+            if attempt == 0:
+                self.assertEqual([item["ID"] for item in sessions], [first["ID"]])
+                viewer = self.spawn(self.a + ["attach", first["ID"]])
+                viewer.stdin.write(b"remote\n")
+                console.until(b"reply:remote")
+                viewer.terminate()
+                viewer.wait(8)
+            else:
+                self.assertFalse(sessions)
+        self.assertEqual(len(launches.read_text().splitlines()), 1)
+        console.send(b"\x03")
+        self.assertEqual(console.process.wait(8), 0)
+
+    def test_supervisor_console_input(self):
+        ui = DashboardTerminal(self, [*self.supervisor, sys.executable, "-c", PTY_INPUT_PROBE])
+        ui.until(b"VIEWPORT")
+        ui.send(b"s\x03\x1b[200~q\x1ds\x1b[201~\x1b[<0;5;8M!")
+        ui.until(b"SIZE=100,22")
+        sid = json.loads(self.run_cli(self.a + ["list"]).stdout)[0]["ID"]
+        remote = self.spawn(self.a + ["attach", sid])
+        output = bytearray()
+        while b"SIZE=100,22" not in output:
+            packet = line(remote.stdout)
+            self.assertTrue(packet, "child exited before reporting its viewport size")
+            output.extend(packet)
+        ui.send(b"x")
+        remote.communicate(timeout=8)
+        self.assertIn(b"[73][03][71][1d][73]", output)
+        self.assertIn(b"[1b][5b][3c][30][3b][35][3b][36][4d]", output)
+        self.assertEqual(ui.process.wait(8), 19)
+
+    def test_supervisor_console_read_only_restart(self):
+        seen = self.base / "seen"
+        script = 'echo WATCHING; while read word; do echo "$word" >> "$1"; done'
+        local = DashboardTerminal(self, [SUP, "-local-input=false", "-state", self.base / "supervisor",
+                                         "/bin/sh", "-c", script, "sh", seen])
+        local.until(b"WATCHING")
+        local.send(b"ignored\r")
+        sid = json.loads(self.run_cli(self.a + ["list"]).stdout)[0]["ID"]
+        viewer = self.spawn(self.a + ["attach", sid])
+        viewer.stdin.write(b"remote-input\n")
+        deadline = time.monotonic() + 5
+        while not seen.exists() or not seen.read_bytes():
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.03)
+        self.assertEqual(seen.read_text(), "remote-input\n")
+        control = DashboardTerminal(self, self.b)
+        control.until(b"R Restart")
+        control.send(b"r")
+        control.until(b"Enter Restart & attach")
+        control.send(b"\x15/bin/cat\r")
+        control.until(b"Ctrl-G Home")
+        control.send(b"replacement-visible\r")
+        local.until(b"replacement-visible")
+        self.assertEqual(viewer.wait(8), 128)
+        local.send(b"\x03")
+        self.assertEqual(local.process.wait(8), 0)
+
+    def test_supervisor_refuses_wrong_pin(self):
+        path = self.base / "supervisor/server.json"
+        profile = json.loads(path.read_text())
+        profile["Pin"] = "0" * 64
+        path.write_text(json.dumps(profile))
+        for flags in ([], ["-once"]):
+            result = self.run_cli([SUP, "-state", path.parent, *flags, "/bin/true"], check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b"mismatch", result.stderr)
+            self.assertNotIn(b"Reconnecting", result.stderr)
+
+    def test_supervisor_console_attach_only(self):
+        script = 'stty size; read x; stty size; read x; exit 17'
+        ui = DashboardTerminal(self, [*self.supervisor, "/bin/sh", "-c", script])
+        ui.until(b"22 100")
+        termios.tcsetwinsize(ui.fd, (18, 73))
+        os.kill(ui.process.pid, signal.SIGWINCH)
+        time.sleep(0.15)
+        ui.send(b"hello\r")
+        ui.until(b"16 73")
+        self.daemon.terminate()
+        self.daemon.wait(8)
+        ui.until(b"Reconnecting")
+        ui.send(b"\x04")
+        self.assertEqual(ui.process.wait(5), 17)
 
     def test_reconnect(self):
         target, old_id = self.session([], ["/bin/cat"])

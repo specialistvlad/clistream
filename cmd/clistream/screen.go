@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/specialistvlad/clistream/internal/terminalview"
 	"image"
 	"strings"
-	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -13,14 +13,6 @@ import (
 	"github.com/specialistvlad/clistream/internal/wire"
 )
 
-func printable(s string) string {
-	return strings.Map(func(r rune) rune {
-		if !unicode.IsPrint(r) {
-			return '�'
-		}
-		return r
-	}, s)
-}
 func stateLabel(row wire.Supervisor) string {
 	if row.Revision == 0 {
 		return "Attach only"
@@ -54,7 +46,7 @@ func (d *dashboardUI) View() tea.View {
 	view := tea.View{AltScreen: true}
 	cell := func(x, y, end int, text string) {
 		if x < end && y >= 0 && y < h {
-			uv.NewStyledString(printable(text)).Draw(&s, image.Rect(x, y, end, y+1))
+			uv.NewStyledString(terminalview.Printable(text)).Draw(&s, image.Rect(x, y, end, y+1))
 		}
 	}
 	line := func(y int, text string) { cell(0, y, w, text) }
@@ -78,25 +70,7 @@ func (d *dashboardUI) View() tea.View {
 		}
 		view.MouseMode = tea.MouseModeAllMotion
 		v := d.attachment.term
-		for y := 0; y < min(v.Height(), h-2); y++ {
-			for x := 0; x < min(w, v.Width()); {
-				c := v.CellAt(x, y)
-				step := 1
-				if c != nil {
-					c = c.Clone()
-					c.Link = uv.Link{}
-					c.Content = printable(c.Content)
-					s.SetCell(x, y+2, c)
-					step = max(1, c.Width)
-				}
-				x += step
-			}
-		}
-		if !v.CursorHidden() {
-			p := v.CursorPosition()
-			view.Cursor = tea.NewCursor(p.X, p.Y+2)
-
-		}
+		terminalview.Draw(&s, v, &view)
 		leave := "Home"
 		if d.target.Revision == 0 {
 			leave = "Disconnect"
@@ -174,7 +148,7 @@ func (d *dashboardUI) View() tea.View {
 			text := d.args[i]
 			if i == d.arg {
 				runes := []rune(text)
-				before := printable(string(runes[:d.cursor]))
+				before := terminalview.Printable(string(runes[:d.cursor]))
 				available := max(1, w-ansi.StringWidth(prefix)-1)
 				before = ansi.TruncateLeft(before, max(0, ansi.StringWidth(before)-available), "")
 				text = before + string(runes[d.cursor:])

@@ -8,6 +8,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/vt"
 	"github.com/specialistvlad/clistream/internal/client"
+	"github.com/specialistvlad/clistream/internal/terminalview"
 	"github.com/specialistvlad/clistream/internal/wire"
 )
 
@@ -79,19 +80,5 @@ func (v *viewport) resize(w, h int) {
 	}
 }
 func (v *viewport) mouse(event uv.MouseEvent) {
-	m := event.Mouse()
-	m.Y -= 2
-	if m.X < 0 || m.Y < 0 || m.X >= v.term.Width() || m.Y >= v.term.Height() {
-		return
-	}
-	switch event.(type) {
-	case uv.MouseClickEvent:
-		v.term.SendMouse(uv.MouseClickEvent(m))
-	case uv.MouseReleaseEvent:
-		v.term.SendMouse(uv.MouseReleaseEvent(m))
-	case uv.MouseMotionEvent:
-		v.term.SendMouse(uv.MouseMotionEvent(m))
-	case uv.MouseWheelEvent:
-		v.term.SendMouse(uv.MouseWheelEvent(m))
-	}
+	terminalview.Mouse(v.term, event)
 }

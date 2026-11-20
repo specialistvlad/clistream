@@ -21,6 +21,7 @@ import (
 	"github.com/specialistvlad/clistream/internal/identity"
 	"github.com/specialistvlad/clistream/internal/session"
 	"github.com/specialistvlad/clistream/internal/termio"
+
 	"github.com/specialistvlad/clistream/internal/wire"
 )
 
@@ -92,20 +93,24 @@ func (settings launchSettings) validate(cmd [][]byte) ([]string, driver.Profile,
 	return argv, profile, err
 }
 
-func supervise(ctx context.Context, reg registration, conn *quic.Conn, path string, args []string, ports map[string]string, root *files.Root, local bool, settings launchSettings) (int, error) {
-	state := wire.Supervisor{ID: uniqueID(), Info: reg.info}
+func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wire.Supervisor, path string, args []string, ports map[string]string, root *files.Root, local bool, settings launchSettings) (int, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	var current atomic.Pointer[session.Process]
 	var inputEnded atomic.Bool
+
 	var restore func()
 	var run *childRun
 	var ended <-chan struct{}
 	start := func() {
 		state.Revision++
 		state.Exit = nil
-		p, err := session.Start(path, args, state.Info.Mode, ports, root, true)
+		p, err := reg.console.start(path, args, state.Info.Mode, ports, root, true, state.Info.Name)
 		state.Failed = err != nil
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "child launch failed")
+			if reg.console.program == nil {
+				fmt.Fprintln(os.Stderr, "child launch failed")
+			}
 			return
 		}
 		state.Info.ID = uniqueID()
@@ -113,7 +118,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, path stri
 		run = r
 		ended = r.ended
 		current.Store(p)
-		if local && state.Info.Mode == "pty" {
+		if local && reg.console.program == nil && state.Info.Mode == "pty" {
 			restore = termio.Setup(func(w, h uint16) { p.Resize(w, h) })
 		}
 		if inputEnded.Load() {
@@ -128,6 +133,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, path stri
 		}
 		current.Store(nil)
 		run.close()
+		reg.console.stopped(fmt.Sprintf("Stopped · exit %d", run.code))
 		state.Exit = &run.code
 		state.Revision++
 		state.Info.ID = ""
@@ -141,7 +147,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, path stri
 			finish()
 		}
 	}()
-	if local {
+	if local && reg.console.program == nil {
 		go func() {
 			client.CopyInput(os.Stdin, func(data []byte) error {
 				if p := current.Load(); p != nil {
@@ -157,22 +163,60 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, path stri
 	}
 	requests := make(chan incoming)
 	var lost <-chan struct{}
-	var reconnect <-chan time.Time
+	type registrationResult struct {
+		conn     *quic.Conn
+		revision uint64
+		err      error
+	}
+	var latest atomic.Pointer[wire.Supervisor]
+	var recovered <-chan registrationResult
+	reconnect := func() {
+		ready := make(chan registrationResult)
+		recovered = ready
+		go func() {
+			var revision uint64
+			c, err := retry(ctx, reg.console, time.Second, func(ctx context.Context) (*quic.Conn, error) {
+				c, err := identity.Dial(ctx, reg.dir, reg.server)
+				if err != nil {
+					return nil, err
+				}
+				stop := abortOnCancel(ctx, c)
+				defer stop()
+				snapshot := latest.Load()
+				revision = snapshot.Revision
+				if err = publishState(c, *snapshot); err != nil {
+					c.CloseWithError(1, "publication failed")
+					return nil, err
+				}
+				return c, nil
+			})
+			select {
+			case ready <- registrationResult{c, revision, err}:
+			case <-ctx.Done():
+				if c != nil {
+					c.CloseWithError(0, "finished")
+				}
+			}
+		}()
+	}
 	publish := func() {
+		snapshot := state
+		latest.Store(&snapshot)
 		if conn == nil {
 			return
 		}
-		_, err := wire.Request(conn, wire.Message{Op: "publish", Supervisor: &state, Capabilities: []string{wire.EditCommand}})
+		err := publishState(conn, state)
 		if err != nil {
 			conn.CloseWithError(1, "publication failed")
 			return
 		}
 		if state.Info.ID != "" {
-			fmt.Fprintln(os.Stderr, "session", state.Info.ID)
+			reg.console.session(state.Info.ID)
 		}
 	}
-	connected := func() { lost = conn.Context().Done(); go listenManaged(conn, requests); publish() }
-	connected()
+	listen := func() { lost = conn.Context().Done(); go listenManaged(conn, requests) }
+	listen()
+	publish()
 	defer func() {
 		if conn != nil {
 			conn.CloseWithError(0, "finished")
@@ -183,18 +227,27 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, path stri
 		case <-ctx.Done():
 			return 0, nil
 		case <-lost:
+			cause := context.Cause(conn.Context())
 			conn = nil
 			lost = nil
-			reconnect = time.After(time.Second)
-		case <-reconnect:
-			var err error
-			conn, err = identity.Dial(ctx, reg.dir, reg.server)
-			if err != nil {
-				reconnect = time.After(time.Second)
+			if permanent(cause) {
+				reg.console.status(connectionFailure(cause), 0)
+			} else {
+				reconnect()
+			}
+		case res := <-recovered:
+			recovered = nil
+			if res.err != nil {
+				reg.console.status(connectionFailure(res.err), 0)
 				continue
 			}
-			reconnect = nil
-			connected()
+			conn = res.conn
+			listen()
+			if state.Revision != res.revision {
+				publish()
+			} else if state.Info.ID != "" {
+				reg.console.session(state.Info.ID)
+			}
 		case <-ended:
 			finish()
 			publish()

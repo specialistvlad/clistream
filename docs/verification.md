@@ -4,6 +4,12 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Local supervisor console and connection recovery · November 20, 2026
+
+Real PTYs exercised cold startup with an unavailable broker, cancellation before launch, two broker outages, input while disconnected, reattachment to the same run, and publication of a child’s offline exit. The child’s launch record contained exactly one PID. Other cases verified editable remote restart in a read-only local view, clear and alternate-screen sequences, translated mouse input, paste, Ctrl-C, Ctrl-D, resize, attach-only exit during backoff, and rejection of a wrong server pin. A controlled Go clock checked the retry schedule through the 30-second cap, reset and cancellation.
+
+The Go race and vet checks and CLI suites ran on macOS and Linux. The Linux deployment suite and mixed-version CLI checks covered multiple hosts and older peers. Native Apple implementation and testing remain deferred.
+
 ## Server console activity · November 20, 2026
 
 The daemon test compared every default stderr event byte for byte with the file journal, including timestamps, from startup through shutdown. A foreground PTY showed a live pairing event. Closing a stderr pipe still allowed a client request and a clean shutdown with a final file record. Rotation, concurrent writers, file opt-out, file failure and payload privacy were also exercised. Both Go platform suites passed (39 CLI cases, with two optional skips on macOS and five on Linux), as did the Linux multi-host deployment and the shared Go, Mac, iPhone and iPad simulator session.

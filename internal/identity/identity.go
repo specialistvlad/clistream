@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"math/big"
 	"net"
 	"os"
@@ -121,16 +122,20 @@ func Pin(cert *x509.Certificate) string {
 func Base(cert tls.Certificate) *tls.Config {
 	return &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS13, NextProtos: []string{wire.ALPN}, SessionTicketsDisabled: true}
 }
+
+var ErrServerKeyMismatch = errors.New("server key mismatch")
+var ErrDeviceKey = errors.New("cannot load device key")
+
 func Dial(ctx context.Context, dir string, p Profile) (*quic.Conn, error) {
 	key, e := Key(dir)
 	if e != nil {
-		return nil, e
+		return nil, fmt.Errorf("%w: %w", ErrDeviceKey, e)
 	}
 	cfg := Base(key)
 	cfg.InsecureSkipVerify = true // Exact SPKI pin from the local pairing invitation replaces public CA verification.
 	cfg.VerifyConnection = func(cs tls.ConnectionState) error {
 		if len(cs.PeerCertificates) != 1 || Pin(cs.PeerCertificates[0]) != p.Pin {
-			return errors.New("server key mismatch")
+			return ErrServerKeyMismatch
 		}
 		return nil
 	}

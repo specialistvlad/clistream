@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -13,12 +11,13 @@ import (
 	"github.com/specialistvlad/clistream/internal/wire"
 )
 
-var errLegacyRole = errors.New("registration denied")
+var errLegacyRole = errors.New("registration denied. Pair this device with the server again")
 
 type registration struct {
-	dir    string
-	server identity.Profile
-	info   wire.Session
+	dir     string
+	server  identity.Profile
+	info    wire.Session
+	console *console
 }
 
 func (r registration) connect(ctx context.Context) (*quic.Conn, error) {
@@ -28,6 +27,8 @@ func (r registration) connect(ctx context.Context) (*quic.Conn, error) {
 	if e != nil {
 		return nil, e
 	}
+	stop := abortOnCancel(ctx, c)
+	defer stop()
 	st, res, e := wire.Open(c, wire.Message{Op: "register", Info: &r.info})
 	if e != nil {
 		c.CloseWithError(1, "registration failed")
@@ -37,29 +38,27 @@ func (r registration) connect(ctx context.Context) (*quic.Conn, error) {
 		return nil, e
 	}
 	st.Close()
-	fmt.Fprintln(os.Stderr, "session", res.ID)
+	r.console.session(res.ID)
 	return c, nil
 }
 func (r registration) serve(ctx context.Context, p *session.Process, c *quic.Conn) {
-	delay := time.Second
 	for {
-		if c != nil {
-			active := c
-			stop := context.AfterFunc(ctx, func() { active.CloseWithError(0, "finished") })
-			p.Serve(c)
-			stop()
-			delay = time.Second
-		}
-		select {
-		case <-ctx.Done():
+		active := c
+		stop := context.AfterFunc(ctx, func() { active.CloseWithError(0, "finished") })
+		p.Serve(active)
+		stop()
+		if ctx.Err() != nil {
 			return
-		case <-time.After(delay):
 		}
-		var e error
-		c, e = r.connect(ctx)
-		if e != nil && ctx.Err() == nil {
-			fmt.Fprintln(os.Stderr, "reconnect:", e)
-			delay = min(delay*2, 30*time.Second)
+		err := context.Cause(active.Context())
+		if !permanent(err) {
+			c, err = retry(ctx, r.console, time.Second, r.connect)
+		}
+		if err != nil {
+			if ctx.Err() == nil {
+				r.console.status(connectionFailure(err), 0)
+			}
+			return
 		}
 	}
 }

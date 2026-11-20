@@ -47,6 +47,10 @@ The client requests distinct keyboard codes for Ctrl-[ and Escape. On terminals 
 - **Permissions and logging.** Apply the existing enrolled-device trust model to management requests. Recheck enrollment and the target supervisor before dispatch. Record the requesting device, action, supervisor and run IDs, and outcome in the daemon activity log. Keep argument values out of listings, logs, and error text. The editor sends argument values directly as an argument vector without shell expansion.
 - **Apple clients.** The first release delivers management controls in the Go terminal client on Linux and macOS. Native Mac, iPhone, and iPad clients continue to list and attach to running sessions. A stop or restart ends their old attachment, and the replacement appears as a new running session.
 
+## Supervisor terminal
+
+On Linux and macOS, a supervisor with terminal stdin and stdout opens directly on its local process. Bubble Tea renders a two-row header above the same bounded emulator viewport as the client. The first row identifies the supervisor, program and broker. The second shows the child state independently of the broker connection, for example **Running · Reconnecting in 4s**. After a managed exit the last screen stays visible with its exit status. A replacement starts in a fresh viewport. Local input goes directly to the child during network outages. In read-only mode remote viewers can still interact, and Ctrl-C exits locally.
+
 ## Launch examples
 
 Use `clistream-supervise /bin/sh` to keep a shell available for another start after exit. Use `clistream-supervise -no-remote-restart /bin/sh` (alias `-once`) to share a single shell. Its row reads **Attach only**. **Ctrl-G Disconnect** returns one viewer to the table while the shell keeps running. Ctrl-D reaches the shell. If it exits, all attachments end, the row disappears, and the supervisor exits with the shell’s status. A new run requires a local launch.

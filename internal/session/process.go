@@ -33,19 +33,24 @@ type Process struct {
 	readers  sync.WaitGroup
 }
 
-func Start(path string, args []string, mode string, ports map[string]string, root *files.Root, managed bool) (*Process, error) {
+type LocalOutput struct {
+	Stdout, Stderr io.Writer
+	Cols, Rows     uint16
+}
+
+func Start(path string, args []string, mode string, ports map[string]string, root *files.Root, managed bool, output LocalOutput) (*Process, error) {
 	p := &Process{managed: managed, Root: root, Cmd: exec.Command(path, args...), ports: ports, out: map[string]*history{}}
 	if mode == "pty" {
 		h := newHistory()
 		p.out["pty"] = h
-		t, e := pty.StartWithSize(p.Cmd, &pty.Winsize{Rows: 24, Cols: 80})
+		t, e := pty.StartWithSize(p.Cmd, &pty.Winsize{Rows: output.Rows, Cols: output.Cols})
 		if e != nil {
 			return nil, e
 		}
 		p.in = t
 		p.terminal = t
 		p.ptyDone = make(chan struct{})
-		go func() { defer close(p.ptyDone); io.Copy(io.MultiWriter(h, os.Stdout), t) }()
+		go func() { defer close(p.ptyDone); io.Copy(io.MultiWriter(h, output.Stdout), t) }()
 		return p, nil
 	}
 	p.out["stdout"] = newHistory()
@@ -54,8 +59,8 @@ func Start(path string, args []string, mode string, ports map[string]string, roo
 		p.Cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		p.Cmd.WaitDelay = time.Second
 	}
-	p.Cmd.Stdout = io.MultiWriter(p.out["stdout"], os.Stdout)
-	p.Cmd.Stderr = io.MultiWriter(p.out["stderr"], os.Stderr)
+	p.Cmd.Stdout = io.MultiWriter(p.out["stdout"], output.Stdout)
+	p.Cmd.Stderr = io.MultiWriter(p.out["stderr"], output.Stderr)
 	in, e := p.Cmd.StdinPipe()
 	if e != nil {
 		return nil, e

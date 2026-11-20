@@ -20,7 +20,6 @@ import (
 	"github.com/specialistvlad/clistream/internal/driver"
 	"github.com/specialistvlad/clistream/internal/files"
 	"github.com/specialistvlad/clistream/internal/identity"
-	"github.com/specialistvlad/clistream/internal/session"
 	"github.com/specialistvlad/clistream/internal/termio"
 	"github.com/specialistvlad/clistream/internal/wire"
 	"golang.org/x/term"
@@ -112,7 +111,7 @@ func run() (int, error) {
 		exports[strings.TrimPrefix(k, "port/")], _, _ = strings.Cut(v, ":")
 	}
 	info := wire.Session{Name: filepath.Base(path), Mode: profile.Mode, Version: profile.Version, Driver: profile.Name, Host: host, OS: runtime.GOOS, Ports: exports}
-	reg := registration{directory, saved, info}
+	reg := registration{dir: directory, server: saved, info: info}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer cancel()
 	root, e := files.Open(".")
@@ -120,50 +119,70 @@ func run() (int, error) {
 		return 1, e
 	}
 	defer root.Close()
-	var c *quic.Conn
-	if !*once {
-		probe, err := identity.Dial(ctx, reg.dir, reg.server)
-		if err != nil {
-			return 1, err
+	console, closeConsole := startConsole(ctx, cancel, terminal, *local, info.Name, saved.Address)
+	reg.console = console
+	defer closeConsole()
+	state := wire.Supervisor{ID: uniqueID(), Revision: 1, Info: info}
+	managed := false
+	c, e := retry(ctx, reg.console, 0, func(ctx context.Context) (*quic.Conn, error) {
+		if !*once {
+			probe, err := identity.Dial(ctx, reg.dir, reg.server)
+			if err != nil {
+				return nil, err
+			}
+			stop := abortOnCancel(ctx, probe)
+			defer stop()
+			managed, err = wire.Managed(probe)
+			if err == nil && managed {
+				err = publishState(probe, state)
+			}
+			if err == nil && managed {
+				return probe, nil
+			}
+			probe.CloseWithError(0, "discovery finished")
+			if err != nil {
+				return nil, err
+			}
+			if reg.console.program == nil {
+				fmt.Fprintln(os.Stderr, "Server supports attach only. Using one-shot supervision.")
+			}
 		}
-		managed, err := wire.Managed(probe)
-		if err != nil {
-			probe.CloseWithError(1, "discovery failed")
-			return 1, err
+		c, err := reg.connect(ctx)
+		if errors.Is(err, errLegacyRole) && *dir == "" && directory == identity.Default("client") && link == "" {
+			legacy := identity.Default("supervisor")
+			if original, e := identity.Load(legacy); e == nil && original.Pin == saved.Pin && original.Address == savedAddress {
+				reg.dir = legacy
+				return reg.connect(ctx)
+			}
 		}
-		if managed {
-			defer probe.CloseWithError(0, "finished")
-			return supervise(ctx, reg, probe, path, args[1:], ports, root, *local, launchSettings{*name, *mode, terminal})
+		return c, err
+	})
+	if ctx.Err() != nil {
+		if c != nil {
+			c.CloseWithError(0, "finished")
 		}
-		probe.CloseWithError(0, "legacy")
-		fmt.Fprintln(os.Stderr, "Server supports attach only. Using one-shot supervision.")
-	}
-	c, e = reg.connect(ctx)
-	// A pre-upgrade daemon can still require the separate supervisor key.
-	if errors.Is(e, errLegacyRole) && *dir == "" && directory == identity.Default("client") && link == "" {
-		legacy := identity.Default("supervisor")
-		if original, err := identity.Load(legacy); err == nil && original.Pin == saved.Pin && original.Address == savedAddress {
-			reg.dir = legacy
-			c, e = reg.connect(ctx)
-		}
+		return 0, nil
 	}
 	if e != nil {
 		return 1, e
 	}
 	defer c.CloseWithError(0, "finished")
-	p, e := session.Start(path, args[1:], profile.Mode, ports, root, false)
+	if managed {
+		return supervise(ctx, reg, c, state, path, args[1:], ports, root, *local, launchSettings{*name, *mode, terminal})
+	}
+	if console.program != nil {
+		console.program.Send(attachOnly{})
+	}
+	p, e := reg.console.start(path, args[1:], profile.Mode, ports, root, false, info.Name)
 	if e != nil {
 		return 1, e
-	}
-	if terminal {
-		fmt.Fprintf(os.Stderr, "Sharing %q through %s (%s). Open clistream to attach.\n", path, saved.Address, profile.Mode)
 	}
 	done := make(chan struct{})
 	go func() { defer close(done); reg.serve(ctx, p, c) }()
 	defer func() { cancel(); <-done }()
 	stop := context.AfterFunc(ctx, func() { p.Cmd.Process.Signal(syscall.SIGTERM) })
 	defer stop()
-	if *local {
+	if *local && !terminal {
 		if profile.Mode == "pty" && term.IsTerminal(int(os.Stdin.Fd())) {
 			defer termio.Setup(func(w, h uint16) { p.Resize(w, h) })()
 		}
