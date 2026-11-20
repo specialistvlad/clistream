@@ -61,7 +61,7 @@ func (d *dashboardUI) draw() error {
 	}
 	line := func(y int, text string) { cell(0, y, w, text) }
 	title := "CLIStream Client"
-	footer := "Q Quit"
+	keys := "Q Quit"
 	target := d.target.Info.Name + " on " + d.target.Info.Host
 	s.HideCursor()
 	switch d.page {
@@ -71,7 +71,7 @@ func (d *dashboardUI) draw() error {
 	case "lost":
 		title += " │ Disconnected from " + d.host
 		line(2, d.notice)
-		footer = "R Retry   Q Quit"
+		keys = "R Retry   Q Quit"
 	case "attached":
 		if w < 55 {
 			title += " │ " + target
@@ -87,7 +87,7 @@ func (d *dashboardUI) draw() error {
 					c = c.Clone()
 					c.Link = uv.Link{}
 					c.Content = printable(c.Content)
-					s.SetCell(x, y+1, c)
+					s.SetCell(x, y+2, c)
 					step = max(1, c.Width)
 				}
 				x += step
@@ -95,10 +95,16 @@ func (d *dashboardUI) draw() error {
 		}
 		if !v.CursorHidden() {
 			p := v.CursorPosition()
-			s.SetCursorPosition(p.X, p.Y+1)
+			s.SetCursorPosition(p.X, p.Y+2)
 			s.ShowCursor()
 		}
-		footer = "Ctrl-] Detach"
+		keys = "Ctrl-G Home   Ctrl-[ Previous   Ctrl-] Next   Ctrl-^ Previous (legacy)"
+		if w < 70 {
+			keys = "^G Home   ^[ / ^^ Prev   ^] Next"
+		}
+		if d.notice != "" {
+			title += " │ " + d.notice
+		}
 	case "confirm":
 		verb := map[string]string{"apply": "Start with these arguments", "restart": "Restart", "stop": "Stop"}[d.action]
 		if d.action == "apply" && d.target.Info.ID != "" {
@@ -111,15 +117,15 @@ func (d *dashboardUI) draw() error {
 			choices = " Cancel    [" + verb + "]"
 		}
 		line(4, choices)
-		footer = "Tab Select   Enter Confirm   Esc Cancel"
+		keys = "Tab Select   Enter Confirm   Esc Cancel"
 		if w < 40 {
-			footer = "Tab Select  ↵ Confirm  Esc Cancel"
+			keys = "Tab Select  ↵ Confirm  Esc Cancel"
 		}
 	case "edit":
 		title += " │ Edit arguments │ " + target
-		line(1, "Executable   "+d.target.Info.Name)
+		line(2, "Executable   "+d.target.Info.Name)
 		first := max(0, d.arg-max(0, h-5))
-		for i := first; i < len(d.args) && 2+i-first < h-1; i++ {
+		for i := first; i < len(d.args) && 3+i-first < h; i++ {
 			mark := "  "
 			if i == d.arg {
 				mark = "› "
@@ -132,21 +138,21 @@ func (d *dashboardUI) draw() error {
 				available := max(1, w-s.StringWidth(prefix)-1)
 				before = ansi.TruncateLeft(before, max(0, s.StringWidth(before)-available), "")
 				text = before + string(runes[d.cursor:])
-				s.SetCursorPosition(min(w-1, s.StringWidth(prefix+before)), 2+i-first)
+				s.SetCursorPosition(min(w-1, s.StringWidth(prefix+before)), 3+i-first)
 				s.ShowCursor()
 			}
-			line(2+i-first, prefix+text)
+			line(3+i-first, prefix+text)
 		}
 		verb := "Start"
 		if d.target.Info.ID != "" {
 			verb = "Restart"
 		}
-		footer = "Ctrl-R " + verb + " with these arguments   ↑↓ Select   Enter Add   Ctrl-D Remove   Esc Cancel"
-		if s.StringWidth(footer) > w {
-			footer = "↑↓ Select  ↵ Add  ^D Remove  ^R " + verb + "  Esc Cancel"
+		keys = "Ctrl-R " + verb + " with these arguments   ↑↓ Select   Enter Add   Ctrl-D Remove   Esc Cancel"
+		if s.StringWidth(keys) > w {
+			keys = "↑↓ Select  ↵ Add  ^D Remove  ^R " + verb + "  Esc Cancel"
 		}
-		if s.StringWidth(footer) > w {
-			footer = "↑↓  ↵ Add  ^D Del  ^R Run  Esc"
+		if s.StringWidth(keys) > w {
+			keys = "↑↓  ↵ Add  ^D Del  ^R Run  Esc"
 		}
 	case "table":
 		if w < 55 {
@@ -177,7 +183,7 @@ func (d *dashboardUI) draw() error {
 				split := max(3, w/2)
 				cell(2, y, split, name)
 				cell(split, y, w, state)
-				if y > 1 {
+				if y > 2 {
 					cell(2, y+1, w-idw-1, host)
 					cell(max(0, w-idw), y+1, w, id)
 				}
@@ -199,44 +205,55 @@ func (d *dashboardUI) draw() error {
 				cell(w-idw, y, w, id)
 			}
 		}
-		row(1, "Program", "Host", "State", "Mode", "ID")
+		row(2, "Program", "Host", "State", "Mode", "ID")
 		room := max(1, (h-4)/rowHeight)
 		first := max(0, d.index-room+1)
 		for i := first; i < len(d.rows) && i < first+room; i++ {
 			v := d.rows[i]
-			y := 2 + (i-first)*rowHeight
+			y := 3 + (i-first)*rowHeight
 			if i == d.index {
 				cell(0, y, 2, "›")
 			}
 			row(y, v.Info.Name, v.Info.Host, stateLabel(v), strings.ToUpper(v.Info.Mode), v.ID[:min(idw, len(v.ID))])
 		}
-		footer = "↑↓ Select"
+		keys = "↑↓ Select"
 		v := d.rows[d.index]
 		if v.Info.ID != "" {
-			footer += "   Enter Attach"
+			keys += "   Enter Attach"
 		}
 		if v.Revision != 0 {
 			if v.Info.ID != "" {
-				footer += "   R Restart   S Stop"
+				keys += "   R Restart   S Stop"
 			} else {
-				footer += "   R Start"
+				keys += "   R Start"
 			}
-			footer += "   E Edit arguments"
+			keys += "   E Edit arguments"
 		}
-		footer += "   Q Quit"
-		if s.StringWidth(footer) > w {
-			footer = strings.NewReplacer("   ", " ", "↑↓ Select", "↑↓", " Edit arguments", " Edit").Replace(footer)
+		keys += "   Q Quit"
+		if s.StringWidth(keys) > w {
+			keys = strings.NewReplacer("   ", " ", "↑↓ Select", "↑↓", " Edit arguments", " Edit").Replace(keys)
 		}
-		if s.StringWidth(footer) > w {
-			footer = strings.NewReplacer("Enter Attach", "↵", "R Restart", "R", "R Start", "R", "S Stop", "S", "E Edit", "E", "Q Quit", "Q").Replace(footer)
+		if s.StringWidth(keys) > w {
+			keys = strings.NewReplacer("Enter Attach", "↵", "R Restart", "R", "R Start", "R", "S Stop", "S", "E Edit", "E", "Q Quit", "Q").Replace(keys)
 		}
 	}
 	if d.page == "table" && d.notice != "" {
-		line(h-2, d.notice)
+		line(h-1, d.notice)
 	}
 	line(0, title)
 	if h > 1 {
-		line(h-1, footer)
+		line(1, keys)
+	}
+	for y := 0; y < min(2, h); y++ {
+		for x := 0; x < w; {
+			c := s.CellAt(x, y).Clone()
+			c.Style.Attrs |= uv.AttrReverse
+			if y == 0 {
+				c.Style.Attrs |= uv.AttrBold
+			}
+			s.SetCell(x, y, c)
+			x += max(1, c.Width)
+		}
 	}
 	s.Render()
 	return s.Flush()

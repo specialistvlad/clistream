@@ -34,7 +34,7 @@ class Compatibility(BrokerFixture):
         dashboard = DashboardTerminal(self)
         dashboard.until(b"Attach only")
         dashboard.send(b"\r")
-        dashboard.until(b"Ctrl-] Detach")
+        dashboard.until(b"Ctrl-G Home")
         dashboard.send(b"old-supervisor\r")
         self.assertEqual(line(child.stdout), b"old-supervisor\n")
         child.terminate()

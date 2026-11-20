@@ -35,9 +35,12 @@ func TestFrameSurvivesRemoteScreenChanges(t *testing.T) {
 		outer.Write(output.Bytes())
 		output.Reset()
 		lines := strings.Split(outer.String(), "\n")
-		if len(lines) != h || strings.TrimSpace(lines[0]) != "CLIStream Client │ Attached to sh on devbox" || strings.TrimSpace(lines[h-1]) != "Ctrl-] Detach" {
+		if len(lines) != h || strings.TrimSpace(lines[0]) != "CLIStream Client │ Attached to sh on devbox" || !strings.Contains(lines[1], "Ctrl-G Home") {
 			t.Fatalf("frame after remote update:\n%s", outer.String())
 		}
+	}
+	if !strings.Contains(strings.Split(outer.String(), "\n")[h-1], "last line") {
+		t.Fatal("bottom viewport row missing")
 	}
 	d.page = "table"
 	d.host = "devbox"

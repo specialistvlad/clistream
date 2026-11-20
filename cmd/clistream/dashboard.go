@@ -111,11 +111,15 @@ func (d *dashboardUI) disconnect(err error) {
 	d.rows = nil
 	d.args = nil
 }
-func (d *dashboardUI) attach() error {
-	a, err := client.Attach(d.conn, d.target.Info.ID)
+func (d *dashboardUI) attach(target wire.Supervisor) error {
+	a, err := client.Attach(d.conn, target.Info.ID)
 	if err != nil {
 		return err
 	}
+	if d.attachment != nil {
+		d.attachment.close()
+	}
+	d.target = target
 	d.attachment = newViewport(a, d.target.Info.Mode, d.screen.Width(), max(1, d.screen.Height()-2))
 	d.screen.SetMouseEncoding(uv.MouseEncodingSGR)
 	d.screen.SetMouseMode(uv.MouseModeMotion)
@@ -123,6 +127,34 @@ func (d *dashboardUI) attach() error {
 	d.notice = ""
 	return nil
 }
+
+// Cycle in dashboard order. Keep the old attachment if the chosen run exits
+// between discovery and opening its streams.
+func (d *dashboardUI) cycle(direction int) bool {
+	if err := d.refresh(); err != nil {
+		d.disconnect(err)
+		return true
+	}
+	n := len(d.rows)
+	current := slices.IndexFunc(d.rows, func(row wire.Supervisor) bool { return row.ID == d.target.ID })
+	if current < 0 {
+		return false
+	}
+	for step := 1; step < n; step++ {
+		i := (current + step*direction + n) % n
+		if d.rows[i].Info.ID == "" {
+			continue
+		}
+		if err := d.attach(d.rows[i]); err != nil {
+			d.notice = "Switch failed"
+			return false
+		}
+		d.index = i
+		return true
+	}
+	return false
+}
+
 func dashboard(dir, link, direct string) (int, error) {
 	fd := int(os.Stdin.Fd())
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
@@ -161,6 +193,7 @@ func dashboard(dir, link, direct string) (int, error) {
 	s.Resize(w, h)
 	s.EnterAltScreen()
 	s.EnableBracketedPaste()
+	s.SetKeyboardEnhancements(&uv.KeyboardEnhancements{DisambiguateEscapeCodes: true})
 	if err := s.Flush(); err != nil {
 		return 1, err
 	}
@@ -244,8 +277,9 @@ func dashboard(dir, link, direct string) (int, error) {
 				if i < 0 {
 					return 1, errors.New("unknown session")
 				}
+				d.index = i
 				d.target = d.rows[i]
-				if err := d.attach(); err != nil {
+				if err := d.attach(d.target); err != nil {
 					return 1, err
 				}
 			}
@@ -321,10 +355,19 @@ func dashboard(dir, link, direct string) (int, error) {
 				k := strings.ToLower(ev.String())
 				switch d.page {
 				case "attached":
-					if ev.MatchString("ctrl+]") || ev.Code == 0x1d {
+					switch {
+					case ev.MatchString("ctrl+]") || ev.Code == 0x1d:
+						if d.cycle(1) {
+							direct = ""
+						}
+					case ev.MatchString("ctrl+[", "ctrl+^", "ctrl+6") || ev.Code == 0x1e:
+						if d.cycle(-1) {
+							direct = ""
+						}
+					case ev.MatchString("ctrl+g") || ev.Code == 7:
 						d.detach()
 						direct = ""
-					} else {
+					default:
 						if d.attachment.mode == "pipe" && ev.Code == uv.KeyEnter {
 							d.attachment.term.SendText("\n")
 						} else {
@@ -384,7 +427,7 @@ func (d *dashboardUI) tableKey(k string) {
 		d.index = min(len(d.rows)-1, d.index+1)
 	case "enter":
 		if d.target.Info.ID != "" {
-			if err := d.attach(); err != nil {
+			if err := d.attach(d.target); err != nil {
 				d.notice = "Session unavailable"
 			}
 		}

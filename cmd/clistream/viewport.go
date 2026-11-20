@@ -79,7 +79,7 @@ func (v *viewport) resize(w, h int) {
 }
 func (v *viewport) mouse(event uv.MouseEvent) {
 	m := event.Mouse()
-	m.Y--
+	m.Y -= 2
 	if m.X < 0 || m.Y < 0 || m.X >= v.term.Width() || m.Y >= v.term.Height() {
 		return
 	}

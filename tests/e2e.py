@@ -194,24 +194,64 @@ while True:
         time.sleep(0.2)
         t.send(b"!")
         t.until(b"SIZE=73,16")
-        t.send(b"\x1d")
+        t.send(b"\x07")
         t.until(b"Enter Attach")
         t.send(b"q")
         self.assertEqual(t.process.wait(5), 0)
         # The replay contains every child-bound byte, including the pasted detach key.
         viewer = DashboardTerminal(self, self.b + ["attach", sid])
         replay = viewer.until(b"SIZE=73,16")
-        for seq in (b"[73][03][71][1d][73]", b"[1b][5b][3c][30][3b][35][3b][37][4d]", b"CLIStream Client", b"Ctrl-] Detach"):
+        for seq in (b"[73][03][71][1d][73]", b"[1b][5b][3c][30][3b][35][3b][36][4d]", b"CLIStream Client", b"Ctrl-G Home"):
             self.assertIn(seq, replay)
-        viewer.send(b"\x1d")
+        viewer.send(b"\x07")
         viewer.until(b"Enter Attach")
         viewer.send(b"q")
         self.assertEqual(viewer.process.wait(8), 0)
         direct = DashboardTerminal(self, self.b + ["attach", sid])
-        direct.until(b"Ctrl-] Detach")
+        direct.until(b"Ctrl-G Home")
         direct.send(b"x")
         self.assertEqual(direct.process.wait(8), 19)
         self.assertIsNone(p.poll())
+
+    def test_cycle_running_apps(self):
+        apps = {}
+        for _ in range(3):
+            child = self.managed(["/bin/cat"])
+            sid = status_line(child.stderr, b"session ").split()[1].decode()
+            apps[sid] = child
+        self.managed(["/bin/true"])
+        # The session list and dashboard have different IDs. Start on a known
+        # run, then use each child's local output to identify where input went.
+        start = next(iter(apps))
+        view = DashboardTerminal(self, self.a + ["attach", start])
+        view.until(b"Ctrl-G Home")
+
+        def write_and_identify(keys, word):
+            view.send(keys + word + b"\r")
+            with selectors.DefaultSelector() as sel:
+                for sid, child in apps.items():
+                    sel.register(child.stdout, selectors.EVENT_READ, sid)
+                ready = sel.select(5)
+                self.assertEqual(len(ready), 1)
+                entry = ready[0][0]
+                self.assertEqual(entry.fileobj.readline(), word + b"\n")
+                return entry.data
+
+        second = write_and_identify(b"\x1d", b"second")
+        third = write_and_identify(b"\x1d", b"third")
+        self.assertEqual(len({start, second, third}), 3)
+        self.assertEqual(write_and_identify(b"\x1d", b"wrap"), start)
+        self.assertEqual(write_and_identify(b"\x1b[91;5u", b"previous"), third)
+        self.assertEqual(write_and_identify(b"\x1e", b"legacy"), second)
+        view.send(b"\x1b")
+        time.sleep(0.15)
+        view.send(b"escape\r")
+        self.assertEqual(line(apps[second].stdout), b"\x1bescape\n")
+        view.send(b"\x07")
+        view.until(b"Enter Attach")
+        view.send(b"q")
+        self.assertEqual(view.process.wait(5), 0)
+        self.assertTrue(all(child.poll() is None for child in apps.values()))
 
     def test_managed_supervisors(self):
         executable = self.work / "worker"
@@ -345,7 +385,7 @@ while True:
         self.assertEqual(observer.wait(8), 128)
         # Losing the broker while attached requires an explicit reattachment.
         retry.send(b"\r")
-        retry.until(b"Ctrl-] Detach")
+        retry.until(b"Ctrl-G Home")
         self.daemon.terminate()
         self.daemon.wait(8)
         retry.until(b"Disconnected")
