@@ -37,7 +37,7 @@ def report(bundle, image_dir=None):
                         "xcrun", "xcresulttool", "export", "object", "--legacy",
                         "--path", str(bundle), "--id", item["payloadId"], "--type", "file",
                         "--output-path", str(image_dir / (name.replace(" ", "-") + ".png")),
-                    ], check=True)
+                    ], check=True, stdout=subprocess.DEVNULL)
         steps = []
         for n in nodes(activities):
             title = n.get("title", "")

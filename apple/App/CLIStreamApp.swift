@@ -122,7 +122,12 @@ struct BrowserView: View {
     }
     .onChange(of: connection.selected?.id) { _, id in
       if id != nil, let session = connection.selected {
-        inputFocused = session.Mode == "pipe"
+        #if os(macOS)
+          inputFocused = session.Mode == "pipe"
+        #else
+          // Let the user read incoming output before bringing up the keyboard.
+          inputFocused = false
+        #endif
         AccessibilityNotification.Announcement(session.Name + ", " + session.Host).post()
       }
     }
@@ -230,6 +235,7 @@ struct BrowserView: View {
       Text(title).font(.caption).foregroundStyle(.secondary)
       #if os(iOS)
         SelectableOutput(text: String(decoding: data, as: UTF8.self), title: title)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
       #else
         ScrollView {
           Text(String(decoding: data, as: UTF8.self)).font(.system(.body, design: .monospaced))

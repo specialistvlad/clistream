@@ -120,12 +120,17 @@ def run(root, stack, suite, command):
             f"{proto}={proto}:127.0.0.1:{endpoint.server_address[1]}",
         ]
 
-    def session(mode, args, label, flags=(), env=None):
-        launch(
+    filler_processes = []
+
+    def session(mode, args, label, flags=(), env=None, filler=False):
+        proc = launch(
             supervisor + ["-mode", mode, "-local-input=false", *flags, "--", *args],
             label,
             env,
         )
+
+        if filler:
+            filler_processes.append(proc)
 
         def registered():
             for msg in (root / (label + ".err")).read_text().splitlines():
@@ -159,7 +164,7 @@ def run(root, stack, suite, command):
     if suite == "scroll":
         # Fill the real session list past the bottom edge of a full-size iPad.
         for index in range(22):
-            session("pipe", ["/bin/cat"], f"scroll-row-{index}")
+            session("pipe", ["/bin/cat"], f"scroll-row-{index}", filler=True)
 
     # Capture bytes at the child, beyond the UI, terminal emulator and broker.
     capture = root / "terminal-input"
@@ -282,6 +287,11 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
                         self.send_error(409, "Child PTY size did not change")
                         return
             elif purpose == "HISTORY":
+                # The real list has already scrolled and the PTY is attached.
+                # Release its filler supervisors before exercising scrollback.
+                for proc in filler_processes:
+                    if proc.poll() is None:
+                        proc.terminate()
                 Path(str(capture) + ".history").touch()
                 payload = b"released"
             elif purpose == "QR":
@@ -353,7 +363,7 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
     try:
         # Each terminal-key check opens a native menu and waits for UIKit to
         # finish animating. A cold hosted simulator can spend minutes there.
-        timeout = 720 if simulator and suite == "terminal" else 420
+        timeout = 720 if simulator and suite in {"terminal", "scroll"} else 420
         subprocess.run(command, cwd=APP, env=env, check=True, timeout=timeout)
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as failure:
         stage = "Timed out" if isinstance(failure, subprocess.TimeoutExpired) else "XCTest failed"

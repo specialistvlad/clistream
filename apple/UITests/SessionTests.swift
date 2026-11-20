@@ -123,35 +123,31 @@ final class SessionTests: XCTestCase {
       let thumbnail = document.images.firstMatch
       let caption = document.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
       let anchor = app.coordinate(withNormalizedOffset: .zero)
-      func activationPoint() -> CGPoint? {
-        let content = grid.frame
-        var top = content.minY
-        var bottom = content.maxY
-        let header = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"]
-        for bar in [header, app.searchFields["Search"].firstMatch] where bar.exists {
-          if bar.frame.intersects(content) { top = max(top, bar.frame.maxY + 4) }
+      let content = grid.frame.intersection(app.frame)
+      var top = content.minY
+      var bottom = content.maxY
+      let header = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"]
+      for bar in [header, app.searchFields["Search"].firstMatch] where bar.exists {
+        let rect = bar.frame
+        if rect.intersects(content) && rect.maxY < content.midY {
+          top = max(top, rect.maxY + 4)
         }
-        for bar in [app.tabBars.firstMatch, app.keyboards.firstMatch] where bar.exists {
-          if bar.frame.intersects(content) { bottom = min(bottom, bar.frame.minY - 4) }
-        }
-        guard top < bottom else { return nil }
-        let viewport = CGRect(x: content.minX, y: top, width: content.width, height: bottom - top)
-        for part in [thumbnail, caption, document] where part.exists {
-          let bounds = part.frame.intersection(viewport)
-          if bounds.width > 6 && bounds.height > 6 {
-            return CGPoint(x: bounds.midX, y: bounds.midY)
-          }
-        }
-        return nil
       }
-      var lastPoint: CGPoint?
-      let stable = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-        let point = activationPoint()
-        defer { lastPoint = point }
-        return point != nil && point == lastPoint && document.isEnabled
-      }, object: document)
-      XCTAssertEqual(XCTWaiter.wait(for: [stable], timeout: 12), .completed)
-      let point = try XCTUnwrap(activationPoint())
+      for bar in [app.buttons["Browse"].firstMatch, app.keyboards.firstMatch] where bar.exists {
+        let rect = bar.frame
+        if rect.intersects(content) && rect.minY > content.minY + content.height * 0.3 {
+          bottom = min(bottom, rect.minY - 4)
+        }
+      }
+      let viewport = CGRect(x: content.minX, y: top, width: content.width, height: max(0, bottom - top))
+      let hit = [thumbnail, caption, document].lazy.compactMap { part -> CGPoint? in
+        guard part.exists else { return nil }
+        let bounds = part.frame.intersection(viewport)
+        guard bounds.width > 6 && bounds.height > 6 else { return nil }
+        return CGPoint(x: bounds.midX, y: bounds.midY)
+      }.first
+      if hit == nil { attachFixtureImage(grid, named: "Fixture document grid") }
+      let point = try XCTUnwrap(hit, "No visible portion of the document inside \(viewport)")
       let delivery = try await fixtureResponse("DOCUMENT", at: point)
       XCTAssertEqual(delivery, "delivered")
       let open = app.buttons["Open"].firstMatch
@@ -338,6 +334,7 @@ final class SessionTests: XCTestCase {
       let app = try await pairedApp(session: "CLISTREAM_SESSION", largeText: true)
       let output = app.textViews["Standard output"]
       assertText("copyword selection", in: output)
+      XCTAssertGreaterThan(output.frame.height, 35, "Pipe output must leave room for text selection")
       let word = output.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 37, dy: 20))
       let delivery = try await fixtureResponse("WORD", at: word.screenPoint)
       XCTAssertEqual(delivery, "delivered")
@@ -484,6 +481,9 @@ final class SessionTests: XCTestCase {
         "UICTContentSizeCategoryAccessibilityL",
       ]
     }
+    #if os(iOS)
+      XCUIDevice.shared.orientation = .portrait
+    #endif
     app.launch()
     let invitation = try await fixtureResponse("QR")
     let link = try XCTUnwrap(URL(string: invitation))
