@@ -26,7 +26,7 @@ func TestFrameSurvivesRemoteScreenChanges(t *testing.T) {
 	defer func() { outer.InputPipe().(io.Closer).Close(); <-done; outer.Close() }()
 	remote := vt.NewEmulator(w, h-2)
 	defer remote.Close()
-	d := dashboardUI{screen: screen, page: "attached", target: wire.Supervisor{Info: wire.Session{Name: "sh", Host: "devbox"}}, attachment: &viewport{term: remote}}
+	d := dashboardUI{screen: screen, page: "attached", target: wire.Supervisor{Revision: 1, Info: wire.Session{Name: "sh", Host: "devbox"}}, attachment: &viewport{term: remote}}
 	for _, sequence := range []string{"hello", "\x1b[?1049h\x1b[2J\x1b[Hfull screen", strings.Repeat("scroll\r\n", 1000), "\x1b[?1049l\x1b[2J\x1b[999;1Hlast line"} {
 		remote.WriteString(sequence)
 		if err := d.draw(); err != nil {

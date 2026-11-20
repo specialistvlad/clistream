@@ -50,6 +50,6 @@ The client requests distinct keyboard codes for Ctrl-[ and Escape. On terminals 
 
 ## Launch examples
 
-Use `clistream-supervise /bin/sh` to keep a shell available for another start after exit. Use `clistream-supervise -once /bin/sh` when a script needs the exit status of that invocation.
+Use `clistream-supervise /bin/sh` to keep a shell available for another start after exit. Use `clistream-supervise -no-remote-restart /bin/sh` (alias `-once`) to share a single shell. Its row reads **Attach only**. **Ctrl-G Disconnect** returns one viewer to the table while the shell keeps running. Ctrl-D reaches the shell. If it exits, all attachments end, the row disappears, and the supervisor exits with the shell’s status. A new run requires a local launch.
 
 In the argument editor, ↑ and ↓ select entries, ← and → move the cursor, Enter inserts an empty argument, and Ctrl-D removes the selected entry. Ctrl-R opens the start or restart confirmation. Tab selects the action, Enter confirms, and Escape cancels.

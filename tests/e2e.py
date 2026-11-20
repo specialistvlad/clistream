@@ -213,6 +213,29 @@ while True:
         self.assertEqual(direct.process.wait(8), 19)
         self.assertIsNone(p.poll())
 
+    def test_no_remote_restart(self):
+        script = 'while read -r word; do echo "received-$word"; done; exit 23'
+        sup = self.spawn([SUP, "-no-remote-restart", "-state", self.base / "supervisor",
+                          "-mode", "pty", "-local-input=false", "--", "/bin/sh", "-c", script])
+        sid = status_line(sup.stderr, b"session ").split()[1].decode()
+        first = DashboardTerminal(self)
+        first.until(b"Attach only")
+        first.send(b"rse\r")
+        first.until(b"Ctrl-G Disconnect")
+        second = DashboardTerminal(self, self.b + ["attach", sid])
+        second.until(b"Ctrl-G Disconnect")
+        first.send(b"\x07")
+        first.until(b"Attach only")
+        second.send(b"still-here\r")
+        second.until(b"received-still-here")
+        first.send(b"\r")
+        first.until(b"received-still-here")
+        first.send(b"\x04")
+        first.until(b"exit 23")
+        self.assertEqual(second.process.wait(8), 23)
+        self.assertEqual(sup.wait(8), 23)
+        self.assertFalse(json.loads(self.run_cli(self.a).stdout))
+
     def test_cycle_running_apps(self):
         apps = {}
         for _ in range(3):

@@ -12,6 +12,8 @@ Activity logs contain device key fingerprints, network endpoints, session and co
 
 ## Supervisor management
 
+The host can select `-no-remote-restart` to omit remote lifecycle controls. Enrolled viewers still interact with the running program using its ordinary input, files and configured exports.
+
 An enrolled key can retrieve arguments and manage every supervisor on its daemon. The broker checks the requester and the target’s enrollment before dispatch. The broker and supervisor check the expected run and revision. An argument edit supplies individual strings to the fixed executable. The child runs with the supervisor account’s permissions and interprets its own arguments. Argument values travel through the trusted broker and stay out of listings, activity records and lifecycle errors. The Go dashboard interprets terminal escape sequences inside the child viewport, filters control characters from labels and keeps paste separate from shortcuts.
 
 ## Workspace service

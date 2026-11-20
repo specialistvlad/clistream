@@ -98,9 +98,13 @@ func (d *dashboardUI) draw() error {
 			s.SetCursorPosition(p.X, p.Y+2)
 			s.ShowCursor()
 		}
-		keys = "Ctrl-G Home   Ctrl-[ Previous   Ctrl-] Next"
+		leave := "Home"
+		if d.target.Revision == 0 {
+			leave = "Disconnect"
+		}
+		keys = "Ctrl-G " + leave + "   Ctrl-[ Previous   Ctrl-] Next"
 		if s.StringWidth(keys) > w {
-			keys = "^G Home   ^[ Prev   ^] Next"
+			keys = "^G " + leave + "   ^[ Prev   ^] Next"
 		}
 		if d.notice != "" {
 			title += " │ " + d.notice

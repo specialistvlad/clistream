@@ -4,6 +4,10 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Single-run supervision · November 20, 2026
+
+`make test e2e` passed on macOS arm64 and Debian Linux arm64. Of 37 CLI cases, macOS passed 35 with two optional provider skips, and Linux passed 32 with five optional driver or provider skips. The new two-viewer PTY case launched a shell with `-no-remote-restart`. One viewer disconnected, the other continued sending input, and the first reattached to the same run. Ctrl-D then ended the shell, both attachments ended, the supervisor returned status 23, and the session disappeared. A broker test verified that enrolled-device lifecycle requests against a single-run registration are rejected. Both previous-binary compatibility cases passed on macOS.
+
 ## Header and app switching · November 20, 2026
 
 `make test e2e` passed on macOS arm64 and Debian Linux arm64. Of 36 CLI cases, macOS passed 34 with two optional provider skips. Linux passed 31 with five optional driver or provider skips. The real-PTY navigation case identified the receiving child after each switch among three running apps, checked wraparound, the previous-app shortcut, plain Escape delivery and Ctrl-G return to the table. The renderer test checked the two header rows during remote screen changes and verified output reached the bottom row. Both compatibility cases passed against binaries from `bd2d7ab`.

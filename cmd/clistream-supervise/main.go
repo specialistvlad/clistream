@@ -42,6 +42,7 @@ func run() (int, error) {
 	pair := flag.Bool("pair", false, "read pairing invitation from stdin")
 	addr := flag.String("server", "", "override paired host:port (same pinned key)")
 	once := flag.Bool("once", false, "exit with the first child's status")
+	flag.BoolVar(once, "no-remote-restart", false, "share one attach-only run and exit with its status (alias for -once)")
 	local := flag.Bool("local-input", true, "forward local stdin (pipe EOF closes child stdin)")
 	ports := map[string]string{}
 	flag.Func("export", "name=tcp:127.0.0.1:port or name=udp:[::1]:port", func(v string) error {

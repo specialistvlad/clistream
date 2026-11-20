@@ -110,6 +110,18 @@ func TestEnrollmentAndCompressedStreams(t *testing.T) {
 		t.Fatal(err)
 	}
 	valid.Close()
+	t.Run("attach-only session rejects lifecycle requests", func(t *testing.T) {
+		registered, err := wire.Request(conn, wire.Message{Op: "register", Info: &wire.Session{Name: "cat", Mode: "pty"}})
+		if err != nil || registered.ID == "" {
+			t.Fatal("register one-shot session", err)
+		}
+		for _, op := range []string{"arguments", "stop", "start", "restart", "apply"} {
+			res, err := wire.Request(conn, wire.Message{Op: op, ID: registered.ID, Run: registered.ID})
+			if err == nil || res.Error != "supervisor unavailable" {
+				t.Fatalf("%s returned %+v, %v", op, res, err)
+			}
+		}
+	})
 }
 
 func TestDisplayedInvitesShareRedemptionAcrossListeners(t *testing.T) {

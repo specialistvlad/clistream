@@ -25,6 +25,8 @@ Every application record, including enrollment, filesystem and tunnel data, is U
 | register(Info) | Enrolled device | Assign a session ID for this connection |
 | open(ID, Channel, Path?) | Enrolled device | Broker opens matching stream back to the supervisor |
 
+Supervisors launched with `-no-remote-restart` or `-once` use `register` for a single attach-only run. Lifecycle requests target managed supervisor registrations.
+
 ## Negotiated supervisor controls
 
 A peer probes with `{"Op":"capabilities"}`. An enrolled peer receives an `ok` with `Capabilities` containing `managed-supervisors-v1`. A legacy operation rejection selects the existing register/list/open paths. Those records retain their original fields.
