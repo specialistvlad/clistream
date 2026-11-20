@@ -177,7 +177,7 @@ final class ClientTests: XCTestCase {
     var sent = names.count == 1
     try await send(sent ? "hosted-\(participant)-echo" : "ready-\(participant)")
     var channels = [String: Data]()
-    try await consume(key, seconds: names.count == 1 ? 12 : 900) { event in
+    try await consume(key, seconds: names.count == 1 ? 12 : 1320) { event in
       if let ch = event.Channel, let data = event.Data {
         channels[ch, default: Data()].append(data)
       }

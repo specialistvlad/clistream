@@ -71,7 +71,7 @@ make dist
 
 Install the supported Claude Code version to enable the emulator test. Live Codex requires the supported CLI and a signed-in account. Set `CLISTREAM_LIVE_CLAUDE=1` to run the separate live Anthropic check when quota is available.
 
-For the iPad hardware-keyboard check, put AXe 2.1.1 on the test host’s PATH. CI verifies the release archive hash. The fixture sends USB keyboard usages for left Control and D to the designated simulator. The child must receive byte 0x04. [AXe simulator test tool](https://github.com/cameroncooke/AXe/releases/tag/v2.1.1)
+For iPhone and iPad UI checks, put AXe 2.1.1 on the test host’s PATH. The fixture taps the visible Files thumbnail and long-presses the rendered output through simulator touch input. CI verifies the release archive hash. The fixture sends USB keyboard usages for left Control and D to the designated simulator. The child must receive byte 0x04. [AXe simulator test tool](https://github.com/cameroncooke/AXe/releases/tag/v2.1.1)
 
 On a Mac with Xcode, XcodeGen, Go and Python 3.10 or later, generate the project, list simulator IDs and run the suites. Setting `CLISTREAM_APP_DRIVERS=1` enables both installed CLI drivers in each Apple app. With that flag unset, the terminal, filesystem, forwarding and UI suites run independently of provider accounts.
 

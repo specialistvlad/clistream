@@ -14,6 +14,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 APP = Path(__file__).resolve().parent
 BIN = APP.parent / "bin"
@@ -47,7 +48,7 @@ def run(root, stack, suite, command):
     (work / "inbox" / "nested").mkdir(parents=True)
     (root / "outside").write_text("private")
     (work / "escape").symlink_to(root)
-    name = f"CLITest-{os.urandom(4).hex()}"
+    name = f"QA{os.urandom(4).hex()}"
     saved = root / "saved"
     saved.mkdir()
     sample = os.urandom(75007).hex()[:150013].encode("ascii")
@@ -212,6 +213,10 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
     available = {"PIPE", "PTY", "FILES", "PORTS", "DRIVERS", "QR"}
     if suite == "scroll":
         available.add("HISTORY")
+    if simulator and suite == "files":
+        available.add("DOCUMENT")
+    if simulator and suite == "touch":
+        available.add("WORD")
     initial_grid = None
     if simulator and suite == "terminal":
         available.update({"GRID", "RESIZED"})
@@ -226,12 +231,26 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
 
         def do_GET(self):
             nonlocal initial_grid
-            purpose = self.path.removeprefix(route)
-            if not self.path.startswith(route) or purpose not in available:
+            target = urlsplit(self.path)
+            purpose = target.path.removeprefix(route)
+            if not target.path.startswith(route) or purpose not in available:
                 self.send_error(404)
                 return
             available.remove(purpose)
-            if purpose == "HID":
+            if purpose in {"DOCUMENT", "WORD"}:
+                try:
+                    params = parse_qs(target.query, strict_parsing=True)
+                    x, y = (float(params[axis][0]) for axis in ("x", "y"))
+                    if not (0 <= x < 4096 and 0 <= y < 4096):
+                        raise ValueError("invalid simulator point")
+                    gesture = ["--hold", "1"] if purpose == "WORD" else []
+                    subprocess.run(["axe", "tap", "-x", str(x), "-y", str(y),
+                                    *gesture, "--udid", simulator], check=True, timeout=30)
+                except (OSError, KeyError, ValueError, subprocess.SubprocessError):
+                    self.send_error(503, "Simulator touch delivery failed")
+                    return
+                payload = b"delivered"
+            elif purpose == "HID":
                 # USB HID usage 224 is left Control and usage 7 is the D key.
                 # XCTest can otherwise synthesize a plain software-keyboard "d".
                 try:

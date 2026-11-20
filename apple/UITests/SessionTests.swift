@@ -107,6 +107,10 @@ final class SessionTests: XCTestCase {
       // Files retains offscreen pages and cells in its accessibility hierarchy.
       // Resolve the visible result after navigation, scrolling the active grid
       // when the same simulator has accumulated earlier exports.
+      let browserReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+        visible(browser) != nil
+      }, object: nil)
+      XCTAssertEqual(XCTWaiter.wait(for: [browserReady], timeout: 12), .completed)
       let grid = try XCTUnwrap(visible(browser), "Files did not show a document grid")
       var file = visible(fileMatches)
       for _ in 0..<12 where file == nil {
@@ -114,33 +118,56 @@ final class SessionTests: XCTestCase {
         file = visible(fileMatches)
       }
       let document = try XCTUnwrap(file, "Exported document was absent from the visible Files grid")
-      // The middle of a Files grid cell is its editable name. Activate the
-      // document image at its actual screen position after the thumbnail loads.
+      // A cell can be hittable while its thumbnail is under Files' sticky
+      // search field. Restrict the touch to the unobstructed part of the image.
       let thumbnail = document.images.firstMatch
+      let caption = document.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
       let anchor = app.coordinate(withNormalizedOffset: .zero)
-      func activationPoint() -> XCUICoordinate {
-        let bounds = thumbnail.exists && !thumbnail.frame.isEmpty ? thumbnail.frame : document.frame
-        return anchor.withOffset(CGVector(
-          dx: bounds.midX - anchor.screenPoint.x, dy: bounds.midY - anchor.screenPoint.y))
+      func activationPoint() -> CGPoint? {
+        let content = grid.frame
+        var top = content.minY
+        var bottom = content.maxY
+        let header = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"]
+        for bar in [header, app.searchFields["Search"].firstMatch] where bar.exists {
+          if bar.frame.intersects(content) { top = max(top, bar.frame.maxY + 4) }
+        }
+        for bar in [app.tabBars.firstMatch, app.keyboards.firstMatch] where bar.exists {
+          if bar.frame.intersects(content) { bottom = min(bottom, bar.frame.minY - 4) }
+        }
+        guard top < bottom else { return nil }
+        let viewport = CGRect(x: content.minX, y: top, width: content.width, height: bottom - top)
+        for part in [thumbnail, caption, document] where part.exists {
+          let bounds = part.frame.intersection(viewport)
+          if bounds.width > 6 && bounds.height > 6 {
+            return CGPoint(x: bounds.midX, y: bounds.midY)
+          }
+        }
+        return nil
       }
       var lastPoint: CGPoint?
       let stable = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-        let point = activationPoint().screenPoint
+        let point = activationPoint()
         defer { lastPoint = point }
-        return point == lastPoint && grid.frame.contains(point) && document.isEnabled
+        return point != nil && point == lastPoint && document.isEnabled
       }, object: document)
       XCTAssertEqual(XCTWaiter.wait(for: [stable], timeout: 12), .completed)
-      activationPoint().tap()
+      let point = try XCTUnwrap(activationPoint())
+      let delivery = try await fixtureResponse("DOCUMENT", at: point)
+      XCTAssertEqual(delivery, "delivered")
       let open = app.buttons["Open"].firstMatch
       if !cancel.waitForNonExistence(timeout: 3) {
         if open.exists && open.isHittable && open.isEnabled {
           open.tap()
         } else if visible(fileMatches) != nil {
-          activationPoint().doubleTap()
+          let label = caption.exists ? caption.frame : document.frame
+          anchor.withOffset(CGVector(dx: label.midX - anchor.screenPoint.x,
+                                     dy: label.midY - anchor.screenPoint.y)).doubleTap()
           if open.exists && open.isHittable && open.isEnabled { open.tap() }
         }
-        XCTAssertTrue(cancel.waitForNonExistence(timeout: 15),
-          "Files did not return the document (selected: \(document.exists && document.isSelected), open: \(open.exists), alert: \(app.alerts.firstMatch.exists))")
+        if !cancel.waitForNonExistence(timeout: 15) {
+          if grid.exists { attachFixtureImage(grid, named: "Fixture document grid") }
+          XCTFail("Files did not return the document (selected: \(document.exists && document.isSelected), open: \(open.exists), alert: \(app.alerts.firstMatch.exists))")
+        }
       }
     #endif
     XCTAssertTrue(
@@ -312,8 +339,14 @@ final class SessionTests: XCTestCase {
       let output = app.textViews["Standard output"]
       assertText("copyword selection", in: output)
       let word = output.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 37, dy: 20))
-      word.press(forDuration: 1)
-      tap(app.descendants(matching: .any)["Copy"].firstMatch)
+      let delivery = try await fixtureResponse("WORD", at: word.screenPoint)
+      XCTAssertEqual(delivery, "delivered")
+      let copyAction = app.descendants(matching: .any)["Copy"].firstMatch
+      if !copyAction.waitForExistence(timeout: 3) { word.doubleTap() }
+      if !copyAction.waitForExistence(timeout: 5) {
+        attachFixtureImage(output, named: "Fixture selection")
+      }
+      tap(copyAction)
       let input = app.textFields["session-input"]
       input.press(forDuration: 1)
       tap(app.descendants(matching: .any)["Paste"].firstMatch)
@@ -399,6 +432,13 @@ final class SessionTests: XCTestCase {
   #endif
 
   #if os(iOS)
+    private func attachFixtureImage(_ element: XCUIElement, named name: String) {
+      let attachment = XCTAttachment(screenshot: element.screenshot())
+      attachment.name = name
+      attachment.lifetime = .keepAlways
+      add(attachment)
+    }
+
     // Measure the actual filename glyphs on the scrolled, rendered row. The
     // platform audit can report even white text on a dark row near a nav bar.
     private func checkVisibleFilenameContrast(_ row: XCUIElement) throws {
@@ -463,7 +503,11 @@ final class SessionTests: XCTestCase {
       }
       app.activate()
       XCTAssertTrue(app.buttons["Pair device"].waitForExistence(timeout: 12))
-      app.typeKey(.return, modifierFlags: [])
+      if session == "CLISTREAM_SESSION" {
+        app.typeKey(.return, modifierFlags: [])
+      } else {
+        tap(app.buttons["Pair device"])
+      }
     #else
       app.open(link)
       tap(app.buttons["Pair device"])

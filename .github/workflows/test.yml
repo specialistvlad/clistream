@@ -41,8 +41,8 @@ jobs:
         with:
           go-version-file: go.mod
       - run: command -v xcodegen || brew install xcodegen
-      - name: Install the simulator hardware-keyboard test tool
-        if: matrix.device == 'iPad'
+      - name: Install the simulator input test tool
+        if: matrix.device == 'iPad' || matrix.device == 'iPhone'
         run: |
           mkdir -p "$RUNNER_TEMP/simulator-hid"
           cd "$RUNNER_TEMP/simulator-hid"
@@ -76,12 +76,12 @@ jobs:
           for bundle in apple/build/results-*/*.xcresult apple/build/shared-*/*.xcresult; do
             [[ -f "$bundle/Info.plist" ]] || continue
             report="results/$(basename "$bundle" .xcresult).json"
-            python3 apple/report-tests.py "$bundle" > "$report"
+            python3 apple/report-tests.py "$bundle" results > "$report"
             cat "$report"
           done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: apple-${{ matrix.device }}-tests
-          path: results/*.json
+          path: results/
           if-no-files-found: ignore

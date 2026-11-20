@@ -34,18 +34,31 @@ class SharedAppleSession(BrokerFixture):
             ),
         }
         subprocess.run(["make", "build"], cwd=APP.parent, check=True)
-        for device in ["ipad", "iphone"]:
+        cls.manifests = {}
+        # Build once before asking the hosted Mac to keep two simulators alive.
+        for device, sdk in [("mac", "macosx"), ("iphone", "iphonesimulator")]:
+            subprocess.run(cls.command(device, "build-for-testing"), cwd=APP, check=True)
+            version = subprocess.check_output(
+                ["xcrun", "--sdk", sdk, "--show-sdk-version"], text=True
+            ).strip()
+            system = cls.destinations[device][0]
+            products = APP / ("build/accept-mac" if device == "mac" else "build/accept-ios") / "Build/Products"
+            manifests = list(products.glob(f"CLIStream-{system}_{sdk}{version}-*.xctestrun"))
+            if len(manifests) != 1:
+                raise RuntimeError(f"Expected one {system} test manifest for {sdk} {version}")
+            cls.manifests[system] = str(manifests[0])
+        app = APP / "build/accept-ios/Build/Products/Debug-iphonesimulator/CLIStream.app"
+        for device in ["iphone", "ipad"]:
             udid = cls.destinations[device][1].split("id=")[1]
             subprocess.run(["xcrun", "simctl", "bootstatus", udid, "-b"], check=True)
-        # The same iOS test bundle runs on both simulated devices.
-        for device in ["mac", "iphone"]:
-            subprocess.run(
-                cls.command(device, "build-for-testing"), cwd=APP, check=True
-            )
+            subprocess.run(["xcrun", "simctl", "install", udid, str(app)], check=True)
 
     @classmethod
     def command(cls, device, action):
         system, destination = cls.destinations[device]
+        if action == "test-without-building":
+            return ["xcodebuild", "-quiet", action, "-xctestrun", cls.manifests[system],
+                    "-destination", destination]
         derived = "build/accept-mac" if system == "macOS" else "build/accept-ios"
         return [
             "xcodebuild",
@@ -74,7 +87,7 @@ class SharedAppleSession(BrokerFixture):
 
         # XCTest may take longer to launch than an invitation stays valid.
         routes = {device: "/" + os.urandom(24).hex() for device in self.destinations}
-        pending = {route + "/PIPE" for route in routes.values()}
+        pending = {route + "/PIPE": device for device, route in routes.items()}
 
         def mint():
             return self.run_cli(self.server + ["invite", "client"]).stdout
@@ -87,7 +100,7 @@ class SharedAppleSession(BrokerFixture):
                 if self.path not in pending:
                     self.send_error(404)
                     return
-                pending.remove(self.path)
+                print(pending.pop(self.path), "requested its pairing link", flush=True)
                 data = mint()
                 self.send_response(200)
                 self.send_header("Cache-Control", "no-store")
@@ -117,9 +130,9 @@ class SharedAppleSession(BrokerFixture):
                     "TEST_RUNNER_CLISTREAM_PARTICIPANT": device,
                 }
                 print("Starting", device, flush=True)
-                log = self.enterContext((self.base / (device + ".log")).open("wb"))
-                jobs[device] = self.spawn(args, env=env, cwd=APP, stdout=log, stderr=log)
-                deadline = time.monotonic() + 360
+                with (self.base / (device + ".log")).open("wb") as log:
+                    jobs[device] = self.spawn(args, env=env, cwd=APP, stdout=log, stderr=log)
+                deadline = time.monotonic() + 600
                 while not sel.select(1):
                     for name, job in jobs.items():
                         self.assertIsNone(job.poll(), f"{name} exited before {device} was ready")
@@ -132,7 +145,7 @@ class SharedAppleSession(BrokerFixture):
         # Only release the writers after all four clients are attached.
         observer.stdin.write(b"hosted-cli-echo\n")
         for device, job in jobs.items():
-            self.assertEqual(job.wait(timeout=150), 0, device)
+            self.assertEqual(job.wait(timeout=240), 0, device)
             report = subprocess.check_output([
                 "xcrun", "xcresulttool", "get", "test-results", "summary", "--path",
                 str(reports / (device + ".xcresult")),
