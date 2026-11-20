@@ -95,7 +95,7 @@ func display(ctx context.Context, qr bool, issue func() (string, error)) error {
 					label = "This computer only"
 					client, supervisor = localCommand(client), localCommand(supervisor)
 				}
-				fmt.Printf("%s (%s)\n  %s %s\n  %s %s PROGRAM\n", label, i.Address, client, link, supervisor, link)
+				fmt.Printf("%s (%s)\n  %s '%s'\n  %s '%s' PROGRAM\n", label, i.Address, client, link, supervisor, link)
 				if qr {
 					if e := printQR(link); e != nil {
 						return e

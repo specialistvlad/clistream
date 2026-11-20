@@ -35,6 +35,8 @@ For F3–F5, supervisors default to a local activity feed and private per-instan
 
 For F3–F5, Linux and macOS terminal clients open a framed supervisor table even when only one child is available. The header identifies the input target and its shortcuts. Attached operators can cycle through running apps or return home while the children continue running. Managed supervisors survive stop, exit, failed launch and broker reconnect. Start and Restart open a single editable line prefilled with the latest successful command, initially the local launch command. Enter submits the executable and arguments and attaches the requesting dashboard to the acknowledged replacement. Escape cancels. A fresh run has its own ID and ends every viewer of the old run. A host operator can select one attach-only run with `--no-remote-restart` or `--once`. Disconnecting affects one viewer. Child exit ends sharing for everyone and returns the child’s status to the local caller. F11 records management outcomes without argument values. [Screen and lifecycle acceptance criteria](terminal-client-design.md)
 
+For F2, display the advertised host in `clistream://HOST/?token=TOKEN`. Shell commands quote the URL and QR codes carry the raw link.
+
 For F2 and F3, pairing through either Go CLI must let the other reconnect on the same OS account. Reuse the sole legacy profile or prefer the client profile when both address and pin match. Keep conflicting connections until explicit pairing.
 
 For F10, every user-facing action offered on iPhone or iPad must work by touch alone. Verify the complete workflows on both simulators using the onscreen keyboard and the visible controls. [Touch-only interaction requirements](apple-client-design.md#touch-only-operation-on-iphone-and-ipad)

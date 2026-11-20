@@ -52,3 +52,7 @@ Use the shared Linux and macOS supervisor to suppress local child streams by def
 ## Go housekeeping
 
 Use a shared long-option parser and account-default identities for all three Linux and macOS commands. Use direct process execution for every executable and retire application-specific session metadata. Port Go-side acceptance, compatibility, deployment, requirements tracing and deterministic release tooling to Go and Make. Verify mixed-version boundaries, native packages, and a macOS CLI attached to a Linux supervisor. Native macOS, iPhone and iPad decoder and test-fixture repairs are deferred. The existing fixture imports and command invocations require migration before the Apple suites can run.
+
+## Pairing link format
+
+Generate the hostname-and-token URL in the shared Go identity package. The Linux and macOS daemon uses it for terminal commands, QR codes and scripted invitations. Both Go clients validate it, retain older invitation parsing and share the existing account enrollment flow. Verify DNS, IPv4, IPv6, custom ports, tampered tokens and host substitution, then exercise real enrollment from the displayed commands and across Linux and macOS. Native macOS, iPhone and iPad integration and verification remain deferred.

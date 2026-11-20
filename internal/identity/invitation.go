@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const InvitePrefix = "clistream://pair/v2/"
+const legacyV2Prefix = "clistream://pair/v2/"
 const legacyPrefix = "clistream://pair/v1/"
 const signatureDomain = "clistream/pair/v2\x00"
 const (
@@ -48,6 +48,16 @@ func validEndpoint(s string) bool {
 	return true
 }
 
+// The public link shows the advertised host. The signed endpoint carries the port.
+func invitationURL(address, token string) string {
+	host, _, _ := net.SplitHostPort(address)
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	u := url.URL{Scheme: "clistream", Host: host, Path: "/", RawQuery: "token=" + token}
+	return u.String()
+}
+
 // The signed bytes are public key, Unix expiry, random ID and endpoint.
 func SignInvitation(key ed25519.PrivateKey, address string, id []byte, expires time.Time) (string, error) {
 	if !validEndpoint(address) || len(id) != idSize {
@@ -58,15 +68,22 @@ func SignInvitation(key ed25519.PrivateKey, address string, id []byte, expires t
 	payload = append(payload, id...)
 	payload = append(payload, address...)
 	sig := ed25519.Sign(key, append([]byte(signatureDomain), payload...))
-	return InvitePrefix + base64.RawURLEncoding.EncodeToString(append(payload, sig...)), nil
+	return invitationURL(address, base64.RawURLEncoding.EncodeToString(append(payload, sig...))), nil
 }
 
 func ParseInvitation(link string) (Invitation, error) {
 	invalid := errors.New("invalid invitation")
-	prefix, domain, start, version := InvitePrefix, signatureDomain, idEnd, 2
-	if strings.HasPrefix(link, legacyPrefix) {
-		prefix, domain, start, version = legacyPrefix, "clistream/pair/v1\x00", legacyEndpointOffset, 1
-	} else if !strings.HasPrefix(link, InvitePrefix) {
+	domain, start, version := signatureDomain, idEnd, 2
+	_, encoded, hostLink := strings.Cut(link, "/?token=")
+	if hostLink {
+		if !strings.HasPrefix(link, "clistream://") {
+			return Invitation{}, invalid
+		}
+	} else if strings.HasPrefix(link, legacyPrefix) {
+		encoded, domain, start, version = strings.TrimPrefix(link, legacyPrefix), "clistream/pair/v1\x00", legacyEndpointOffset, 1
+	} else if strings.HasPrefix(link, legacyV2Prefix) {
+		encoded = strings.TrimPrefix(link, legacyV2Prefix)
+	} else {
 		// Old daemons issue an unsigned URL with a one-use token and TLS pin.
 		u, e := url.Parse(link)
 		if e != nil || u.Scheme != "clistream" || u.Host != "pair" || u.Path != "" || u.User != nil || u.RawQuery != "" {
@@ -80,7 +97,6 @@ func ParseInvitation(link string) (Invitation, error) {
 		}
 		return Invitation{Profile: Profile{q.Get("address"), q.Get("pin")}, ID: q.Get("token")}, nil
 	}
-	encoded := strings.TrimPrefix(link, prefix)
 	if len(encoded) > 2048 {
 		return Invitation{}, invalid
 	}
@@ -105,7 +121,7 @@ func ParseInvitation(link string) (Invitation, error) {
 			return Invitation{}, invalid
 		}
 	}
-	if !validEndpoint(address) {
+	if !validEndpoint(address) || (hostLink && link != invitationURL(address, base64.RawURLEncoding.EncodeToString(raw))) {
 		return Invitation{}, invalid
 	}
 	der, e := x509.MarshalPKIXPublicKey(key)

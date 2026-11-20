@@ -4,6 +4,10 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Hostname pairing URLs · November 20, 2026
+
+The macOS and Linux arm64 runs of `make test e2e` passed. The new identity checks covered DNS, IPv4, IPv6, scoped IPv6 and custom ports. They verified the earlier v2 link form and rejected a modified host or token. The terminal test redeemed the displayed quoted link, replaced it with the daemon’s **p** command, rejected the superseded invitation and exchanged input with the paired supervisor. The four-container Linux deployment, native macOS CLI to Linux supervisor deployment, and macOS mixed-version suite passed. Native Apple pairing was deferred.
+
 ## Go command and tooling housekeeping · November 20, 2026
 
 With Go 1.27.4 on macOS arm64 and Debian Linux arm64, `make test e2e` passed the race-enabled package tests, vet, requirements trace and 41 end-to-end cases. The command tests exercised double-dash options, help, retired option rejection, direct argument passing, automatic and explicit I/O modes, and account-default identity migration. The session listing omitted both retired metadata keys.

@@ -13,7 +13,7 @@ export PATH="$PWD/bin:$PATH"
 clistreamd
 ```
 
-The daemon prints two commands and a QR code for each listening address. Both commands use the same three-minute link. Replace `LINK` below with the link for the machine where the program will run.
+The daemon prints two commands and a QR code for each listening address. Both commands use the same three-minute link, such as `clistream://127.0.0.1/?token=<token>`. The signed token includes the port. Keep the single quotes when pasting a displayed command into your shell. Replace `LINK` below with the link for the machine where the program will run.
 
 ```sh
 mkdir -p ~/clistream-demo
@@ -41,7 +41,7 @@ Choose the network interfaces to serve when starting the daemon. For example, on
 clistreamd --interface loopback --interface en0
 ```
 
-Use a network link printed for an IP address reachable from the phone. The default loopback link works only on the server machine. Scan the QR code, open the link in CLIStream, or paste it into **Pair**, then tap **Pair device**. Each device can redeem the invitation during its three-minute lifetime. Fresh enrollment requires software that understands v2 invitations. With a background daemon, run `clistreamd` as the same user in a terminal to open the pairing display. Start supervisors on the machines where the target executables are installed.
+Use a network link printed for an IP address reachable from the phone. The default loopback link works only on the server machine. Scan the QR code, open the link in CLIStream, or paste it into **Pair**, then tap **Pair device**. Each device can redeem the invitation during its three-minute lifetime. Fresh enrollment requires software that accepts the hostname-and-token link. With a background daemon, run `clistreamd` as the same user in a terminal to open the pairing display. Start supervisors on the machines where the target executables are installed.
 
 ```sh
 clistream-supervise LINK claude

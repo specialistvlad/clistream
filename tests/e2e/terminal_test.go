@@ -7,6 +7,7 @@ import (
 	"golang.org/x/term"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 
@@ -337,9 +338,9 @@ func TestInteractivePairingAndReconnect(t *testing.T) {
 	display := func(ui *process) string {
 		s := ui.see("Ctrl-C exits.")
 		contains(t, s, "This computer only")
-		m := regexp.MustCompile(`clistream (clistream://pair/v2/[A-Za-z0-9_-]+)`).FindStringSubmatch(s)
+		m := regexp.MustCompile(`clistream '(clistream://127\.0\.0\.1/\?token=[A-Za-z0-9_-]+)'`).FindStringSubmatch(s)
 		equal(t, len(m), 2)
-		contains(t, s, "clistream-supervise "+m[1]+" PROGRAM")
+		contains(t, s, "clistream-supervise '"+m[1]+"' PROGRAM")
 		return m[1]
 	}
 	foreground := f.ui("fresh", daemon, "--listen", "127.0.0.1:0", "--qr=false")
@@ -355,7 +356,11 @@ func TestInteractivePairingAndReconnect(t *testing.T) {
 	admin.send("p")
 	fresh := display(admin)
 	f.reject("guest", client, old)
-	viewer := f.ui("guest", "/bin/sh", "-c", `exec "$@" `+fresh, "test", filepath.Join(f.bin, client))
+	shell, err := exec.LookPath("zsh")
+	if err != nil {
+		shell = "/bin/sh"
+	}
+	viewer := f.ui("guest", shell, "-c", `exec "$@" '`+fresh+`'`, "test", filepath.Join(f.bin, client))
 	viewer.see("Waiting for supervisors")
 	p := f.start("sup", supervisor, "--interactive", "--once", fresh, "sh", "-c", "echo first-ready; while read x; do echo reply-$x; done")
 	p.sessionID()
