@@ -20,7 +20,7 @@ Apple’s Food Truck sample demonstrates how a SwiftUI split view and navigation
 
 ## Interact with a running CLI
 
-- **Keyboard.** Focus the terminal on attach. In PTY mode, send text, arrows, Escape and control keys to the running program. For example, Control-C goes to the child while Command-C copies a local text selection. Keep app commands available through standard menus. In pipe mode, provide a labeled input field and distinct, selectable stdout and stderr.
+- **Keyboard.** Focus the terminal on attach. On Mac, Command-1 focuses Sessions, the arrow keys select a session, Command-E opens Files and Escape returns to the session. In PTY mode, send text, arrows, Escape and control keys to the running program. For example, Control-C goes to the child while Command-C copies a local text selection. Keep app commands available through standard menus. In pipe mode, provide a labeled input field and distinct, selectable stdout and stderr.
 - **Mouse and trackpad.** In an ordinary terminal, clicking focuses the view, dragging selects text and scrolling moves through output. When a terminal application enables mouse reporting, translate supported clicks, drags and wheel events into terminal input at the correct row and column. A click in a full-screen CLI’s list should select the item the user pointed at. Keep toolbar and file-browser events local.
 - **Touch and focus.** Tapping the terminal on iPhone or iPad should bring up the keyboard. Make terminal-specific keys such as Escape and Control reachable from the onscreen keyboard. Opening Files moves focus into the browser. Returning to Terminal restores input focus and shows output received while the user was browsing.
 

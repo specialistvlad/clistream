@@ -15,14 +15,14 @@ final class SessionTests: XCTestCase {
         app.staticTexts.matching(
           NSPredicate(
             format: "label BEGINSWITH %@ OR value BEGINSWITH %@", "127.0.0.1:", "127.0.0.1:")
-        ).firstMatch.waitForExistence(timeout: 8))
+        ).firstMatch.waitForExistence(timeout: 8), "Forwarded address missing for " + port)
       tap(app.buttons["Stop " + port])
     }
     let input = app.textFields["session-input"]
-    tap(input)
     #if os(macOS)
       input.typeText("echo\n")
     #else
+      tap(input)
       for letter in "echo" { tap(app.keyboards.keys[String(letter)]) }
       tap(app.buttons["Send"])
     #endif
@@ -32,9 +32,17 @@ final class SessionTests: XCTestCase {
           NSPredicate(
             format: "label CONTAINS %@ OR value CONTAINS %@", ch + "echo",
             ch + "echo")
-        ).firstMatch.waitForExistence(timeout: 10))
+        ).firstMatch.waitForExistence(timeout: 10), "Pipe output missing " + ch + "echo")
     }
-    tap(app.buttons["Files"])
+    #if os(macOS)
+      app.typeKey("e", modifierFlags: [.command])
+      XCTAssertTrue(app.buttons["Upload"].waitForExistence(timeout: 10))
+      app.typeKey(.escape, modifierFlags: [])
+      input.typeText("keyboard-return\n")
+      app.typeKey("e", modifierFlags: [.command])
+    #else
+      tap(app.buttons["Files"])
+    #endif
     openEntry(name + ".txt", in: app)
     // Save the remote file through the system document picker, then re-import it
     // from Recents into another remote directory. The fixture checks the bytes.
@@ -82,7 +90,8 @@ final class SessionTests: XCTestCase {
         NSPredicate(
           format: "label == %@ OR value == %@", "Uploaded " + name + ".txt",
           "Uploaded " + name + ".txt")
-      ).firstMatch.waitForExistence(timeout: 15), app.debugDescription)
+      ).firstMatch.waitForExistence(timeout: 15),
+      "Upload completion was missing in the restored nested folder")
     #if os(macOS)
       tap(app.buttons["Up"])
     #else
@@ -96,7 +105,8 @@ final class SessionTests: XCTestCase {
         NSPredicate(
           format: "label CONTAINS %@ OR value CONTAINS %@", "out:workspace-finished",
           "out:workspace-finished")
-      ).firstMatch.waitForExistence(timeout: 10))
+      ).firstMatch.waitForExistence(timeout: 10),
+      "Output from the other viewer was missing on return to Terminal")
     tap(app.buttons["EOF"])
     XCTAssertTrue(app.staticTexts["Process exited with status 0"].waitForExistence(timeout: 12))
     tap(app.buttons["Detach"])
@@ -132,8 +142,12 @@ final class SessionTests: XCTestCase {
       tap(app.buttons["Keys"])
       tap(app.buttons["Control Key"])
       tap(app.buttons["Control-C"])
+      let portraitWidth = view.frame.width
       XCUIDevice.shared.orientation = .landscapeLeft
       defer { XCUIDevice.shared.orientation = .portrait }
+      let resized = XCTNSPredicateExpectation(
+        predicate: NSPredicate { _, _ in abs(view.frame.width - portraitWidth) > 1 }, object: view)
+      XCTAssertEqual(XCTWaiter.wait(for: [resized], timeout: 15), .completed)
       let rotated = view.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 4, dy: 4))
       rotated.tap()
       if UIDevice.current.userInterfaceIdiom == .pad {
@@ -269,7 +283,11 @@ final class SessionTests: XCTestCase {
       tap(app.buttons["Pair device"])
       tap(app.alerts.buttons["OK"])
     }
-    tap(app.buttons["Refresh"])
+    #if os(macOS)
+      app.typeKey("r", modifierFlags: [.command])
+    #else
+      tap(app.buttons["Refresh"])
+    #endif
     let target = app.descendants(matching: .any)["session-" + id].firstMatch
     #if os(iOS)
       if scrollList {
@@ -289,7 +307,20 @@ final class SessionTests: XCTestCase {
         for _ in 0..<12 where !target.isHittable { list.swipeUp() }
       }
     #endif
-    tap(target)
+    #if os(macOS)
+      if session == "CLISTREAM_SESSION" {
+        // This fixture advertises one pipe so the first keyboard selection
+        // identifies the same child that the independent CLI observes.
+        XCTAssertTrue(target.waitForExistence(timeout: 12))
+        app.typeKey("1", modifierFlags: [.command])
+        app.typeKey(.downArrow, modifierFlags: [])
+        XCTAssertTrue(app.textFields["session-input"].waitForExistence(timeout: 10))
+      } else {
+        tap(target)
+      }
+    #else
+      tap(target)
+    #endif
     return app
   }
 

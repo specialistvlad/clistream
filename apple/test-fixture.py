@@ -144,15 +144,17 @@ def run(root, stack, suite, command):
         "pipe",
         exports,
     )
-    pty = session(
-        "pty",
-        [
-            "/bin/sh",
-            "-c",
-            """stty -echo; read v; stty size; printf '\\033[32m%s\\033[0m\\n' "$v"; exit 23""",
-        ],
-        "pty",
-    )
+    pty = ""
+    if suite == "hosted":
+        pty = session(
+            "pty",
+            [
+                "/bin/sh",
+                "-c",
+                """stty -echo; read v; stty size; printf '\\033[32m%s\\033[0m\\n' "$v"; exit 23""",
+            ],
+            "pty",
+        )
     if suite == "scroll":
         # Fill the real session list past the bottom edge of a full-size iPad.
         for index in range(22):
@@ -190,7 +192,7 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
             str(capture), suite,
         ],
         "ui-pty",
-    )
+    ) if suite in {"scroll", "terminal"} else ""
     observer = launch(viewer + ["attach", sid], "observer", stdin=subprocess.PIPE)
     stack.callback(observer.stdin.close)
     env = os.environ.copy()
@@ -283,9 +285,12 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
     worker.start()
     try:
         subprocess.run(command, cwd=APP, env=env, check=True, timeout=420)
-    except subprocess.TimeoutExpired:
-        print(f"Timed out in {suite}. Uploaded file published: "
-              f"{(work / 'inbox/nested' / (name + '.txt')).exists()}", flush=True)
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as failure:
+        stage = "Timed out" if isinstance(failure, subprocess.TimeoutExpired) else "XCTest failed"
+        observed = (root / "observer.out").read_bytes().splitlines()
+        print(f"{stage} in {suite}. Echo received: {b'out:echo' in observed}. "
+              f"Workspace output received: {b'out:workspace-finished' in observed}. "
+              f"Uploaded file published: {(work / 'inbox/nested' / (name + '.txt')).exists()}", flush=True)
         if "-resultBundlePath" in command:
             bundle = Path(command[command.index("-resultBundlePath") + 1])
             for log in bundle.glob("Staging/**/Session-*UITests*.log"):
@@ -318,7 +323,10 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
         assert len(expected) == 240019
         assert (work / "inbox/apple.bin").read_bytes() == expected
     elif suite == "files":
-        assert b"out:echo" in (root / "observer.out").read_bytes()
+        lines = (root / "observer.out").read_bytes().splitlines()
+        assert b"out:echo" in lines
+        if not simulator:
+            assert b"out:keyboard-return" in lines, "input focus was not restored after closing Files"
         assert (work / "inbox/nested" / f"{name}.txt").read_bytes() == sample
     elif suite == "touch":
         observed = (root / "observer.out").read_bytes().splitlines()

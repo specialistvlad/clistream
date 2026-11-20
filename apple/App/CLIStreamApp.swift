@@ -25,6 +25,9 @@ struct BrowserView: View {
   @State private var selection: String?
   @State private var folders = [String: WorkspaceLocation]()
   @FocusState private var inputFocused: Bool
+  #if os(macOS)
+    @FocusState private var sidebarFocused: Bool
+  #endif
 
   var body: some View {
     NavigationSplitView(preferredCompactColumn: $column) {
@@ -39,6 +42,9 @@ struct BrowserView: View {
           }.accessibilityIdentifier("session-" + item.id)
         }
       }
+      #if os(macOS)
+        .focused($sidebarFocused)
+      #endif
       .overlay {
         if connection.sessions.isEmpty {
           ContentUnavailableView(
@@ -132,6 +138,7 @@ struct BrowserView: View {
         \.sessionActions,
         SessionActions(
           pair: { pairing = Pairing() },
+          sessions: { sidebarFocused = true },
           refresh: { Task { await connection.refresh() } }, files: { browsing = true },
           detach: detach, attached: connection.selected != nil))
     #endif
@@ -265,7 +272,7 @@ struct BrowserView: View {
 
 #if os(macOS)
   private struct SessionActions {
-    let pair, refresh, files, detach: () -> Void
+    let pair, sessions, refresh, files, detach: () -> Void
     let attached: Bool
   }
   private struct SessionActionKey: FocusedValueKey { typealias Value = SessionActions }
@@ -280,6 +287,7 @@ struct BrowserView: View {
     var body: some Commands {
       CommandMenu("Session") {
         Button("Pair…") { actions?.pair() }.keyboardShortcut("k")
+        Button("Focus Sessions") { actions?.sessions() }.keyboardShortcut("1")
         Button("Refresh Sessions") { actions?.refresh() }.keyboardShortcut("r")
         Divider()
         Button("Files") { actions?.files() }.keyboardShortcut("e").disabled(
