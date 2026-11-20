@@ -31,6 +31,12 @@ Save the property list below as ~/Library/LaunchAgents/com.vlk.clistreamd.plist.
 </dict></plist>
 ```
 
+## Isolated supervisor deployment
+
+When the target is a shell or any utility that can open arbitrary files, its operating-system environment determines which host data the operator can reach. Put the supervisor and target in a dedicated VM or container. Mount the intended workspace at `/workspace`, make that the working directory, and put the supervisor identity in a separate private state directory. Give the container a read-only root, drop capabilities and enable `no-new-privileges`. Keep the host home directory, Docker socket, broker credentials and unrelated volumes outside the container.
+
+Run `make test-deployment` with Docker available for a working example. The test starts a broker, two independent supervisors and a viewer on a private network. Its temporary deployment uses in-memory identities and cleans up its own containers and network. Production supervisors need private persistent state or re-enrollment after replacement. [Deployment test](../tests/deployment.py)
+
 ## Apple client and TestFlight
 
 Install full Xcode, Go and XcodeGen. Run `make apple` and open apple/CLIStream.xcodeproj. Select CLIStream-iOS for iPhone and iPad, or CLIStream-macOS for Mac. The static Go library contains arm64 device, arm64/x86_64 simulator, and universal macOS slices. Simulator and local builds can use separate signing settings. The application uses SwiftTerm for PTY rendering.

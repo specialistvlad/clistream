@@ -2,7 +2,9 @@
 
 The acceptance suites launch the compiled daemon, supervisor and client with temporary device keys, a private administration socket and real QUIC connections. The Apple tests run the built app and its linked Go client. Test processes use a separate bundle identifier.
 
-## Executed on November 19, 2026
+The current audit maps each functional and engineering requirement to its executable checks. [Requirements audit](test-results/requirements-audit.md)
+
+## Earlier baseline on November 19, 2026
 
 | Suite | Environment | Result |
 |---|---|---|
@@ -58,7 +60,7 @@ CLISTREAM_APP_DRIVERS=1 apple/test-device.sh macOS
 IPHONE_SIMULATOR_ID="$IPHONE_SIMULATOR_ID" IPAD_SIMULATOR_ID="$IPAD_SIMULATOR_ID" python3 apple/test-shared.py
 ```
 
-Xcode saves local result bundles under `apple/build/accept-ios/Logs/Test` and `apple/build/accept-mac/Logs/Test`. The simultaneous-client harness prints its three-bundle directory under `apple/build/shared-*`. Open the bundle with Xcode or run `xcrun xcresulttool get test-results tests --path PATH.xcresult` for the individual outcomes.
+The device suite prints its result directory under `apple/build/results-*`. Each scenario has its own XCTest bundle. The simultaneous-client harness prints its three-bundle directory under `apple/build/shared-*`. Open the bundle with Xcode or run `xcrun xcresulttool get test-results tests --path PATH.xcresult` for the individual outcomes.
 
 ## Distribution
 

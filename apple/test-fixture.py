@@ -172,6 +172,35 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
         TEST_RUNNER_CLISTREAM_FILENAME=name,
         TEST_RUNNER_CLISTREAM_SAVE_DIR=str(saved),
     )
+    # CI can take longer to launch a cold simulator than the lifetime of an
+    # invitation. Only this private runner may request one client invite per case.
+    route = "/" + os.urandom(24).hex() + "/"
+    available = {"PIPE", "PTY", "FILES", "PORTS", "DRIVERS", "QR"}
+    class Invitations(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_GET(self):
+            purpose = self.path.removeprefix(route)
+            if not self.path.startswith(route) or purpose not in available:
+                self.send_error(404)
+                return
+            available.remove(purpose)
+            if purpose == "QR":
+                qr = subprocess.check_output(server)
+                payload = subprocess.check_output([APP / "build/test-qr"], input=qr)
+            else:
+                payload = invite("client")
+            self.send_response(200)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+    service = stack.enter_context(http.server.HTTPServer(("127.0.0.1", 0), Invitations))
+    threading.Thread(target=service.serve_forever, daemon=True).start()
+    stack.callback(service.shutdown)
+    env["TEST_RUNNER_CLISTREAM_FIXTURE"] = f"http://127.0.0.1:{service.server_port}{route}"
     if suite == "hosted" and os.environ.get("CLISTREAM_APP_DRIVERS") == "1":
         sys.path.insert(0, str(APP.parent / "tests"))
         from model_endpoint import CLAUDE_ARGS, CODEX_ARGS, Messages, claude_environment
@@ -208,17 +237,9 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
                 "pipe", [exe, *args], driver, env=process_env
             )
         env.update(
-            TEST_RUNNER_CLISTREAM_DRIVERS_LINK=invite("client").decode().strip(),
             TEST_RUNNER_CLISTREAM_CLAUDE_INPUT=endpoint.challenge,
             TEST_RUNNER_CLISTREAM_CLAUDE_OUTPUT=endpoint.answer,
         )
-    for purpose in ["PIPE", "PTY", "FILES", "PORTS"]:
-        env[f"TEST_RUNNER_CLISTREAM_{purpose}_LINK"] = invite("client").decode().strip()
-    # A second invocation without a subcommand must attach to the existing daemon.
-    qr = subprocess.check_output(server)
-    decoded = subprocess.check_output([APP / "build/test-qr"], input=qr)
-    env["TEST_RUNNER_CLISTREAM_LINK"] = decoded.decode().strip()
-
     # An independent writer produces output while the UI is inside Files.
     def signal_upload():
         target = work / "inbox/nested" / f"{name}.txt"

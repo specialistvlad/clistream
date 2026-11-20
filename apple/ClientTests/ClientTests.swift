@@ -8,7 +8,7 @@ import XCTest
 /// Runs in the built app on macOS or in the iOS simulator. All calls use its linked Go client.
 final class ClientTests: XCTestCase {
   func profile(_ fixture: String) async throws -> String {
-    let link = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_" + fixture + "_LINK"])
+    let link = try await testInvitation(fixture)
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
     let fields = ["Op": "pair", "Dir": dir.path, "Link": link]
@@ -60,7 +60,7 @@ final class ClientTests: XCTestCase {
   func testCLISpecificDrivers() async throws {
     let env = ProcessInfo.processInfo.environment
     try XCTSkipIf(
-      env["CLISTREAM_DRIVERS_LINK"] == nil,
+      env["CLISTREAM_CLAUDE_SESSION"] == nil,
       "Run with CLISTREAM_APP_DRIVERS=1 to start both installed model CLIs.")
     let dir = try await profile("DRIVERS")
     let list = try await request("list", ["Dir": dir])

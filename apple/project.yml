@@ -53,7 +53,7 @@ targets:
   CLIStream-UITests:
     type: bundle.ui-testing
     platform: iOS
-    sources: [UITests]
+    sources: [UITests, TestSupport]
     dependencies:
       - target: CLIStream-iOS
     settings:
@@ -66,7 +66,7 @@ targets:
   CLIStream-MacUITests:
     type: bundle.ui-testing
     platform: macOS
-    sources: [UITests]
+    sources: [UITests, TestSupport]
     dependencies:
       - target: CLIStream-macOS
     settings:
@@ -79,7 +79,7 @@ targets:
   CLIStream-iOSTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [ClientTests]
+    sources: [ClientTests, TestSupport]
     dependencies:
       - target: CLIStream-iOS
     settings:
@@ -93,7 +93,7 @@ targets:
   CLIStream-MacTests:
     type: bundle.unit-test
     platform: macOS
-    sources: [ClientTests]
+    sources: [ClientTests, TestSupport]
     dependencies:
       - target: CLIStream-macOS
     settings:

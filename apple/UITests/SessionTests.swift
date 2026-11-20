@@ -1,10 +1,10 @@
 import XCTest
 
 final class SessionTests: XCTestCase {
-  func testPairAndUseSession() throws {
+  @MainActor func testPairAndUseSession() async throws {
     let env = ProcessInfo.processInfo.environment
     let name = try XCTUnwrap(env["CLISTREAM_FILENAME"])
-    let app = try pairedApp(session: "CLISTREAM_SESSION")
+    let app = try await pairedApp(session: "CLISTREAM_SESSION")
     for port in ["tcp", "udp"] {
       tap(app.buttons["Forward " + port])
       XCTAssertTrue(
@@ -85,8 +85,8 @@ final class SessionTests: XCTestCase {
     tap(app.buttons["Detach"])
   }
 
-  func testTerminalInput() throws {
-    let app = try pairedApp(session: "CLISTREAM_UI_PTY")
+  @MainActor func testTerminalInput() async throws {
+    let app = try await pairedApp(session: "CLISTREAM_UI_PTY")
     let view = app.descendants(matching: .any)["session-terminal"].firstMatch
     XCTAssertTrue(view.waitForExistence(timeout: 10), app.debugDescription)
     let origin = view.coordinate(withNormalizedOffset: .zero)
@@ -108,8 +108,8 @@ final class SessionTests: XCTestCase {
   }
 
   #if os(iOS)
-    func testTouchNavigationAndEditing() throws {
-      let app = try pairedApp(session: "CLISTREAM_SESSION", largeText: true)
+    @MainActor func testTouchNavigationAndEditing() async throws {
+      let app = try await pairedApp(session: "CLISTREAM_SESSION", largeText: true)
       let output = app.textViews["Standard output"]
       XCTAssertTrue(output.waitForExistence(timeout: 10))
       let word = output.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 37, dy: 20))
@@ -143,10 +143,11 @@ final class SessionTests: XCTestCase {
     }
   #endif
 
-  private func pairedApp(session: String, largeText: Bool = false) throws -> XCUIApplication {
+  @MainActor private func pairedApp(session: String, largeText: Bool = false) async throws
+    -> XCUIApplication
+  {
     continueAfterFailure = false
     let env = ProcessInfo.processInfo.environment
-    let link = try XCTUnwrap(env["CLISTREAM_LINK"].flatMap(URL.init(string:)))
     let id = try XCTUnwrap(env[session])
     let app = XCUIApplication()
     if largeText {
@@ -156,7 +157,8 @@ final class SessionTests: XCTestCase {
       ]
     }
     app.launch()
-    app.open(link)
+    let invitation = try await testInvitation("QR")
+    app.open(try XCTUnwrap(URL(string: invitation)))
     tap(app.buttons["Pair device"])
     tap(app.descendants(matching: .any)["session-" + id].firstMatch)
     return app
