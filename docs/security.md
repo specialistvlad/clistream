@@ -4,7 +4,7 @@ The server operator and enrolled client devices are trusted to interact with all
 
 Each enrollment uses a locally generated Ed25519 key. Protect the device profile directory as a credential. The Go and Apple clients store private key files with mode 0600. The Apple client uses its sandboxed Application Support directory and excludes it from backup. The private key is software-backed. Losing a device requires revocation on each server where it was enrolled.
 
-Only the local Unix administration socket can issue invitations or revoke keys. Its containing directory is private. A QR or link is a bearer enrollment capability until used or expired. Display invitations in a trusted terminal. Stop and rotate the server identity and enroll devices again if the server private key is compromised.
+The interactive server terminal issues client invitations. The Unix administration socket lives in the daemon’s private state directory and supports invitation issuance and device revocation. Anyone holding an unused invitation can enroll until it expires. Treat the QR code, shell history, terminal scrollback and shared messages as sensitive during that window. Background startup reports the listening addresses. Scripts can explicitly request a link with `clistreamd -qr=false invite client`. If the server private key is compromised, stop the server, rotate its identity and enroll devices again.
 
 ## Workspace service
 

@@ -5,6 +5,48 @@ import XCTest
 #endif
 
 final class SessionTests: XCTestCase {
+  #if os(iOS)
+    @MainActor func testExpiredPairingLink() async throws {
+      continueAfterFailure = false
+      let app = XCUIApplication()
+      app.launch()
+      let link = try await fixtureResponse("EXPIRED")
+      let url = try XCTUnwrap(URL(string: link))
+      app.open(url)
+      tap(app.buttons["Pair device"])
+      let alert = app.alerts["Couldn’t pair this device"]
+      XCTAssertTrue(alert.waitForExistence(timeout: 10))
+      XCTAssertTrue(alert.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "fresh")).firstMatch.exists)
+    }
+
+    @MainActor func testSignedPairingLink() async throws {
+      continueAfterFailure = false
+      let env = ProcessInfo.processInfo.environment
+      let address = try XCTUnwrap(env["CLISTREAM_ENDPOINT"])
+      let session = try XCTUnwrap(env["CLISTREAM_SESSION"])
+      let app = XCUIApplication()
+      app.launch()
+      let invitation = try await fixtureResponse("QR")
+      XCTAssertTrue(invitation.hasPrefix("clistream://pair/v1/"))
+      let url = try XCTUnwrap(URL(string: invitation))
+      app.open(url)
+      XCTAssertTrue(app.staticTexts[address].waitForExistence(timeout: 10))
+      tap(app.buttons["Cancel"])
+      tap(app.buttons["Pair"])
+      let field = app.secureTextFields["Pairing link"]
+      field.press(forDuration: 1)
+      tap(app.descendants(matching: .any)["Paste"].firstMatch)
+      let allow = app.buttons["Allow Paste"]
+      if allow.waitForExistence(timeout: 2) { allow.tap() }
+      XCTAssertTrue(app.staticTexts[address].waitForExistence(timeout: 10))
+      tap(app.buttons["Pair device"])
+      XCTAssertTrue(app.descendants(matching: .any)["session-" + session].firstMatch.waitForExistence(timeout: 12))
+      app.open(url)
+      tap(app.buttons["Pair device"])
+      XCTAssertTrue(app.alerts["Couldn’t pair this device"].waitForExistence(timeout: 10))
+    }
+  #endif
+
   @MainActor func testPairAndUseSession() async throws {
     let env = ProcessInfo.processInfo.environment
     let name = try XCTUnwrap(env["CLISTREAM_FILENAME"])

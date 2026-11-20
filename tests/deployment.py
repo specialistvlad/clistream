@@ -90,10 +90,8 @@ def verify(root, resources):
     run(
         "broker",
         "clistreamd",
-        "-listen",
-        ":7443",
-        "-advertise",
-        "broker:7443",
+        "-interface", "loopback",
+        "-interface", "eth0",
         background=True,
     )
 
@@ -111,7 +109,7 @@ def verify(root, resources):
         role = "client" if host == "viewer" else "supervisor"
         link = run("broker", "clistreamd", "-qr=false", "invite", role).stdout
         if host == "viewer":
-            run(host, "clistream", "pair", data=link)
+            run(host, "clistream", link.decode().strip())
         else:
             run(host, "clistream-supervise", "-pair", data=link)
             run(

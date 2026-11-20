@@ -13,11 +13,13 @@ struct CLIStreamApp: App {
 private struct Pairing: Identifiable {
   let id = UUID()
   var link: URL?
+  var address: String?
 }
 
 struct BrowserView: View {
   @StateObject private var connection = Connection()
   @State private var invitation = ""
+  @State private var pastedAddress: String?
   @State private var browsing = false
   @State private var pairing: Pairing?
   @State private var line = ""
@@ -157,7 +159,13 @@ struct BrowserView: View {
       #endif
     }
     .onOpenURL { url in
-      if url.scheme == "clistream", url.host == "pair" { pairing = Pairing(link: url) }
+      guard url.scheme == "clistream", url.host == "pair" else { return }
+      let info = Core.call(["Op": "inspect-invitation", "Link": url.absoluteString])
+      if let error = info.Error {
+        connection.pairingError = error
+        return
+      }
+      pairing = Pairing(link: url, address: info.Address)
     }
     .alert(
       "Couldn’t pair this device",
@@ -170,15 +178,22 @@ struct BrowserView: View {
     } message: {
       Text(connection.pairingError ?? "")
     }
-    .sheet(item: $pairing, onDismiss: { invitation = "" }) { request in
+    .sheet(item: $pairing, onDismiss: {
+      invitation = ""
+      pastedAddress = nil
+    }) { request in
       VStack(alignment: .leading, spacing: 16) {
         Text("Pair a server").font(.title2)
-        if let url = request.link {
-          let fields = URLComponents(string: "?" + (url.fragment ?? ""))?.queryItems
-          Text(fields?.first(where: { $0.name == "address" })?.value ?? "Server invitation")
+        if let address = request.address {
+          Text(address)
         } else {
           SecureField("Pairing link", text: $invitation).textFieldStyle(.roundedBorder)
             .focused($invitationFocused).onAppear { invitationFocused = true }
+            .onChange(of: invitation) { _, text in
+              let link = text.trimmingCharacters(in: .whitespacesAndNewlines)
+              pastedAddress = Core.call(["Op": "inspect-invitation", "Link": link]).Address
+            }
+          if let pastedAddress { Text(pastedAddress) }
         }
         HStack {
           Button("Cancel") { pairing = nil }.keyboardShortcut(.cancelAction)

@@ -11,4 +11,11 @@
 9. Attach the three Apple clients and a CLI client concurrently to one child. Exercise packet loss, delay, address changes and a lost handshake. Record the commands, results and remaining provider and distribution gates in the verification record.
 10. Implement and verify the native Apple session and workspace navigation. Exercise keyboard focus, terminal mouse reporting, Finder and Files interactions, adaptive layout and accessibility on each supported form factor. Run every mobile workflow by touch alone on both iPhone and iPad simulators and record the gesture outcomes. [Design acceptance criteria](apple-client-design.md#design-acceptance)
 
+## One-command pairing and reconnect
+
+1. Sign short-lived role-bound invitations and share redemption across selected listeners.
+2. Display a copyable CLI command and QR code in an interactive terminal. Support replacement with **p** and the local administration socket.
+3. Reconnect from the saved device profile and wait for, attach to, or select a session. Use the same invitation decoder for Apple confirmation.
+4. Exercise concurrent redemption, tampering, expiry, terminal interaction and iPhone/iPad handoff. Verify tap-to-open from Messages on a physical iPhone with an updated build before claiming that workflow.
+
 Track acceptance against the ten functional requirements and the engineering checks in the [requirements audit](test-results/requirements-audit.md).

@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
-	"github.com/skip2/go-qrcode"
+
 	"github.com/specialistvlad/clistream/internal/broker"
 	"github.com/specialistvlad/clistream/internal/identity"
 	"github.com/specialistvlad/clistream/internal/wire"
@@ -36,6 +36,8 @@ func run() error {
 	listen := flag.String("listen", "127.0.0.1:7443", "UDP listener")
 	addr := flag.String("advertise", "", "host:port clients can reach")
 	qr := flag.Bool("qr", true, "render invitation QR")
+	var names []string
+	flag.Func("interface", "interface name or loopback (repeatable)", func(name string) error { names = append(names, name); return nil })
 	flag.Parse()
 	action, arg := "serve", "client"
 	if flag.NArg() > 0 {
@@ -57,60 +59,74 @@ func run() error {
 		if !errors.Is(e, unix.EWOULDBLOCK) {
 			return e
 		}
-		if action == "serve" {
-			action = "invite"
+		if action == "serve" && interactive() {
+			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+			defer cancel()
+			return display(ctx, *qr, func() (string, error) { return adminRequest(sock, "display", "client") })
 		}
-		c, e := net.DialTimeout("unix", sock, 3*time.Second)
+		if action == "serve" {
+			fmt.Println("clistreamd is already running. Open clistreamd in a terminal to pair, or run clistreamd invite client.")
+			return nil
+		}
+		result, e := adminRequest(sock, action, arg)
 		if e != nil {
 			return e
 		}
-		defer c.Close()
-		if e = json.NewEncoder(c).Encode(request{action, arg}); e != nil {
-			return e
-		}
-		var r reply
-		if e = json.NewDecoder(c).Decode(&r); e != nil {
-			return e
-		}
-		if r.Error != "" {
-			return errors.New(r.Error)
-		}
 		if action == "invite" && *qr {
-			q, e := qrcode.New(r.Result, qrcode.Medium)
-			if e != nil {
+			if e := printQR(result); e != nil {
 				return e
 			}
-			fmt.Print(q.ToSmallString(false))
 		}
-		fmt.Println(r.Result)
+		fmt.Println(result)
 		return nil
 	}
 	if action != "serve" {
 		return errors.New("start clistreamd first")
 	}
-	if *addr == "" {
-		*addr = *listen
-	}
-	host, _, e := net.SplitHostPort(*addr)
-	if e != nil || host == "" || net.ParseIP(host).IsUnspecified() {
-		return errors.New("set -advertise to a reachable host:port")
-	}
-	s, t, e := broker.New(*dir, *addr, identity.DeviceKeys{})
+	configs, e := endpoints(names, *listen, *addr)
 	if e != nil {
 		return e
 	}
-	l, e := quic.ListenAddr(*listen, t, wire.Config())
+	var addresses []string
+	var sockets []net.PacketConn
+	for _, cfg := range configs {
+		pc, e := net.ListenPacket("udp", cfg.bind)
+		if e != nil {
+			return e
+		}
+		defer pc.Close()
+		sockets = append(sockets, pc)
+		adv := cfg.advertised
+		h, port, e := net.SplitHostPort(adv)
+		if e != nil || h == "" || net.ParseIP(h).IsUnspecified() {
+			return errors.New("invalid advertised endpoint")
+		}
+		if port == "0" {
+			_, bound, _ := net.SplitHostPort(pc.LocalAddr().String())
+			adv = net.JoinHostPort(h, bound)
+		}
+		addresses = append(addresses, adv)
+	}
+	s, t, e := broker.New(*dir, addresses, identity.DeviceKeys{})
 	if e != nil {
 		return e
 	}
-	defer l.Close()
+	var listeners []*quic.Listener
+	for _, pc := range sockets {
+		l, e := quic.Listen(pc, t, wire.Config())
+		if e != nil {
+			return e
+		}
+		defer l.Close()
+		listeners = append(listeners, l)
+	}
 	_ = os.Remove(sock)
 	admin, e := net.Listen("unix", sock)
 	if e != nil {
 		return e
 	}
 	defer admin.Close()
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer cancel()
 	go func() {
 		for {
@@ -134,8 +150,18 @@ func run() error {
 			}()
 		}
 	}()
-	fmt.Fprintln(os.Stderr, "serving QUIC on", l.Addr())
-	e = s.Serve(ctx, l)
+	for _, l := range listeners {
+		fmt.Fprintln(os.Stderr, "serving QUIC on", l.Addr())
+	}
+	if interactive() {
+		done := make(chan error, 1)
+		go func() { done <- s.Serve(ctx, listeners...); cancel() }()
+		e := display(ctx, *qr, func() (string, error) { return s.Admin("display", "client") })
+		cancel()
+		<-done
+		return e
+	}
+	e = s.Serve(ctx, listeners...)
 	if ctx.Err() != nil {
 		return nil
 	}

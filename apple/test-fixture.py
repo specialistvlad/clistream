@@ -104,6 +104,10 @@ def run(root, stack, suite, command):
     def invite(role):
         return subprocess.check_output(server + ["-qr=false", "invite", role])
 
+    if suite == "pairing-expiry":
+        aged_invitation = invite("client")
+        issued_at = time.monotonic()
+
     subprocess.run(supervisor + ["-pair"], input=invite("supervisor"), check=True)
     subprocess.run(viewer + ["pair"], input=invite("client"), check=True)
     exports = []
@@ -225,6 +229,8 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
     # invitation. Only this private runner may request one client invite per case.
     route = "/" + os.urandom(24).hex() + "/"
     available = {"PIPE", "PTY", "FILES", "PORTS", "DRIVERS", "QR"}
+    if suite == "pairing-expiry":
+        available.add("EXPIRED")
     if suite == "hosted":
         available.update({"FLUSH", "FLUSHED"})
     if suite == "scroll":
@@ -312,9 +318,13 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
                         proc.terminate()
                 Path(str(capture) + ".history").touch()
                 payload = b"released"
+            elif purpose == "EXPIRED":
+                payload = aged_invitation
             elif purpose == "QR":
-                qr = subprocess.check_output(server)
+                qr = subprocess.check_output(server + ["invite", "client"])
                 payload = subprocess.check_output([APP / "build/test-qr"], input=qr)
+                if suite == "pairing":
+                    subprocess.run(["xcrun", "simctl", "pbcopy", simulator], input=payload.strip(), check=True)
             else:
                 payload = invite("client")
             self.send_response(200)
@@ -326,6 +336,7 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
     service = stack.enter_context(http.server.HTTPServer(("127.0.0.1", 0), Invitations))
     threading.Thread(target=service.serve_forever, daemon=True).start()
     stack.callback(service.shutdown)
+    env["TEST_RUNNER_CLISTREAM_ENDPOINT"] = f"127.0.0.1:{port}"
     env["TEST_RUNNER_CLISTREAM_FIXTURE"] = f"http://127.0.0.1:{service.server_port}{route}"
     if suite == "hosted" and os.environ.get("CLISTREAM_APP_DRIVERS") == "1":
         sys.path.insert(0, str(APP.parent / "tests"))
@@ -382,6 +393,10 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
         # Each terminal-key check opens a native menu and waits for UIKit to
         # finish animating. A cold hosted simulator can spend minutes there.
         timeout = 720 if simulator and suite in {"terminal", "scroll"} else 420
+        if suite == "pairing-expiry":
+            # Exercise the shipping lifetime without changing the device or broker clock.
+            print("Aging the unused invitation for three minutes", flush=True)
+            time.sleep(max(0, issued_at + 181 - time.monotonic()))
         subprocess.run(command, cwd=APP, env=env, check=True, timeout=timeout)
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as failure:
         stage = "Timed out" if isinstance(failure, subprocess.TimeoutExpired) else "XCTest failed"

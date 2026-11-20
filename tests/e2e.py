@@ -5,6 +5,8 @@ import http.server
 import json
 import os
 import pathlib
+import pty
+import re
 import selectors
 import shutil
 import socket
@@ -126,6 +128,70 @@ class BrokerFixture(unittest.TestCase):
 
 
 class Live(BrokerFixture):
+    def test_interactive_pairing_and_reconnect(self):
+        def terminal(args):
+            master, slave = pty.openpty()
+            self.addCleanup(os.close, master)
+            try:
+                proc = self.spawn(args, stdin=slave, stdout=slave, stderr=slave)
+            finally:
+                os.close(slave)
+            return master, proc
+
+        def until(fd, marker):
+            output = bytearray()
+            deadline = time.monotonic() + 12
+            with selectors.DefaultSelector() as sel:
+                sel.register(fd, selectors.EVENT_READ)
+                while marker not in output:
+                    if not sel.select(max(0, deadline - time.monotonic())):
+                        self.fail("Missing terminal prompt " + marker.decode())
+                    output.extend(os.read(fd, 4096))
+            return bytes(output)
+
+        def displayed_link(console):
+            screen = until(console, b"Ctrl-C exits.")
+            self.assertIn(b"This computer only", screen)
+            return re.search(rb" (clistream://pair/v1/[A-Za-z0-9_-]+)", screen)[1]
+
+        # Starting the daemon in a fresh terminal must immediately allow pairing.
+        console, foreground = terminal([DAEMON, "-state", self.base / "fresh", "-listen", "127.0.0.1:0", "-qr=false"])
+        initial = displayed_link(console)
+        enrolled = self.run_cli([CLI, "-state", self.base / "first-device", initial])
+        self.assertEqual(json.loads(enrolled.stdout), [])
+        foreground.terminate()
+        foreground.wait(5)
+
+        duplicate = self.run_cli(self.server)
+        self.assertIn(b"already running", duplicate.stdout)
+        self.assertNotIn(b"clistream://", duplicate.stdout + duplicate.stderr)
+        console, admin = terminal(self.server)
+        first = displayed_link(console)
+        os.write(console, b"p")
+        fresh = displayed_link(console)
+        guest = [CLI, "-state", self.base / "guest"]
+        self.assertNotEqual(self.run_cli(guest + [first], check=False).returncode, 0)
+        # Exercise the unquoted link exactly as a user would paste it into a shell.
+        shell = shutil.which("zsh") or "/bin/sh"
+        fd, viewer = terminal([shell, "-c", 'exec "$@" ' + fresh.decode(), "test", *guest])
+        until(fd, b"Waiting for a supervisor")
+        self.session(["-mode", "pipe"], ["/bin/sh", "-c", "echo first-ready; cat"])
+        until(fd, b"first-ready")
+        viewer.terminate()
+        viewer.wait(5)
+        self.assertEqual(len(json.loads(self.run_cli(guest).stdout)), 1)
+        fd, viewer = terminal(guest)
+        until(fd, b"first-ready")
+        viewer.terminate()
+        viewer.wait(5)
+        self.session(["-mode", "pipe"], ["/bin/sh", "-c", "echo second-ready; cat"])
+        fd, viewer = terminal(guest)
+        until(fd, b"Choose a session")
+        os.write(fd, b"2\n")
+        until(fd, b"-ready")
+        admin.terminate()
+        self.assertEqual(len(json.loads(self.run_cli(guest).stdout)), 2)
+
     def test_shared_session(self):
         p, sid = self.session(
             [],
@@ -588,6 +654,7 @@ class Live(BrokerFixture):
         self.run_cli(self.server + ["revoke", new.pop().split()[0]])
         self.assertNotEqual(revoked.wait(10), 0)
         self.assertNotEqual(self.run_cli(guest + ["list"], check=False).returncode, 0)
+        self.assertIn(b"no longer authorized", self.run_cli(guest, check=False).stderr)
         retained.stdin.write(b"still-enrolled\n")
         self.assertEqual(line(retained.stdout), b"still-enrolled\n")
 
@@ -618,6 +685,7 @@ class Live(BrokerFixture):
             b"mismatch",
             self.run_cli([CLI, "-state", unknown, "list"], check=False).stderr,
         )
+        self.assertIn(b"mismatch", self.run_cli([CLI, "-state", unknown], check=False).stderr)
         self.assertNotEqual(
             self.run_cli(
                 [CLI, "-state", self.base / "supervisor", "list"], check=False

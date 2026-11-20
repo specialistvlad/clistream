@@ -60,7 +60,7 @@ func run() (int, error) {
 		if _, e := fmt.Fscanln(os.Stdin, &link); e != nil {
 			return 1, e
 		}
-		return 0, identity.Pair(context.Background(), *dir, link)
+		return 0, identity.Pair(context.Background(), *dir, link, "supervisor")
 	}
 	if flag.NArg() == 0 {
 		return 1, errors.New("supply executable and arguments after --")

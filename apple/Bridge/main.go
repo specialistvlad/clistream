@@ -67,8 +67,17 @@ func (h *handle) run() {
 func call(q request) (response, error) {
 	var r response
 	switch q.Op {
+	case "inspect-invitation":
+		i, e := identity.ParseInvitation(q.Link)
+		if e != nil {
+			return r, e
+		}
+		if i.Role != "" && i.Role != "client" {
+			return r, errors.New("expected a client pairing invitation")
+		}
+		return response{Address: i.Address}, nil
 	case "pair":
-		return r, identity.Pair(context.Background(), q.Dir, q.Link)
+		return r, identity.Pair(context.Background(), q.Dir, q.Link, "client")
 	case "ls", "get", "put":
 		var c *quic.Conn
 		var e error

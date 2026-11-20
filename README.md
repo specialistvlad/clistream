@@ -11,29 +11,28 @@ export PATH="$PWD/bin:$PATH"
 clistreamd
 ```
 
-In another terminal, enroll a supervisor and a client. Each invocation issues a fresh invitation. These pipelines are for a same-machine demonstration.
+The daemon prints a pairing command and QR code. Press **p** in its terminal to replace the displayed invitation. In another terminal with the same PATH, enroll the supervisor and start the program to share.
 
 ```sh
 clistreamd -qr=false invite supervisor | clistream-supervise -pair
-clistreamd -qr=false invite client | clistream pair
 mkdir -p ~/clistream-demo
 cd ~/clistream-demo
 clistream-supervise -mode pty -- /bin/sh
 ```
 
-From a third terminal run `clistream list`, copy the session ID and run `clistream attach ID`. Type into either terminal. The shell exits for everyone when you run `exit`. To detach a remote CLI without affecting the shared process, press Ctrl-] in an interactive PTY attachment. In pipe mode, `clistream -eof attach ID` closes the child's shared stdin when the client's input ends.
+In a third terminal, paste the entire printed `clistream clistream://pair/v1/…` command. On later visits run just `clistream`. It attaches to the sole session, offers a numbered choice for several, or waits for a supervisor. When input or output is redirected it prints the session list as JSON. Explicit `list`, `attach ID`, and `pair` (invitation on stdin) remain available to scripts. Type into either terminal. The shell exits for everyone when you run `exit`. To detach a remote CLI without affecting the shared process, press Ctrl-] in an interactive PTY attachment. In pipe mode, `clistream -eof attach ID` closes the child's shared stdin when the client's input ends.
 
 With Python 3.11+, `make dist` builds checksummed CLI archives in `dist/` for Linux and macOS on amd64 and arm64. Extract the matching archive on each host.
 
 ## Connect another machine
 
-Start the daemon with a reachable advertised hostname and allow inbound UDP on the selected port. For example, replace `server.example.org` with your server.
+Choose the network interfaces to serve when starting the daemon. For example, on a Mac whose Wi-Fi interface is `en0`, run:
 
 ```sh
-clistreamd -listen :7443 -advertise server.example.org:7443
+clistreamd -interface loopback -interface en0
 ```
 
-Run `clistreamd` a second time as the same user to display a client enrollment QR and link. On iPhone or iPad, scan it with Camera, open CLIStream and tap **Pair device**. The Apple client also accepts a pasted link. For another CLI or supervisor, run its pairing command, paste its role-specific link on standard input and press Return. Start supervisors on the machines where the target executables are installed.
+Use a network link printed for an IP address reachable from the phone. The default loopback link works only on the server machine. Scan the QR code, open the link in CLIStream, or paste it into **Pair**, then tap **Pair device**. All endpoints in a displayed set enroll one device. The set expires after three minutes. Press **p** for another device. With a background daemon, run `clistreamd` as the same user in a terminal to open the pairing display. Start supervisors on the machines where the target executables are installed.
 
 ```sh
 clistream-supervise -- claude

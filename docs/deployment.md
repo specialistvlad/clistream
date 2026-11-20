@@ -1,6 +1,6 @@
 # Deployment
 
-Build with `make build`. Install the three binaries to a directory on PATH. The server needs an inbound UDP route. Supervisors and clients initiate outbound connections. The default is loopback. Configure a public or VPN-reachable hostname with `-advertise`. The local admin socket lives inside the daemon state directory. On Unix systems keep this path short enough for a Unix socket (under roughly 100 bytes).
+Build with `make build`. Install the three binaries to a directory on PATH. The server needs an inbound UDP route. Supervisors and clients initiate outbound connections. The default is loopback. Select network interfaces by repeating `-interface NAME` (use `loopback` to include localhost). Alternatively use `-listen` with `-advertise` for a reachable address, including a numeric IP. Allow inbound UDP on that port. The local admin socket lives inside the daemon state directory. On Unix systems keep this path short enough for a Unix socket (under roughly 100 bytes).
 
 ## Linux user service
 
@@ -38,6 +38,8 @@ When the target is a shell or any utility that can open arbitrary files, its ope
 Run `make test-deployment` with Docker available for a working example. The test starts a broker, two independent supervisors and a viewer on a private network. Its temporary deployment uses in-memory identities and cleans up its own containers and network. Production supervisors need private persistent state or re-enrollment after replacement. [Deployment test](../tests/deployment.py)
 
 ## Apple client and TestFlight
+
+Install an updated Apple build to use the signed `clistream://pair/v1/` links. Existing enrolled devices can reconnect with their saved keys. The updated app and CLI also accept invitations from older daemons. When upgrading a running daemon, restart the process to activate the new terminal display. If the saved network address changes, enroll with a link containing a reachable address.
 
 Install full Xcode, Go and XcodeGen. Run `make apple` and open apple/CLIStream.xcodeproj. Select CLIStream-iOS for iPhone and iPad, or CLIStream-macOS for Mac. The static Go library contains arm64 device, arm64/x86_64 simulator, and universal macOS slices. Simulator and local builds can use separate signing settings. The application uses SwiftTerm for PTY rendering.
 

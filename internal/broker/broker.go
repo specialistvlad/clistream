@@ -3,14 +3,14 @@ package broker
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-
 	"io"
-	"net/url"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -32,21 +32,31 @@ type entry struct {
 	conn *quic.Conn
 }
 type Server struct {
-	auth              identity.Authenticator
-	mu                sync.Mutex
-	dir, address, pin string
-	roles             map[string]string
-	invites           map[string]invitation
-	sessions          map[string]entry
-	peers             map[*quic.Conn]string
+	auth       identity.Authenticator
+	mu         sync.Mutex
+	dir, pin   string
+	addresses  []string
+	signingKey ed25519.PrivateKey
+	displayed  string
+	slots      chan struct{}
+	now        func() time.Time
+	roles      map[string]string
+	invites    map[string]invitation
+	sessions   map[string]entry
+	peers      map[*quic.Conn]string
 }
 
-func New(dir, address string, auth identity.Authenticator) (*Server, *tls.Config, error) {
+func New(dir string, addresses []string, auth identity.Authenticator) (*Server, *tls.Config, error) {
 	cert, e := identity.Key(dir)
 	if e != nil {
 		return nil, nil, e
 	}
-	s := &Server{auth: auth, dir: dir, address: address, pin: identity.Pin(cert.Leaf), roles: map[string]string{}, invites: map[string]invitation{}, sessions: map[string]entry{}, peers: map[*quic.Conn]string{}}
+	s := &Server{
+		auth: auth, dir: dir, addresses: addresses, pin: identity.Pin(cert.Leaf),
+		signingKey: cert.PrivateKey.(ed25519.PrivateKey), now: time.Now,
+		slots: make(chan struct{}, 128), roles: map[string]string{},
+		invites: map[string]invitation{}, sessions: map[string]entry{}, peers: map[*quic.Conn]string{},
+	}
 	b, e := os.ReadFile(filepath.Join(dir, "devices.json"))
 	if e == nil {
 		e = json.Unmarshal(b, &s.roles)
@@ -63,19 +73,51 @@ func (s *Server) Admin(action, arg string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch action {
-	case "invite":
+	case "invite", "display":
 		if arg != "client" && arg != "supervisor" {
 			return "", errors.New("expected client or supervisor")
 		}
-		for k, v := range s.invites {
-			if time.Now().After(v.until) {
-				delete(s.invites, k)
+		now := s.now()
+		for id, v := range s.invites {
+			if !now.Before(v.until) {
+				delete(s.invites, id)
 			}
 		}
-		token := randomID(32)
-		s.invites[token] = invitation{arg, time.Now().Add(3 * time.Minute)}
-		q := url.Values{"address": {s.address}, "pin": {s.pin}, "token": {token}}
-		return "clistream://pair#" + q.Encode(), nil
+		id := make([]byte, 32)
+		rand.Read(id)
+		token := hex.EncodeToString(id)
+		until := now.Add(3 * time.Minute).Truncate(time.Second)
+		if len(s.addresses) == 0 {
+			return "", errors.New("no listening endpoints")
+		}
+		addresses := s.addresses
+		if action == "invite" {
+			// Scripts expect one line. Prefer a reachable network address for
+			// remote supervisors when loopback and network listeners coexist.
+			address := addresses[0]
+			for _, candidate := range addresses {
+				host, _, _ := net.SplitHostPort(candidate)
+				if host != "localhost" && !net.ParseIP(host).IsLoopback() {
+					address = candidate
+					break
+				}
+			}
+			addresses = []string{address}
+		}
+		var links []string
+		for _, addr := range addresses {
+			link, e := identity.SignInvitation(s.signingKey, addr, arg, id, until)
+			if e != nil {
+				return "", e
+			}
+			links = append(links, link)
+		}
+		if action == "display" {
+			delete(s.invites, s.displayed)
+			s.displayed = token
+		}
+		s.invites[token] = invitation{arg, until}
+		return strings.Join(links, "\n"), nil
 	case "devices":
 		var lines []string
 		for k, v := range s.roles {
@@ -103,23 +145,32 @@ func (s *Server) Admin(action, arg string) (string, error) {
 	return "", errors.New("unknown action")
 }
 func (s *Server) save() error { return identity.Save(filepath.Join(s.dir, "devices.json"), s.roles) }
-func (s *Server) Serve(ctx context.Context, l *quic.Listener) error {
-	defer func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		for peer := range s.peers {
-			peer.CloseWithError(0, "daemon stopping")
-		}
-	}()
-	slots := make(chan struct{}, 128)
+func (s *Server) Serve(ctx context.Context, listeners ...*quic.Listener) error {
+	results := make(chan error, len(listeners))
+	for _, l := range listeners {
+		go func() { results <- s.accept(ctx, l) }()
+	}
+	var err error
+	for range listeners {
+		err = <-results
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for peer := range s.peers {
+		peer.CloseWithError(0, "daemon stopping")
+	}
+	return err
+}
+func (s *Server) accept(ctx context.Context, l *quic.Listener) error {
 	for {
 		c, e := l.Accept(ctx)
 		if e != nil {
 			return e
 		}
 		select {
-		case slots <- struct{}{}:
-			go func() { defer func() { <-slots }(); s.connection(c) }()
+		case s.slots <- struct{}{}:
+			go func() { defer func() { <-s.slots }(); s.connection(c) }()
 		default:
 			c.CloseWithError(2, "busy")
 		}
@@ -181,9 +232,13 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, pin string, m wire.Messag
 	switch m.Op {
 	case "pair":
 		defer s.mu.Unlock()
-		v, ok := s.invites[m.Token]
-		if !ok || time.Now().After(v.until) || role != "" && role != v.role {
-			return errors.New("invalid invitation or role")
+		i, e := identity.ParseInvitation(m.Token)
+		if e != nil || i.Pin != s.pin || i.Role == "" {
+			return errors.New("invalid invitation")
+		}
+		v, ok := s.invites[i.ID]
+		if !ok || !s.now().Before(v.until) || !i.Expires.Equal(v.until) || i.Role != v.role || role != "" && role != v.role {
+			return errors.New("invalid invitation or role; press p in the server terminal for a new link")
 		}
 		s.roles[pin] = v.role
 		if e := s.save(); e != nil {
@@ -192,7 +247,7 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, pin string, m wire.Messag
 			}
 			return e
 		}
-		delete(s.invites, m.Token)
+		delete(s.invites, i.ID)
 		return wire.Write(st, wire.Message{Op: "ok"})
 	case "register":
 		defer s.mu.Unlock()

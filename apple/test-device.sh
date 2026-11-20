@@ -27,7 +27,7 @@ case "$platform" in
 esac
 suites="hosted files terminal"
 if [[ "$platform" == iOS ]]; then
-  suites+=" touch scroll"
+  suites+=" pairing touch scroll"
   runtime=$(xcrun simctl getenv "$SIMULATOR_ID" SIMULATOR_RUNTIME_VERSION)
   if (( ${runtime%%.*} >= 27 )); then suites+=" voiceover"; fi
 fi
@@ -36,6 +36,8 @@ echo "XCTest results in $results"
 failed=0
 for suite in ${CLISTREAM_TEST_SUITES:-$suites}; do
   case "$suite" in
+    pairing-expiry) test="$ui/SessionTests/testExpiredPairingLink" ;;
+    pairing) test="$ui/SessionTests/testSignedPairingLink" ;;
     hosted) test="$hosted" ;;
     files) test="$ui/SessionTests/testPairAndUseSession" ;;
     terminal) test="$ui/SessionTests/testTerminalInput" ;;

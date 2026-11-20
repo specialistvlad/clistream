@@ -4,7 +4,13 @@ Each supervisor and client initiates a QUIC connection to the broker. TLS 1.3 ne
 
 ## Identity and roles
 
-The broker requests a TLS client certificate. TLS CertificateVerify proves possession of the private key. The broker identifies a device by hex-encoded SHA-256 of the certificate's DER SubjectPublicKeyInfo. Enrollment on a new connection requires a 256-bit, single-use, three-minute local invitation. The URL fragment contains address, server key pin and token. The requested role comes from the daemon's invitation table. Regular connections require an enrolled public key with the appropriate role. Each profile has one server and one device identity. Revocation disconnects the device.
+The broker requests a TLS client certificate. TLS CertificateVerify proves possession of the private key. The broker identifies a device by hex-encoded SHA-256 of the certificate's DER SubjectPublicKeyInfo.
+
+Enrollment on a new connection requires a 256-bit, single-use, three-minute local invitation. The versioned link is `clistream://pair/v1/` followed by unpadded base64url. The decoded payload contains the 32-byte Ed25519 public key, 8-byte big-endian Unix expiry in seconds, 32-byte random invitation ID, one ASCII role byte (`c` or `s`), and the remaining UTF-8 host:port. A 64-byte Ed25519 signature follows the payload. The signed input is ASCII `clistream/pair/v1`, one zero byte, then the payload. The client verifies the signature and derives the TLS pin from the key’s DER SubjectPublicKeyInfo.
+
+On a pinned QUIC connection it sends the complete link as the `pair` token. The server verifies its own signer, server-clock expiry, role and outstanding ID, and consumes the ID once across all endpoints. Replacing the displayed set invalidates its previous ID. On an older daemon the updated client accepts the original fragment format and sends its opaque token.
+
+Regular connections require an enrolled public key with the appropriate role. Each profile has one server and one device identity. Revocation disconnects the device.
 
 The broker terminates both TLS connections and can read relayed data. Enrolled clients share all sessions on this daemon. Use separate daemons for separate trust domains. Invitation possession authorizes enrollment and the custom URL scheme requires trust in the app handling the link.
 

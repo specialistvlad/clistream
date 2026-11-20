@@ -32,8 +32,25 @@ func main() {
 func run() (int, error) {
 	dir := flag.String("state", identity.Default("client"), "identity directory")
 	end := flag.Bool("eof", false, "close shared child stdin at local EOF in pipe mode")
+	flag.Usage = func() {
+		fmt.Fprintln(flag.CommandLine.Output(), "Usage: clistream [flags] [PAIRING-LINK | list | attach ID | forward ID NAME LOOPBACK:PORT | ls ID [DIR] | get ID REMOTE LOCAL | put ID LOCAL REMOTE | pair]")
+		fmt.Fprintln(flag.CommandLine.Output(), "First time: paste the command printed by clistreamd. Next time: run clistream to reconnect.")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 	action := flag.Arg(0)
+	automatic := action == "" || strings.HasPrefix(action, "clistream://")
+	if automatic && flag.NArg() > 1 {
+		return 1, errors.New("supply only the pairing link")
+	}
+	if automatic && action != "" {
+		if e := identity.Pair(context.Background(), *dir, action, "client"); e != nil {
+			return 1, e
+		}
+	}
+	if automatic {
+		action = "attach"
+	}
 	// Reserve stderr for the attached child's error stream. Operators can opt into transport diagnostics.
 	if action == "attach" {
 		if _, set := os.LookupEnv("QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING"); !set {
@@ -45,24 +62,44 @@ func run() (int, error) {
 		if _, e := fmt.Fscanln(os.Stdin, &link); e != nil {
 			return 1, e
 		}
-		return 0, identity.Pair(context.Background(), *dir, link)
+		return 0, identity.Pair(context.Background(), *dir, link, "client")
 	}
 	if action != "list" && action != "attach" && action != "forward" && action != "ls" && action != "get" && action != "put" {
 		return 1, errors.New("usage: clistream [flags] pair | list | attach ID | forward ID NAME LOOPBACK:PORT | ls ID [DIR] | get ID REMOTE LOCAL | put ID LOCAL REMOTE")
 	}
 	c, e := client.Connect(*dir)
 	if e != nil {
+		if automatic && errors.Is(e, os.ErrNotExist) {
+			return 1, errors.New("no saved server. Run clistream with the pairing link printed by clistreamd")
+		}
 		return 1, e
 	}
 	defer c.CloseWithError(0, "")
 	items, e := client.List(c)
 	if e != nil {
+		if automatic && strings.Contains(e.Error(), "client authorization required") {
+			return 1, errors.New("device is no longer authorized. Request a fresh pairing link from clistreamd")
+		}
 		return 1, e
+	}
+	if automatic && (!term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd()))) {
+		if items == nil {
+			items = []wire.Session{}
+		}
+		action = "list"
 	}
 	if action == "list" {
 		return 0, json.NewEncoder(os.Stdout).Encode(items)
 	}
 	id := flag.Arg(1)
+	if automatic {
+		selected, err := chooseSession(c, items)
+		if err != nil {
+			return 1, err
+		}
+		id = selected.ID
+		items = []wire.Session{selected}
+	}
 	for _, item := range items {
 		if item.ID != id {
 			continue

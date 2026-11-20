@@ -4,6 +4,19 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 Each requirement has an executable check and a recorded outcome for the environments exercised. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## One-command pairing on November 20, 2026
+
+| Environment | Checks |
+|---|---|
+| macOS CLI | A fresh interactive daemon printed a shell-safe command. A second terminal replaced its invitation with **p**. The CLI rejected the old link, enrolled with the replacement, waited for the first session, reconnected using its saved key, and offered a numbered choice with two sessions. Background startup kept invitations out of redirected output. |
+| Broker and Linux deployment | Race-enabled Go tests checked signature tampering, expiry against the server clock and concurrent redemption of two signed endpoints for one device slot. Four Linux containers exercised loopback and a selected network interface with the compiled clients and supervisors. |
+| iPhone 17 Pro and iPad mini simulators, iOS 26.4.1 | XCTest opened a link decoded from the daemon’s QR code, checked the displayed server address, canceled, pasted the same link and paired. Reusing the link failed. A separate test waited out the full three-minute lifetime before attempting enrollment with an unused link. |
+| Native macOS | App-hosted XCTest exercised the Go bridge and device enrollment against a running daemon. |
+
+Run `make test e2e` for the Go and CLI checks and `make test-deployment` for Linux. For each mobile form factor, run `make apple` and then `SIMULATOR_ID="$DEVICE_ID" CLISTREAM_TEST_SUITES="pairing pairing-expiry" apple/test-device.sh iOS`. Use `CLISTREAM_TEST_SUITES=hosted apple/test-device.sh macOS` for the native Mac checks.
+
+Opening a custom link directly on a simulator exercises the app’s URL handler. Tapping a message containing that link and scanning with a physical camera still require a device with the updated app installed.
+
 ## Requirements audit on November 19, 2026
 
 | Executed check | Result |

@@ -14,9 +14,9 @@ import (
 	"errors"
 	"math/big"
 	"net"
-	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -143,25 +143,25 @@ func Load(dir string) (p Profile, e error) {
 	}
 	return
 }
-func Pair(ctx context.Context, dir, link string) error {
-	u, e := url.Parse(link)
-	if e != nil || u.Scheme != "clistream" || u.Host != "pair" {
-		return errors.New("invalid invitation")
-	}
-	v, e := url.ParseQuery(u.Fragment)
+func Pair(ctx context.Context, dir, link, role string) error {
+	invite, e := ParseInvitation(link)
 	if e != nil {
-		return errors.New("invalid invitation fields")
+		return e
 	}
-	p := Profile{v.Get("address"), v.Get("pin")}
-	if _, _, e = net.SplitHostPort(p.Address); e != nil || len(p.Pin) != 64 || len(v.Get("token")) != 64 {
-		return errors.New("invalid invitation fields")
+	if invite.Role != "" && invite.Role != role {
+		return errors.New("invitation is for a different device role")
+	}
+	p := invite.Profile
+	token := invite.ID
+	if strings.HasPrefix(link, InvitePrefix) {
+		token = link
 	}
 	c, e := Dial(ctx, dir, p)
 	if e != nil {
 		return e
 	}
 	defer c.CloseWithError(0, "")
-	s, _, e := wire.Open(c, wire.Message{Op: "pair", Token: v.Get("token")})
+	s, _, e := wire.Open(c, wire.Message{Op: "pair", Token: token})
 	if e != nil {
 		return e
 	}
