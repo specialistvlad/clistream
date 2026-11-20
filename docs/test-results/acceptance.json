@@ -1,0 +1,234 @@
+{
+  "localTestDate": "2026-11-19",
+  "xcode": "27.1 (27A9275)",
+  "go": "1.27.4",
+  "apple": {
+    "iPhone": {
+      "destination": "iPhone 17 Pro",
+      "platform": "iOS Simulator",
+      "os": "26.4.1",
+      "bundle": "Test-CLIStream-iOS-2026.11.19_19-46-05--0700.xcresult",
+      "tests": [
+        {
+          "test": "ClientTests/testCLISpecificDrivers()",
+          "result": "Passed",
+          "seconds": 6.112
+        },
+        {
+          "test": "ClientTests/testPortForwarding()",
+          "result": "Passed",
+          "seconds": 0.04
+        },
+        {
+          "test": "ClientTests/testPTYRenderingKeyboardResizeAndExit()",
+          "result": "Passed",
+          "seconds": 0.227
+        },
+        {
+          "test": "ClientTests/testSharedPipe()",
+          "result": "Passed",
+          "seconds": 5.036
+        },
+        {
+          "test": "ClientTests/testWorkspaceTransfers()",
+          "result": "Passed",
+          "seconds": 0.113
+        },
+        {
+          "test": "SessionTests/testPairAndUseSession()",
+          "result": "Passed",
+          "seconds": 52.75
+        }
+      ],
+      "independentFixtureChecks": "passed"
+    },
+    "iPad": {
+      "destination": "iPad mini (A17 Pro)",
+      "platform": "iOS Simulator",
+      "os": "26.4.1",
+      "bundle": "Test-CLIStream-iOS-2026.11.19_19-47-39--0700.xcresult",
+      "tests": [
+        {
+          "test": "ClientTests/testCLISpecificDrivers()",
+          "result": "Passed",
+          "seconds": 5.095
+        },
+        {
+          "test": "ClientTests/testPortForwarding()",
+          "result": "Passed",
+          "seconds": 0.042
+        },
+        {
+          "test": "ClientTests/testPTYRenderingKeyboardResizeAndExit()",
+          "result": "Passed",
+          "seconds": 0.206
+        },
+        {
+          "test": "ClientTests/testSharedPipe()",
+          "result": "Passed",
+          "seconds": 0.033
+        },
+        {
+          "test": "ClientTests/testWorkspaceTransfers()",
+          "result": "Passed",
+          "seconds": 0.106
+        },
+        {
+          "test": "SessionTests/testPairAndUseSession()",
+          "result": "Passed",
+          "seconds": 50.838
+        }
+      ],
+      "independentFixtureChecks": "passed"
+    },
+    "Mac": {
+      "destination": "MacBook Pro",
+      "platform": "macOS",
+      "os": "27.2",
+      "bundle": "Test-CLIStream-macOS-2026.11.19_19-46-05--0700.xcresult",
+      "tests": [
+        {
+          "test": "ClientTests/testCLISpecificDrivers()",
+          "result": "Passed",
+          "seconds": 7.699
+        },
+        {
+          "test": "ClientTests/testPortForwarding()",
+          "result": "Passed",
+          "seconds": 0.042
+        },
+        {
+          "test": "ClientTests/testPTYRenderingKeyboardResizeAndExit()",
+          "result": "Passed",
+          "seconds": 0.141
+        },
+        {
+          "test": "ClientTests/testSharedPipe()",
+          "result": "Passed",
+          "seconds": 0.051
+        },
+        {
+          "test": "ClientTests/testWorkspaceTransfers()",
+          "result": "Passed",
+          "seconds": 0.1
+        },
+        {
+          "test": "SessionTests/testPairAndUseSession()",
+          "result": "Passed",
+          "seconds": 74.179
+        }
+      ],
+      "independentFixtureChecks": "passed"
+    }
+  },
+  "cli": {
+    "macOS native with live Codex and 120-second path": {
+      "passed": 17,
+      "skipped": {
+        "live_claude_task": "requires Claude provider quota"
+      },
+      "seconds": 138.429,
+      "cases": [
+        "active_revocation",
+        "authorization",
+        "claude_with_emulated_provider",
+        "concurrent_uploads",
+        "detach_and_replay",
+        "detected_drivers",
+        "files",
+        "keystroke_latency",
+        "large_binary_stdio",
+        "live_claude_task",
+        "live_codex_task",
+        "network_path",
+        "ports",
+        "pty",
+        "pty_resize",
+        "reconnect",
+        "retry_lost_handshake",
+        "shared_session"
+      ],
+      "networkPath": "verified 2376 round trips, 474 dropped datagrams and a changed source port"
+    },
+    "macOS arm64 archive": {
+      "passed": 16,
+      "skipped": {
+        "live_claude_task": "requires Claude provider quota",
+        "live_codex_task": "requires authenticated Codex CLI"
+      },
+      "seconds": 15.82
+    },
+    "macOS amd64 archive": {
+      "passed": 16,
+      "skipped": {
+        "live_claude_task": "requires Claude provider quota",
+        "live_codex_task": "requires authenticated Codex CLI"
+      },
+      "seconds": 28.252
+    },
+    "Linux arm64 archive": {
+      "passed": 14,
+      "skipped": {
+        "claude_with_emulated_provider": "requires Claude Code",
+        "detected_drivers": "Supported Claude Code and Codex CLI versions unavailable",
+        "live_claude_task": "requires Claude provider quota",
+        "live_codex_task": "requires authenticated Codex CLI"
+      },
+      "seconds": 12.834
+    },
+    "Linux amd64 archive": {
+      "passed": 14,
+      "skipped": {
+        "claude_with_emulated_provider": "requires Claude Code",
+        "detected_drivers": "Supported Claude Code and Codex CLI versions unavailable",
+        "live_claude_task": "requires Claude provider quota",
+        "live_codex_task": "requires authenticated Codex CLI"
+      },
+      "seconds": 38.948
+    }
+  },
+  "archivesSHA256": {
+    "clistream-darwin-amd64.tar.gz": "61626a6c092ae6c410c0a00c7d250924451b08c9090da75078e170979db977b4",
+    "clistream-darwin-arm64.tar.gz": "96eb646a1ae566c6f17c3a7c0eb4b9fe6df07e1a86cdb04f911a8a09ea7efdb6",
+    "clistream-linux-amd64.tar.gz": "846ed44a58f8065a94d02d39ca3f13c039f57ac49d9495de482a6ed1ead1d7fd",
+    "clistream-linux-arm64.tar.gz": "2e185538c6faf84c671decd95db731a8506373b2fce0166d50476f7f76eff90c"
+  },
+  "simultaneousSession": {
+    "appleResults": {
+      "ipad": {
+        "result": "Passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      "iphone": {
+        "result": "Passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      },
+      "mac": {
+        "result": "Passed",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    "cliAndChild": "passed",
+    "seconds": 19.445
+  },
+  "signedArchives": {
+    "iOS": {
+      "bundleId": "com.vlk.clistream",
+      "build": "2611200245",
+      "signatureVerification": "passed",
+      "projectLicenseSHA256": "9b3d28e36b6b75f0e68a1ab07b4f1e7f9c1473ae5bf0f656538708f41af74dd7"
+    },
+    "macOS": {
+      "bundleId": "com.vlk.clistream",
+      "build": "2611200245",
+      "signatureVerification": "passed",
+      "projectLicenseSHA256": "9b3d28e36b6b75f0e68a1ab07b4f1e7f9c1473ae5bf0f656538708f41af74dd7"
+    }
+  }
+}

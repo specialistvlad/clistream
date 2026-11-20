@@ -139,6 +139,11 @@ final class Connection: ObservableObject {
         }
     }
 
+    func workspace(_ fields: [String:Any], session: SessionInfo) async -> Reply {
+        guard selected?.id == session.id, let handle else { return Reply(Error: "Session detached") }
+        return await Core.request(fields.merging(["Handle":handle, "ID":session.id]) { _, new in new })
+    }
+
     func forward(_ name: String, item: SessionInfo) async {
         if let key = forwards.removeValue(forKey: name) {
             forwarding.removeValue(forKey: name)

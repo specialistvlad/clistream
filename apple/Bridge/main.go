@@ -70,11 +70,25 @@ func call(q request) (response, error) {
 	case "pair":
 		return r, identity.Pair(context.Background(), q.Dir, q.Link)
 	case "ls", "get", "put":
-		c, e := client.Connect(q.Dir)
-		if e != nil {
-			return r, e
+		var c *quic.Conn
+		var e error
+		if q.Handle != "" {
+			value, ok := handles.Load(q.Handle)
+			if !ok {
+				return r, errors.New("attachment closed")
+			}
+			h := value.(*handle)
+			if h.attach == nil {
+				return r, errors.New("terminal attachment required")
+			}
+			c = h.conn
+		} else {
+			c, e = client.Connect(q.Dir)
+			if e != nil {
+				return r, e
+			}
+			defer c.CloseWithError(0, "")
 		}
-		defer c.CloseWithError(0, "")
 		switch q.Op {
 		case "ls":
 			e = client.Files(c, q.ID, q.Path, func(i wire.FileEntry) error {

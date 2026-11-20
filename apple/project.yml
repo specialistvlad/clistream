@@ -11,7 +11,8 @@ packages:
     exactVersion: 1.13.0
 settings:
   base:
-    PRODUCT_BUNDLE_IDENTIFIER: com.vlk.clistream
+    CLISTREAM_APP_ID: com.vlk.clistream
+    PRODUCT_BUNDLE_IDENTIFIER: "$(CLISTREAM_APP_ID)"
     MARKETING_VERSION: 0.1.0
     CURRENT_PROJECT_VERSION: 1
     CODE_SIGN_STYLE: Automatic
@@ -22,7 +23,10 @@ settings:
 targetTemplates:
   Client:
     type: application
-    sources: [App]
+    sources:
+      - path: App
+      - path: ../LICENSE
+        buildPhase: resources
     dependencies:
       - package: SwiftTerm
       - framework: build/Core.xcframework
@@ -59,10 +63,37 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: CLIStream-iOS
         SWIFT_OBJC_BRIDGING_HEADER: ""
+  CLIStream-MacUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources: [UITests]
+    dependencies:
+      - target: CLIStream-macOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vlk.clistream.macuitests
+        PRODUCT_NAME: CLIStreamMacUITests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: CLIStream-macOS
+        SWIFT_OBJC_BRIDGING_HEADER: ""
+  CLIStream-iOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [ClientTests]
+    dependencies:
+      - target: CLIStream-iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vlk.clistream.iostests
+        PRODUCT_NAME: CLIStreamClientTests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/CLIStream.app/CLIStream"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        SWIFT_OBJC_BRIDGING_HEADER: ""
   CLIStream-MacTests:
     type: bundle.unit-test
     platform: macOS
-    sources: [MacTests]
+    sources: [ClientTests]
     dependencies:
       - target: CLIStream-macOS
     settings:
@@ -79,10 +110,10 @@ schemes:
       targets:
         CLIStream-macOS: all
     test:
-      targets: [CLIStream-MacTests]
+      targets: [CLIStream-MacTests, CLIStream-MacUITests]
   CLIStream-iOS:
     build:
       targets:
         CLIStream-iOS: all
     test:
-      targets: [CLIStream-UITests]
+      targets: [CLIStream-iOSTests, CLIStream-UITests]

@@ -5,6 +5,7 @@ struct Download: Transferable {
     let url: URL
     static var transferRepresentation: some TransferRepresentation {
         FileRepresentation(exportedContentType: .data) { file in SentTransferredFile(file.url) }
+            .suggestedFileName { $0.url.lastPathComponent }
     }
 }
 
@@ -45,11 +46,14 @@ struct WorkspaceBrowser: View {
             if active { ProgressView() }
             if !message.isEmpty { Text(message).font(.caption).textSelection(.enabled) }
         }
+        #if os(macOS)
+        .frame(minWidth: 480, minHeight: 320)
+        #endif
         .task(id: location) {
             let folder = location
             while !Task.isCancelled {
                 do {
-                    let r = await Core.request(["Op":"ls", "Dir":try connection.directory, "ID":session.id, "Path":folder])
+                    let r = await connection.workspace(["Op":"ls", "Path":folder], session:session)
                     guard !Task.isCancelled else { return }
                     if let error = r.Error { message = error; return }
                     entries = (r.Entries ?? []).sorted { $0.Name.localizedStandardCompare($1.Name) == .orderedAscending }
@@ -79,7 +83,7 @@ struct WorkspaceBrowser: View {
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let file = dir.appendingPathComponent(entry.Name)
-            let r = await Core.request(["Op":"get","Dir":try connection.directory,"ID":session.id,"Path":child(entry.Name),"Local":file.path])
+            let r = await connection.workspace(["Op":"get", "Path":child(entry.Name),"Local":file.path], session:session)
             if let error = r.Error { message = error; try? FileManager.default.removeItem(at: dir); return }
             download = Download(url: file)
             exporter = true
@@ -91,9 +95,7 @@ struct WorkspaceBrowser: View {
         defer { active = false }
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
-        do {
-            let r = await Core.request(["Op":"put","Dir":try connection.directory,"ID":session.id,"Path":child(url.lastPathComponent),"Local":url.path])
-            message = r.Error ?? "Uploaded \(url.lastPathComponent)"
-        } catch { message = error.localizedDescription }
+        let r = await connection.workspace(["Op":"put", "Path":child(url.lastPathComponent),"Local":url.path], session:session)
+        message = r.Error ?? "Uploaded \(url.lastPathComponent)"
     }
 }

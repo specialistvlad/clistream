@@ -127,7 +127,14 @@ func Dial(ctx context.Context, dir string, p Profile) (*quic.Conn, error) {
 		}
 		return nil
 	}
-	return quic.DialAddr(ctx, p.Address, cfg, wire.Config())
+	conn, err := quic.DialAddr(ctx, p.Address, cfg, wire.Config())
+	var timeout net.Error
+	if ctx.Err() == nil && errors.As(err, &timeout) && timeout.Timeout() {
+		// A fresh UDP socket can restore reachability after a transient path loss.
+		// Only retry the handshake, before any enrollment or application request.
+		return quic.DialAddr(ctx, p.Address, cfg, wire.Config())
+	}
+	return conn, err
 }
 func Load(dir string) (p Profile, e error) {
 	b, e := os.ReadFile(filepath.Join(dir, "server.json"))

@@ -1,19 +1,23 @@
 """Exercise installed binaries on real UDP sockets with isolated, temporary identities."""
 
 import contextlib
+import http.server
 import json
 import os
 import pathlib
 import selectors
 import shutil
-import statistics
 import socket
-import termios
+import statistics
 import subprocess
 import tempfile
+import termios
 import threading
 import time
 import unittest
+
+from model_endpoint import CLAUDE_ARGS, CODEX_ARGS, Messages, claude_environment
+from network_path import NetworkPath
 
 BIN = pathlib.Path(
     os.environ.get("CLISTREAM_BIN", pathlib.Path(__file__).resolve().parents[1] / "bin")
@@ -47,7 +51,7 @@ def status_line(stream, prefix):
     raise AssertionError(f"missing process status {prefix!r}")
 
 
-class Live(unittest.TestCase):
+class BrokerFixture(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(dir="/tmp")
         self.addCleanup(self.tmp.cleanup)
@@ -108,16 +112,20 @@ class Live(unittest.TestCase):
         return p
 
     def run_cli(self, args, data=None, check=True):
-        result = subprocess.run(args, input=data, capture_output=True, timeout=12)
+        result = subprocess.run(
+            args, input=data, capture_output=True, timeout=12, check=False
+        )
         if check:
             self.assertEqual(result.returncode, 0, result.stderr)
         return result
 
-    def session(self, flags, cmd):
-        p = self.spawn(self.supervisor + flags + ["--"] + cmd, cwd=self.work)
+    def session(self, flags, cmd, **options):
+        p = self.spawn(self.supervisor + flags + ["--"] + cmd, cwd=self.work, **options)
         msg = status_line(p.stderr, b"session ")
         return p, msg.split()[1].decode()
 
+
+class Live(BrokerFixture):
     def test_shared_session(self):
         p, sid = self.session(
             [],
@@ -309,17 +317,22 @@ class Live(unittest.TestCase):
         remote = self.spawn(self.a + ["attach", new_id])
         self.assertEqual(line(remote.stdout), b"before-restart\n")
 
+    def supported_executable(self, name):
+        banners = {"claude": b"2.1.329 (Claude Code)", "codex": b"codex-cli 0.170.0"}
+        executable = shutil.which(name)
+        if (
+            executable
+            and self.run_cli([executable, "--version"], check=False).stdout.strip()
+            == banners[name]
+        ):
+            return executable
+        return None
+
     def test_detected_drivers(self):
         found = 0
-        for name, banner in [
-            ("claude", b"2.1.329 (Claude Code)"),
-            ("codex", b"codex-cli 0.170.0"),
-        ]:
-            executable = shutil.which(name)
-            if (
-                executable
-                and self.run_cli([executable, "--version"]).stdout.strip() == banner
-            ):
+        for name in ("claude", "codex"):
+            executable = self.supported_executable(name)
+            if executable:
                 r = self.run_cli(
                     self.supervisor
                     + ["-local-input=false", "--", executable, "--version"]
@@ -329,6 +342,175 @@ class Live(unittest.TestCase):
                 found += 1
         if not found:
             self.skipTest("Supported Claude Code and Codex CLI versions unavailable")
+
+    def remote_task(self, name, args, prompt, expected, **options):
+        executable = shutil.which(name)
+        self.assertIsNotNone(executable, name + " installation required")
+        proc, sid = self.session(
+            ["-mode", "pipe", "-local-input=false"], [executable, *args], **options
+        )
+        items = json.loads(self.run_cli(self.a + ["list"]).stdout)
+        self.assertEqual(next(s["Driver"] for s in items if s["ID"] == sid), name)
+        viewer = self.spawn(self.a + ["-eof", "attach", sid])
+        output, diagnostics = viewer.communicate(prompt, timeout=120)
+        self.assertEqual(viewer.returncode, 0, (output[-500:], diagnostics[-500:]))
+        self.assertEqual(output.strip(), expected)
+        self.assertEqual(proc.wait(5), 0)
+
+    @unittest.skipUnless(
+        os.environ.get("CLISTREAM_LIVE_DRIVERS") == "1",
+        "requires authenticated Codex CLI",
+    )
+    def test_live_codex_task(self):
+        self.remote_task(
+            "codex",
+            CODEX_ARGS,
+            b"Compute 713 times 29. Reply with just the integer. Do not use tools.\n",
+            b"20677",
+        )
+
+    @unittest.skipUnless(
+        os.environ.get("CLISTREAM_LIVE_CLAUDE") == "1", "requires Claude provider quota"
+    )
+    def test_live_claude_task(self):
+        self.remote_task(
+            "claude",
+            ["-p", "--model", "sonnet", "--tools", "", "--no-session-persistence"],
+            b"Compute 713 times 29. Reply with just the integer. Do not use tools.\n",
+            b"20677",
+        )
+
+    def test_claude_with_emulated_provider(self):
+        if not self.supported_executable("claude"):
+            self.skipTest("requires the supported Claude Code version")
+        with http.server.ThreadingHTTPServer(("127.0.0.1", 0), Messages) as service:
+            service.challenge = os.urandom(12).hex()
+            service.answer = "accepted-" + os.urandom(12).hex()
+            service.seen = threading.Event()
+            thread = threading.Thread(target=service.serve_forever, daemon=True)
+            thread.start()
+            env = claude_environment(self.base / "claude", service)
+            try:
+                self.remote_task(
+                    "claude",
+                    CLAUDE_ARGS,
+                    service.challenge.encode() + b"\n",
+                    service.answer.encode(),
+                    env=env,
+                )
+                self.assertTrue(service.seen.is_set())
+            finally:
+                service.shutdown()
+                thread.join(3)
+
+    def test_retry_lost_handshake(self):
+        with NetworkPath(int(self.address.split(":")[1]), drop_first_peer=True) as path:
+            profile = self.base / "a/server.json"
+            config = json.loads(profile.read_text())
+            config["Address"] = path.address
+            profile.write_text(json.dumps(config))
+            self.run_cli(self.a + ["list"])
+            self.assertGreater(path.dropped, 0)
+
+    def test_network_path(self):
+        target, sid = self.session([], ["/bin/cat"])
+        with NetworkPath(int(self.address.split(":")[1])) as path:
+            profile = self.base / "a/server.json"
+            config = json.loads(profile.read_text())
+            config["Address"] = path.address
+            profile.write_text(json.dumps(config))
+            viewer = self.spawn(self.a + ["attach", sid])
+            viewer.stdin.write(b"before-rebinding\n")
+            self.assertEqual(line(viewer.stdout), b"before-rebinding\n")
+            path.rebind.set()
+            self.assertTrue(path.rebound.wait(3))
+            end = time.monotonic() + float(
+                os.environ.get("CLISTREAM_SOAK_SECONDS", "2")
+            )
+            seq = 0
+            while time.monotonic() < end or seq < 40:
+                message = f"{seq:09d}:".encode() + b"x" * 256 + b"\n"
+                viewer.stdin.write(message)
+                self.assertEqual(line(viewer.stdout), message)
+                self.assertEqual(
+                    line(target.stdout), message if seq else b"before-rebinding\n"
+                )
+                if seq == 0:
+                    self.assertEqual(line(target.stdout), message)
+                seq += 1
+            self.assertGreater(path.dropped, 0)
+            print(
+                f"verified {seq} round trips, {path.dropped} dropped datagrams and a changed source port",
+                flush=True,
+            )
+
+    def test_detach_and_replay(self):
+        target, sid = self.session(
+            ["-mode", "pty"],
+            ["/bin/sh", "-c", "stty -echo; echo ready; read v; echo result-$v"],
+        )
+        master, slave = os.openpty()
+        self.addCleanup(os.close, master)
+        self.addCleanup(os.close, slave)
+        client = self.spawn(self.a + ["attach", sid], stdin=slave)
+        self.assertEqual(line(client.stdout), b"ready\r\n")
+        os.write(master, bytes([0x1D]))
+        self.assertEqual(client.wait(8), 0)
+        self.assertIsNone(target.poll())
+        second = self.spawn(self.b + ["attach", sid])
+        self.assertEqual(line(second.stdout), b"ready\r\n")
+        second.stdin.write(b"joined\n")
+        self.assertEqual(line(second.stdout), b"result-joined\r\n")
+        self.assertEqual(second.wait(8), 0)
+
+    def test_large_binary_stdio(self):
+        target, sid = self.session(["-local-input=false"], ["/bin/cat"])
+        local = bytearray()
+        drain = threading.Thread(
+            target=lambda: local.extend(target.stdout.read()), daemon=True
+        )
+        drain.start()
+        viewer = self.spawn(self.a + ["-eof", "attach", sid])
+        data = os.urandom(4 * 1024 * 1024)
+        output, diagnostics = viewer.communicate(data, timeout=40)
+        self.assertEqual(viewer.returncode, 0, diagnostics)
+        self.assertTrue(output == data, "binary stream differs")
+        self.assertEqual(diagnostics, b"")
+        drain.join(5)
+        self.assertTrue(local == data, "local output differs")
+
+    def test_active_revocation(self):
+        _, sid = self.session([], ["/bin/sh", "-c", "echo ready; exec cat"])
+        before = set(self.run_cli(self.server + ["devices"]).stdout.splitlines())
+        guest = [CLI, "-state", self.base / "guest"]
+        self.run_cli(
+            guest + ["pair"],
+            data=self.run_cli(self.server + ["invite", "client"]).stdout,
+        )
+        new = set(self.run_cli(self.server + ["devices"]).stdout.splitlines()) - before
+        self.assertEqual(len(new), 1)
+        revoked = self.spawn(guest + ["attach", sid])
+        retained = self.spawn(self.b + ["attach", sid])
+        self.assertEqual(line(revoked.stdout), b"ready\n")
+        self.assertEqual(line(retained.stdout), b"ready\n")
+        self.run_cli(self.server + ["revoke", new.pop().split()[0]])
+        self.assertNotEqual(revoked.wait(10), 0)
+        self.assertNotEqual(self.run_cli(guest + ["list"], check=False).returncode, 0)
+        retained.stdin.write(b"still-enrolled\n")
+        self.assertEqual(line(retained.stdout), b"still-enrolled\n")
+
+    def test_concurrent_uploads(self):
+        _, sid = self.session([], ["/bin/cat"])
+        writers = []
+        for i, client in enumerate((self.a, self.b)):
+            path = self.base / f"upload-{i}"
+            data = os.urandom(256001)
+            path.write_bytes(data)
+            writers.append((self.spawn(client + ["put", sid, path, "winner"]), data))
+        winners = [data for writer, data in writers if writer.wait(12) == 0]
+        self.assertEqual(len(winners), 1)
+        self.assertTrue((self.work / "winner").read_bytes() == winners[0])
+        self.assertEqual(list(self.work.glob(".clistream-upload-*")), [])
 
     def test_authorization(self):
         unknown = self.base / "stranger"

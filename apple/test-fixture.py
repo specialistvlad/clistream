@@ -1,0 +1,215 @@
+"""Run XCTest against a private broker, live pipes, PTY, CLI viewer and loopback services."""
+
+import contextlib
+import http.server
+import os
+import shutil
+import socket
+import socketserver
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from pathlib import Path
+
+APP = Path(__file__).resolve().parent
+BIN = APP.parent / "bin"
+
+
+class ReverseTCP(socketserver.BaseRequestHandler):
+    def handle(self):
+        with self.request.makefile("rb") as reader:
+            self.request.sendall(reader.read()[::-1])
+
+
+class ReverseUDP(socketserver.BaseRequestHandler):
+    def handle(self):
+        data, sock = self.request
+        sock.sendto(data[::-1], self.client_address)
+
+
+def run(root, stack, command):
+    work = root / "workspace"
+    work.mkdir()
+    (work / "inbox").mkdir()
+    (root / "outside").write_text("private")
+    (work / "escape").symlink_to(root)
+    name = f"CLITest-{os.urandom(4).hex()}"
+    saved = root / "saved"
+    saved.mkdir()
+    sample = os.urandom(150013)
+    (work / f"{name}.txt").write_bytes(sample)
+    (work / "fixture.txt").touch()
+    server = [BIN / "clistreamd", "-state", root / "server"]
+    supervisor = [BIN / "clistream-supervise", "-state", root / "sup"]
+    viewer = [BIN / "clistream", "-state", root / "viewer"]
+
+    def launch(args, log, env=None):
+        with (
+            (root / (log + ".out")).open("wb") as out,
+            (root / (log + ".err")).open("wb") as err,
+        ):
+            proc = subprocess.Popen(
+                args,
+                cwd=work,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=out,
+                stderr=err,
+            )
+
+        def stop():
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=4)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+
+        stack.callback(stop)
+        return proc
+
+    def wait_until(check):
+        for _ in range(200):
+            result = check()
+            if result:
+                return result
+            time.sleep(0.05)
+        raise RuntimeError("fixture did not become ready")
+
+    with socket.socket(type=socket.SOCK_DGRAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    launch(server + ["-listen", f"127.0.0.1:{port}"], "server")
+    wait_until(lambda: (root / "server/admin.sock").exists())
+
+    def invite(role):
+        return subprocess.check_output(server + ["-qr=false", "invite", role])
+
+    subprocess.run(supervisor + ["-pair"], input=invite("supervisor"), check=True)
+    subprocess.run(viewer + ["pair"], input=invite("client"), check=True)
+    exports = []
+    for proto, cls, handler in [
+        ("tcp", socketserver.ThreadingTCPServer, ReverseTCP),
+        ("udp", socketserver.ThreadingUDPServer, ReverseUDP),
+    ]:
+        endpoint = stack.enter_context(cls(("127.0.0.1", 0), handler))
+        endpoint.daemon_threads = True
+        threading.Thread(target=endpoint.serve_forever, daemon=True).start()
+        stack.callback(endpoint.shutdown)
+        exports += [
+            "-export",
+            f"{proto}={proto}:127.0.0.1:{endpoint.server_address[1]}",
+        ]
+
+    def session(mode, args, label, flags=(), env=None):
+        launch(
+            supervisor + ["-mode", mode, "-local-input=false", *flags, "--", *args],
+            label,
+            env,
+        )
+
+        def registered():
+            for msg in (root / (label + ".err")).read_text().splitlines():
+                if msg.startswith("session "):
+                    return msg.split()[1]
+
+        return wait_until(registered)
+
+    sid = session(
+        "pipe",
+        [
+            "/bin/sh",
+            "-c",
+            'while IFS= read -r v; do echo "out:$v"; echo "err:$v" >&2; done',
+        ],
+        "pipe",
+        exports,
+    )
+    pty = session(
+        "pty",
+        [
+            "/bin/sh",
+            "-c",
+            """stty -echo; read v; stty size; printf '\\033[32m%s\\033[0m\\n' "$v"; exit 23""",
+        ],
+        "pty",
+    )
+    launch(viewer + ["attach", sid], "observer")
+    env = os.environ.copy()
+    env.update(
+        TEST_RUNNER_CLISTREAM_SESSION=sid,
+        TEST_RUNNER_CLISTREAM_PTY_SESSION=pty,
+        TEST_RUNNER_CLISTREAM_FILENAME=name,
+        TEST_RUNNER_CLISTREAM_SAVE_DIR=str(saved),
+    )
+    if os.environ.get("CLISTREAM_APP_DRIVERS") == "1":
+        sys.path.insert(0, str(APP.parent / "tests"))
+        from model_endpoint import CLAUDE_ARGS, CODEX_ARGS, Messages, claude_environment
+
+        endpoint = stack.enter_context(
+            http.server.ThreadingHTTPServer(("127.0.0.1", 0), Messages)
+        )
+        endpoint.challenge = "AppleClient-" + os.urandom(10).hex()
+        endpoint.answer = "AppleResponse-" + os.urandom(10).hex()
+        endpoint.seen = threading.Event()
+        threading.Thread(target=endpoint.serve_forever, daemon=True).start()
+        stack.callback(endpoint.shutdown)
+        for driver, args, process_env in [
+            (
+                "claude",
+                [
+                    *CLAUDE_ARGS,
+                    "--input-format",
+                    "stream-json",
+                    "--output-format",
+                    "stream-json",
+                    "--verbose",
+                ],
+                claude_environment(root / "claude", endpoint),
+            ),
+            ("codex", CODEX_ARGS, None),
+        ]:
+            exe = shutil.which(driver)
+            if not exe:
+                raise RuntimeError(
+                    f"{driver} executable required for the Apple driver suite"
+                )
+            env["TEST_RUNNER_CLISTREAM_" + driver.upper() + "_SESSION"] = session(
+                "pipe", [exe, *args], driver, env=process_env
+            )
+        env.update(
+            TEST_RUNNER_CLISTREAM_DRIVERS_LINK=invite("client").decode().strip(),
+            TEST_RUNNER_CLISTREAM_CLAUDE_INPUT=endpoint.challenge,
+            TEST_RUNNER_CLISTREAM_CLAUDE_OUTPUT=endpoint.answer,
+        )
+    for purpose in ["PIPE", "PTY", "FILES", "PORTS"]:
+        env[f"TEST_RUNNER_CLISTREAM_{purpose}_LINK"] = invite("client").decode().strip()
+    # A second invocation without a subcommand must attach to the existing daemon.
+    qr = subprocess.check_output(server)
+    decoded = subprocess.check_output([APP / "build/test-qr"], input=qr)
+    env["TEST_RUNNER_CLISTREAM_LINK"] = decoded.decode().strip()
+    subprocess.run(command, cwd=APP, env=env, check=True, timeout=420)
+    for label in ("pipe", "observer"):
+        assert b"out:hosted-apple-echo" in (root / (label + ".out")).read_bytes()
+        assert b"err:hosted-apple-echo" in (root / (label + ".err")).read_bytes()
+    expected = bytes(range(256)) * 937 + bytes(range(147))
+    assert len(expected) == 240019
+    assert (work / "inbox/apple.bin").read_bytes() == expected
+    assert b"out:apple-client-echo" in (root / "observer.out").read_bytes()
+    assert (work / "inbox" / f"{name}.txt").read_bytes() == sample
+    print(
+        "PASS: verified child, independent CLI viewer, and workspace bytes", flush=True
+    )
+
+
+if __name__ == "__main__":
+    with (
+        tempfile.TemporaryDirectory(
+            dir="/tmp", prefix="clistream-accept-"
+        ) as directory,
+        contextlib.ExitStack() as stack,
+    ):
+        run(Path(directory), stack, sys.argv[1:])

@@ -5,3 +5,4 @@
 *.p8
 *.xcuserstate
 /dist/
+__pycache__/
