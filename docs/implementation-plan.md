@@ -9,3 +9,4 @@
 7. Exercise both platforms, two simultaneous clients, unauthorized access, replay, port exports and terminal behavior. Record executed checks and release gates in verification.md.
 8. Run app-hosted and UI tests on iPhone and iPad simulators and native macOS. Verify both target-specific drivers, repeatable file-picker round trips, terminal rendering and forwarded sockets.
 9. Attach the three Apple clients and a CLI client concurrently to one child. Exercise packet loss, delay, address changes and a lost handshake. Record the commands, results and remaining provider and distribution gates in the verification record.
+10. Implement and verify the native Apple session and workspace navigation. Exercise keyboard focus, terminal mouse reporting, Finder and Files interactions, adaptive layout and accessibility on each supported form factor. [Design acceptance criteria](apple-client-design.md#design-acceptance)
