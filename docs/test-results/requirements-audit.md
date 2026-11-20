@@ -17,13 +17,17 @@ Use the case names below to trace a product requirement to the executable that v
 
 ## Engineering checks
 
-| Quality | Evidence and interpretation |
-|---|---|
-| Authentication and modularity | The broker accepts an `identity.Authenticator`. Version-specific mode selection lives in `internal/driver`. The client and Apple bridge share the transport, file and forwarding implementations. Go race tests, vet and end-to-end tests exercise these component boundaries. |
-| Responsiveness and reliability | `test_keystroke_latency` measures median echo time. `test_network_path` injects loss, delay and a source-port change. `test_retry_lost_handshake` and `test_reconnect` check recovery. `TestSlowSubscriberCanReattachWithinBoundedHistory` checks replay after a subscriber falls behind. |
-| Distribution | `make dist` creates four archives. Run `python3 tests/distribution.py dist/ARCHIVE.tar.gz` on a compatible host to verify SHA-256, archive contents and the MIT notice and execute the suite against the extracted binaries. Both signed Apple apps must pass code-signature and bundled MIT notice verification. |
-| Apple delivery | Simulator deep links exercise the app after the camera has handed off a URL. A physical camera and installation through TestFlight require separate evidence. The previous distribution attempt returned Apple's missing-agreement error. |
-| Source and evidence | The repository carries the MIT license. Published XCTest results contain case names and outcomes. Keep raw result bundles local because a diagnostic attachment may contain a short-lived pairing URL. |
+| Requirement | Automated evidence | Interpretation |
+|---|---|---|
+| N1. Security and trust | `TestServerRequiresCertificateAndCompressionALPN`, `TestEnrollmentAndCompressedStreams`, `test_active_revocation` | The peer proves possession of an Ed25519 key under TLS 1.3. Enrollment, broker identity and active revocation are exercised. Device secrets stay out of the published results. |
+| N2. Responsiveness and integrity | `test_keystroke_latency`, `test_network_path`, `test_large_binary_stdio`, `test_ports` | Measure echo time and compare ordered data and datagrams on the receiving end. Network conditions and results are reported separately. |
+| N3. Reliability and resource use | `test_retry_lost_handshake`, `test_reconnect`, `TestPartialUploadIsRemoved`, `TestSlowSubscriberCanReattachWithinBoundedHistory` | Exercise retry, reconnection, incomplete uploads, bounded replay and a slow viewer. |
+| N4. Modularity and maintainability | `make test`, `test_driver_catalog`, `test_unsupported_version_and_generic_override` | The broker accepts an authenticator interface. Version-specific mode selection is independent of process execution. The Apple bridge and CLI share a Go client. Architectural boundaries also require code review. |
+| N5. Protocol discipline | `TestRecords`, `TestReject`, `TestEnrollmentAndCompressedStreams`, `test_authorization` | Check reference messages, decoding limits, mandatory compression, unrecognized fields, and role-specific channel operations. |
+| N6. Portability and delivery | `make dist`, `make test-deployment`, `testPairAndUseSession` | Test the three executables unpacked from each of four archives. Verify the signatures and MIT notices in both Apple archives. TestFlight installation and physical-camera handoff require separate evidence. |
+| N7. Verification and ownership | `make test`, `make e2e`, `apple/test-shared.py` | Race detection, vet, test-reference validation and multi-process acceptance run against real components. The public MIT repository includes build instructions, the plan, protocol and sanitized results. |
+
+Run `python3 tests/distribution.py dist/ARCHIVE.tar.gz` on a compatible host to verify SHA-256, archive contents and the original MIT notice and execute the suite against the extracted binaries. Published XCTest reports contain case outcomes and selected diagnostic messages. Raw bundles can contain a temporary pairing URL and stay on the test machine.
 
 ## Reproduce a failed check
 

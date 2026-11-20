@@ -91,6 +91,8 @@ final class SessionTests: XCTestCase {
           format: "label CONTAINS %@ OR value CONTAINS %@", "out:workspace-finished",
           "out:workspace-finished")
       ).firstMatch.waitForExistence(timeout: 10))
+    tap(app.buttons["EOF"])
+    XCTAssertTrue(app.staticTexts["Process exited with status 0"].waitForExistence(timeout: 12))
     tap(app.buttons["Detach"])
   }
 
@@ -112,8 +114,10 @@ final class SessionTests: XCTestCase {
       view.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 4, dy: 4)).click()
     #else
       cell.tap()
-      tap(app.buttons["Keys"])
-      tap(app.buttons["Up Arrow"])
+      for name in ["Up Arrow", "Down Arrow", "Right Arrow", "Left Arrow", "Escape"] {
+        tap(app.buttons["Keys"])
+        tap(app.buttons[name])
+      }
       tap(app.buttons["Keys"])
       tap(app.buttons["Control Key"])
       tap(app.buttons["Control-C"])
@@ -215,7 +219,12 @@ final class SessionTests: XCTestCase {
       tap(app.buttons["Cancel"])
     }
     app.open(link)
-    tap(app.buttons["Pair device"])
+    #if os(macOS)
+      XCTAssertTrue(app.buttons["Pair device"].waitForExistence(timeout: 12))
+      app.typeKey(.return, modifierFlags: [])
+    #else
+      tap(app.buttons["Pair device"])
+    #endif
     if largeText {
       XCTAssertTrue(
         app.descendants(matching: .any)["session-" + id].firstMatch.waitForExistence(timeout: 10))
@@ -223,6 +232,7 @@ final class SessionTests: XCTestCase {
       tap(app.buttons["Pair device"])
       tap(app.alerts.buttons["OK"])
     }
+    tap(app.buttons["Refresh"])
     tap(app.descendants(matching: .any)["session-" + id].firstMatch)
     return app
   }
@@ -250,7 +260,16 @@ final class SessionTests: XCTestCase {
       element.waitForExistence(timeout: 12), XCUIApplication().debugDescription, file: file,
       line: line)
     #if os(macOS)
-      element.click()
+      // Sheets and toolbar buttons can disappear as soon as mouse-down fires.
+      // Resolve the hit point once so mouse-up can complete on the same window.
+      let app = XCUIApplication()
+      let anchor = app.coordinate(withNormalizedOffset: .zero)
+      let target = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).screenPoint
+      anchor.withOffset(
+        CGVector(
+          dx: target.x - anchor.screenPoint.x,
+          dy: target.y - anchor.screenPoint.y)
+      ).click()
     #else
       element.tap()
     #endif

@@ -4,6 +4,20 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The current audit maps each functional and engineering requirement to its executable checks. [Requirements audit](test-results/requirements-audit.md)
 
+## Requirements audit on November 19, 2026
+
+| Executed check | Result |
+|---|---|
+| Go on macOS arm64 | Race-enabled package tests and vet passed. The trace check resolved test references for F1–F10 and N1–N7. |
+| Real daemon, supervisor and CLI on macOS | 20 of 21 passed. The live Anthropic case was skipped in this run. A separate real provider request reached the account's weekly usage limit. Both interactive CLI executables, the emulated Claude exchange and live Codex passed. |
+| Packaged executables | Each Darwin architecture passed 19 cases and skipped the two live-provider cases. Each Linux architecture passed 16 and skipped five optional model-client cases. All four archives matched SHA-256 and carried the MIT notice. Linux amd64 ran under emulation. |
+| Network interference | 2,232 verified round trips in 120 seconds with 450 intentionally dropped datagrams and a mid-session source-port change. The separate loopback test measured a median key echo of 2.31 ms. |
+| Four Linux containers | Two supervisors registered independently. Each returned its own workspace data. File-service traversal failed, the isolated shells could neither read nor modify the host sentinel, and the original bytes survived. |
+| Dependency scan | `govulncheck` reported zero reachable known vulnerabilities. It identified 11 module-level advisories outside the application's call paths. |
+| Signed Apple build 2611200450 | Both archives passed deep, strict code-signature verification and contained the original MIT notice. The Mac executable contains arm64 and x86_64. |
+
+The iPhone and iPad scenarios use real system UI for copy/paste, keyboard input, file pickers and navigation. The touch test extends a selection using the system handle, sends the pasted text to the remote process, cancels a partial back swipe, completes a second swipe and runs Apple's accessibility audit. The fixture compares the two distinct pasted strings at the child. The terminal fixture checks the reported cell and records window sizes in the child process. The permissions of an ordinary supervised host process and those of the isolated Linux deployment differ as described in the [security model](security.md).
+
 ## Earlier baseline on November 19, 2026
 
 | Suite | Environment | Result |

@@ -3,6 +3,7 @@
 import contextlib
 import http.server
 import os
+import re
 import shutil
 import socket
 import socketserver
@@ -270,6 +271,21 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
     worker.start()
     try:
         subprocess.run(command, cwd=APP, env=env, check=True, timeout=420)
+    except subprocess.TimeoutExpired:
+        print(f"Timed out in {suite}. Uploaded file published: "
+              f"{(work / 'inbox/nested' / (name + '.txt')).exists()}", flush=True)
+        if "-resultBundlePath" in command:
+            bundle = Path(command[command.index("-resultBundlePath") + 1])
+            for log in bundle.glob("Staging/**/Session-*UITests*.log"):
+                actions = [
+                    line.partition(" +0000: ")[-1]
+                    for line in log.read_text(errors="replace").splitlines()
+                    if "willStartActivity:" in line and " +0000: " in line
+                ]
+                for action in actions[-10:]:
+                    if not any(s in action for s in ["://", "Type text", "Type '"]):
+                        print(re.sub(r"[a-fA-F0-9]{24,}", "<redacted>", action)[:190])
+        raise
     finally:
         finished.set()
         worker.join(5)
@@ -305,7 +321,7 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
         columns = {cols for cols, rows in sizes if cols > 0 and rows > 0}
         assert len(columns) >= 2, f"no child terminal width change: {sizes}"
         if os.environ.get("SIMULATOR_ID"):
-            assert b"\x1b[A" in received and b"\x03" in received, (
+            assert b"\x1b[A\x1b[B\x1b[C\x1b[D\x1b\x03" in received, (
                 f"missing terminal keys: {received!r}"
             )
     print(f"PASS: {suite} fixture assertions", flush=True)

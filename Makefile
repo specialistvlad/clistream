@@ -4,6 +4,7 @@ build:
 test:
 	go test -race ./...
 	go vet ./...
+	python3 tests/requirements.py
 e2e: build
 	python3 tests/e2e.py
 apple:

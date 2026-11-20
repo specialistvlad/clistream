@@ -342,8 +342,10 @@ class Live(BrokerFixture):
         return None
 
     def test_driver_catalog(self):
-        result = subprocess.check_output([BIN / "clistream-supervise", "-drivers"])
-        drivers = json.loads(result)
+        unpaired = self.base / "unused-profile"
+        result = self.run_cli([SUP, "-state", unpaired, "-drivers"])
+        self.assertFalse(unpaired.exists())
+        drivers = json.loads(result.stdout)
         for name, version, default in [
             ("generic", None, "pipe"),
             ("codex", "0.170.0", "pty"),
