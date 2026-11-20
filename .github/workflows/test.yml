@@ -46,15 +46,16 @@ jobs:
       - name: Record individual XCTest outcomes
         if: always()
         run: |
-          bundle=$(find apple/build -path '*/Logs/Test/*.xcresult' -type d | sort | tail -1)
-          if [[ -n "$bundle" && -f "$bundle/Info.plist" ]]; then
+          mkdir -p results
+          for bundle in apple/build/accept-*/Logs/Test/*.xcresult; do
+            [[ -f "$bundle/Info.plist" ]] || continue
             xcrun xcresulttool get test-results tests --path "$bundle" |
-              jq '[.. | objects | select(.nodeType? == "Test Case") | {test: .nodeIdentifier, result, duration}]' > test-cases.json
-            cat test-cases.json
-          fi
+              jq '[.. | objects | select(.nodeType? == "Test Case") | {test: .nodeIdentifier, result, duration}]' \
+                > "results/$(basename "$bundle" .xcresult).json"
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: apple-${{ matrix.device }}-tests
-          path: test-cases.json
+          path: results/*.json
           if-no-files-found: ignore

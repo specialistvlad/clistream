@@ -65,15 +65,6 @@ extension Connection {
   }
 
   #if os(iOS)
-    func armControlKey() {
-      focusTerminal()
-      if let accessory = terminal?.inputAccessoryView as? TerminalAccessory {
-        accessory.controlModifier = true
-      } else {
-        terminal?.controlModifier = true
-      }
-    }
-
     func sendArrow(_ suffix: String) {
       guard let terminal else { return }
       terminal.send(

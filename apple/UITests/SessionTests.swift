@@ -2,16 +2,9 @@ import XCTest
 
 final class SessionTests: XCTestCase {
   func testPairAndUseSession() throws {
-    continueAfterFailure = false
     let env = ProcessInfo.processInfo.environment
-    let link = try XCTUnwrap(env["CLISTREAM_LINK"].flatMap(URL.init(string:)))
-    let id = try XCTUnwrap(env["CLISTREAM_SESSION"])
     let name = try XCTUnwrap(env["CLISTREAM_FILENAME"])
-    let app = XCUIApplication()
-    app.launch()
-    app.open(link)
-    tap(app.buttons["Pair device"])
-    tap(app.descendants(matching: .any)["session-" + id].firstMatch)
+    let app = try pairedApp(session: "CLISTREAM_SESSION")
     for port in ["tcp", "udp"] {
       tap(app.buttons["Forward " + port])
       XCTAssertTrue(
@@ -31,7 +24,7 @@ final class SessionTests: XCTestCase {
     #endif
     for ch in ["out:", "err:"] {
       XCTAssertTrue(
-        app.staticTexts.matching(
+        app.descendants(matching: .any).matching(
           NSPredicate(
             format: "label CONTAINS %@ OR value CONTAINS %@", ch + "echo",
             ch + "echo")
@@ -90,9 +83,10 @@ final class SessionTests: XCTestCase {
           "out:workspace-finished")
       ).firstMatch.waitForExistence(timeout: 10))
     tap(app.buttons["Detach"])
-    tap(app.buttons["Refresh"])
-    let pty = try XCTUnwrap(env["CLISTREAM_UI_PTY"])
-    tap(app.descendants(matching: .any)["session-" + pty].firstMatch)
+  }
+
+  func testTerminalInput() throws {
+    let app = try pairedApp(session: "CLISTREAM_UI_PTY")
     let view = app.descendants(matching: .any)["session-terminal"].firstMatch
     XCTAssertTrue(view.waitForExistence(timeout: 10), app.debugDescription)
     let origin = view.coordinate(withNormalizedOffset: .zero)
@@ -105,12 +99,67 @@ final class SessionTests: XCTestCase {
       tap(app.buttons["Up Arrow"])
       tap(app.buttons["Keys"])
       tap(app.buttons["Control Key"])
-      tap(app.keyboards.keys["c"])
+      tap(app.buttons["Control-C"])
       XCUIDevice.shared.orientation = .landscapeLeft
       defer { XCUIDevice.shared.orientation = .portrait }
       view.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 4, dy: 4)).tap()
     #endif
     tap(app.buttons["Detach"])
+  }
+
+  #if os(iOS)
+    func testTouchNavigationAndEditing() throws {
+      let app = try pairedApp(session: "CLISTREAM_SESSION", largeText: true)
+      let output = app.textViews["Standard output"]
+      XCTAssertTrue(output.waitForExistence(timeout: 10))
+      let word = output.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 37, dy: 20))
+      word.press(forDuration: 1)
+      tap(app.descendants(matching: .any)["Copy"].firstMatch)
+      let input = app.textFields["session-input"]
+      input.press(forDuration: 1)
+      tap(app.descendants(matching: .any)["Paste"].firstMatch)
+      tap(app.buttons["Send"])
+      tap(app.buttons["Files"])
+      openEntry("inbox", in: app)
+      openEntry("nested", in: app)
+      let list = app.collectionViews.firstMatch
+      XCTAssertTrue(list.waitForExistence(timeout: 5))
+      let edge = list.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.5))
+      edge.press(
+        forDuration: 0.05, thenDragTo: edge.withOffset(CGVector(dx: 22, dy: 0)),
+        withVelocity: .slow, thenHoldForDuration: 0.5)
+      XCTAssertTrue(app.navigationBars["nested"].exists)
+      list.swipeUp()
+      XCTAssertTrue(app.navigationBars["nested"].exists)
+      edge.press(
+        forDuration: 0.05,
+        thenDragTo: list.coordinate(
+          withNormalizedOffset:
+            CGVector(dx: 0.85, dy: 0.5)), withVelocity: .fast, thenHoldForDuration: 0)
+      XCTAssertTrue(app.navigationBars["inbox"].waitForExistence(timeout: 5))
+      try app.performAccessibilityAudit(for: [.sufficientElementDescription])
+      tap(app.buttons["Done"])
+      tap(app.buttons["Detach"])
+    }
+  #endif
+
+  private func pairedApp(session: String, largeText: Bool = false) throws -> XCUIApplication {
+    continueAfterFailure = false
+    let env = ProcessInfo.processInfo.environment
+    let link = try XCTUnwrap(env["CLISTREAM_LINK"].flatMap(URL.init(string:)))
+    let id = try XCTUnwrap(env[session])
+    let app = XCUIApplication()
+    if largeText {
+      app.launchArguments += [
+        "-AppleInterfaceStyle", "Dark", "-UIPreferredContentSizeCategoryName",
+        "UICTContentSizeCategoryAccessibilityL",
+      ]
+    }
+    app.launch()
+    app.open(link)
+    tap(app.buttons["Pair device"])
+    tap(app.descendants(matching: .any)["session-" + id].firstMatch)
+    return app
   }
 
   private func openEntry(_ name: String, in app: XCUIApplication) {

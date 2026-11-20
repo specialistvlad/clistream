@@ -29,7 +29,7 @@ class ReverseUDP(socketserver.BaseRequestHandler):
         sock.sendto(data[::-1], self.client_address)
 
 
-def run(root, stack, command):
+def run(root, stack, suite, command):
     work = root / "workspace"
     work.mkdir()
     (work / "inbox" / "nested").mkdir(parents=True)
@@ -41,11 +41,14 @@ def run(root, stack, command):
     sample = os.urandom(150013)
     (work / f"{name}.txt").write_bytes(sample)
     (work / "fixture.txt").touch()
+    if suite == "touch":
+        for index in range(60):
+            (work / "inbox/nested" / f"row-{index:03d}").touch()
     server = [BIN / "clistreamd", "-state", root / "server"]
     supervisor = [BIN / "clistream-supervise", "-state", root / "sup"]
     viewer = [BIN / "clistream", "-state", root / "viewer"]
 
-    def launch(args, log, env=None):
+    def launch(args, log, env=None, stdin=subprocess.DEVNULL):
         with (
             (root / (log + ".out")).open("wb") as out,
             (root / (log + ".err")).open("wb") as err,
@@ -54,7 +57,7 @@ def run(root, stack, command):
                 args,
                 cwd=work,
                 env=env,
-                stdin=subprocess.DEVNULL,
+                stdin=stdin,
                 stdout=out,
                 stderr=err,
             )
@@ -118,12 +121,13 @@ def run(root, stack, command):
 
         return wait_until(registered)
 
+    greeting = "echo 'copyword selection'; " if suite == "touch" else ""
     sid = session(
         "pipe",
         [
             "/bin/sh",
             "-c",
-            'while IFS= read -r v; do echo "out:$v"; echo "err:$v" >&2; done',
+            greeting + 'while IFS= read -r v; do echo "out:$v"; echo "err:$v" >&2; done',
         ],
         "pipe",
         exports,
@@ -148,7 +152,7 @@ def run(root, stack, command):
             """
 import os, sys, tty
 tty.setraw(0)
-os.write(1, b'COPYME terminal selection test\\r\\n')
+os.write(1, b'\\x1b[2 qCOPYME terminal selection test\\r\\n')
 os.write(1, b'\\x1b[?1000h\\x1b[?1006h')
 with open(sys.argv[1], 'wb', buffering=0) as captured:
     while data := os.read(0, 4096):
@@ -158,7 +162,8 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
         ],
         "ui-pty",
     )
-    launch(viewer + ["attach", sid], "observer")
+    observer = launch(viewer + ["attach", sid], "observer", stdin=subprocess.PIPE)
+    stack.callback(observer.stdin.close)
     env = os.environ.copy()
     env.update(
         TEST_RUNNER_CLISTREAM_SESSION=sid,
@@ -167,7 +172,7 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
         TEST_RUNNER_CLISTREAM_FILENAME=name,
         TEST_RUNNER_CLISTREAM_SAVE_DIR=str(saved),
     )
-    if os.environ.get("CLISTREAM_APP_DRIVERS") == "1":
+    if suite == "hosted" and os.environ.get("CLISTREAM_APP_DRIVERS") == "1":
         sys.path.insert(0, str(APP.parent / "tests"))
         from model_endpoint import CLAUDE_ARGS, CODEX_ARGS, Messages, claude_environment
 
@@ -219,50 +224,41 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
         target = work / "inbox/nested" / f"{name}.txt"
         while not finished.wait(0.05):
             if target.exists():
-                subprocess.run(
-                    viewer + ["attach", sid],
-                    input=b"workspace-finished\n",
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=3,
-                    check=False,
-                )
+                observer.stdin.write(b"workspace-finished\n")
+                observer.stdin.flush()
                 return
 
     finished = threading.Event()
-
-    def sender():
-        try:
-            signal_upload()
-        except subprocess.TimeoutExpired:
-            pass  # The viewer stays attached after local EOF until stopped.
-
-    worker = threading.Thread(target=sender, daemon=True)
+    worker = threading.Thread(target=signal_upload, daemon=True)
     worker.start()
     try:
         subprocess.run(command, cwd=APP, env=env, check=True, timeout=420)
     finally:
         finished.set()
         worker.join(5)
-    for label in ("pipe", "observer"):
-        assert b"out:hosted-apple-echo" in (root / (label + ".out")).read_bytes()
-        assert b"err:hosted-apple-echo" in (root / (label + ".err")).read_bytes()
-    expected = bytes(range(256)) * 937 + bytes(range(147))
-    assert len(expected) == 240019
-    assert (work / "inbox/apple.bin").read_bytes() == expected
-    assert b"out:echo" in (root / "observer.out").read_bytes()
-    assert (work / "inbox/nested" / f"{name}.txt").read_bytes() == sample
-    received = capture.read_bytes()
-    assert b"\x1b[<0;1;1M" in received, (
-        f"missing mouse press in first cell: {received!r}"
-    )
-    if os.environ.get("SIMULATOR_ID"):
-        assert b"\x1b[A" in received and b"\x03" in received, (
-            f"missing terminal keys: {received!r}"
+    if suite == "hosted":
+        for label in ("pipe", "observer"):
+            assert b"out:hosted-apple-echo" in (root / (label + ".out")).read_bytes()
+            assert b"err:hosted-apple-echo" in (root / (label + ".err")).read_bytes()
+        expected = bytes(range(256)) * 937 + bytes(range(147))
+        assert len(expected) == 240019
+        assert (work / "inbox/apple.bin").read_bytes() == expected
+    elif suite == "files":
+        assert b"out:echo" in (root / "observer.out").read_bytes()
+        assert (work / "inbox/nested" / f"{name}.txt").read_bytes() == sample
+    elif suite == "touch":
+        assert b"out:copyword\n" in (root / "observer.out").read_bytes()
+    elif suite == "terminal":
+        received = capture.read_bytes()
+        assert b"\x1b[<0;1;1M" in received, (
+            f"missing mouse press in first cell: {received!r}"
         )
-    print(
-        "PASS: verified child, independent CLI viewer, and workspace bytes", flush=True
-    )
+        if os.environ.get("SIMULATOR_ID"):
+            assert received.count(b"\x1b[<0;1;1M") == 2, "expected two deliberate cell taps"
+            assert b"\x1b[A" in received and b"\x03" in received, (
+                f"missing terminal keys: {received!r}"
+            )
+    print(f"PASS: {suite} fixture assertions", flush=True)
 
 
 if __name__ == "__main__":
@@ -272,4 +268,4 @@ if __name__ == "__main__":
         ) as directory,
         contextlib.ExitStack() as stack,
     ):
-        run(Path(directory), stack, sys.argv[1:])
+        run(Path(directory), stack, sys.argv[1], sys.argv[2:])

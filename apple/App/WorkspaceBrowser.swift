@@ -20,7 +20,8 @@ struct WorkspaceBrowser: View {
   let session: SessionInfo
   @Environment(\.dismiss) private var dismiss
   @Binding var location: WorkspaceLocation
-  @State private var entries = [WorkspaceEntry]()
+  @State private var listings = [String: [WorkspaceEntry]]()
+  private var entries: [WorkspaceEntry] { listings[location.folder] ?? [] }
   @State private var message = ""
   @State private var importer = false
   @State private var exporter = false
@@ -50,23 +51,7 @@ struct WorkspaceBrowser: View {
     .onChange(of: message) { _, text in
       if !text.isEmpty { AccessibilityNotification.Announcement(text).post() }
     }
-    .task(id: location.folder) {
-      let folder = location.folder
-      entries = []
-      message = ""
-      while !Task.isCancelled {
-        let r = await connection.workspace(["Op": "ls", "Path": folder], session: session)
-        guard !Task.isCancelled, location.folder == folder else { return }
-        if let error = r.Error {
-          message = error
-          return
-        }
-        entries = (r.Entries ?? []).sorted {
-          $0.Name.localizedStandardCompare($1.Name) == .orderedAscending
-        }
-        do { try await Task.sleep(for: .seconds(2)) } catch { return }
-      }
-    }
+    .task(id: location.folder) { await refreshFolder() }
     .fileImporter(isPresented: $importer, allowedContentTypes: [.data]) { result in
       if case .success(let url) = result { Task { await put(url) } }
     }
@@ -81,8 +66,27 @@ struct WorkspaceBrowser: View {
     }
   }
 
+  private func refreshFolder() async {
+    let folder = location.folder
+    listings = listings.filter { $0.key == "." || location.path.contains($0.key) }
+    message = ""
+    while !Task.isCancelled {
+      let r = await connection.workspace(["Op": "ls", "Path": folder], session: session)
+      guard !Task.isCancelled, location.folder == folder else { return }
+      if let error = r.Error {
+        message = error
+        return
+      }
+      listings[folder] = (r.Entries ?? []).sorted {
+        $0.Name.localizedStandardCompare($1.Name) == .orderedAscending
+      }
+      do { try await Task.sleep(for: .seconds(2)) } catch { return }
+    }
+  }
+
   private func contents(folder: String) -> some View {
-    VStack(alignment: .leading) {
+    let entries = listings[folder] ?? []
+    return VStack(alignment: .leading) {
       #if os(macOS)
         Table(
           entries,

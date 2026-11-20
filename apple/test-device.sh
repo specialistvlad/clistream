@@ -20,4 +20,23 @@ case "$platform" in
   iOS) notice="$dd/Build/Products/Debug-iphonesimulator/CLIStream.app/LICENSE" ;;
 esac
 cmp ../LICENSE "$notice"
-python3 test-fixture.py xcodebuild -quiet test-without-building "${options[@]}" -parallel-testing-enabled NO
+case "$platform" in
+  macOS) hosted=CLIStream-MacTests; ui=CLIStream-MacUITests ;;
+  iOS) hosted=CLIStream-iOSTests; ui=CLIStream-UITests ;;
+esac
+suites="hosted files terminal"
+if [[ "$platform" == iOS ]]; then suites+=" touch"; fi
+failed=0
+for suite in ${CLISTREAM_TEST_SUITES:-$suites}; do
+  case "$suite" in
+    hosted) test="$hosted" ;;
+    files) test="$ui/SessionTests/testPairAndUseSession" ;;
+    terminal) test="$ui/SessionTests/testTerminalInput" ;;
+    touch) test="$ui/SessionTests/testTouchNavigationAndEditing" ;;
+    *) echo "Unknown suite $suite" >&2; exit 2 ;;
+  esac
+  echo "Running $platform $suite"
+  python3 test-fixture.py "$suite" xcodebuild -quiet test-without-building "${options[@]}" \
+    -only-testing:"$test" -parallel-testing-enabled NO -collect-test-diagnostics never || failed=1
+done
+exit "$failed"

@@ -183,7 +183,13 @@ struct BrowserView: View {
         Button("Show Keyboard") { connection.focusTerminal() }
         Button("Hide Keyboard") { _ = connection.terminal?.resignFirstResponder() }
         Button("Escape") { connection.terminal?.send(txt: "\u{1b}") }
-        Button("Control Key") { connection.armControlKey() }
+        Menu("Control Key") {
+          ForEach(Array(65...90), id: \.self) { letter in
+            Button("Control-" + String(UnicodeScalar(letter)!)) {
+              connection.terminal?.send(txt: String(UnicodeScalar(letter - 64)!))
+            }
+          }
+        }
         ForEach([("Up", "A"), ("Down", "B"), ("Right", "C"), ("Left", "D")], id: \.0) {
           label, suffix in
           Button(label + " Arrow") { connection.sendArrow(suffix) }
@@ -201,13 +207,50 @@ struct BrowserView: View {
   func stream(_ title: String, _ data: Data) -> some View {
     VStack(alignment: .leading) {
       Text(title).font(.caption).foregroundStyle(.secondary)
-      ScrollView {
-        Text(String(decoding: data, as: UTF8.self)).font(.system(.body, design: .monospaced))
-          .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-      }
+      #if os(iOS)
+        SelectableOutput(text: String(decoding: data, as: UTF8.self), title: title)
+      #else
+        ScrollView {
+          Text(String(decoding: data, as: UTF8.self)).font(.system(.body, design: .monospaced))
+            .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+        }
+      #endif
     }.padding(.horizontal)
   }
 }
+
+#if os(iOS)
+  private struct SelectableOutput: UIViewRepresentable {
+    let text: String
+    let title: String
+
+    func makeUIView(context: Context) -> UITextView {
+      let view = UITextView()
+      view.isEditable = false
+      view.isSelectable = true
+      view.backgroundColor = .clear
+      view.adjustsFontForContentSizeCategory = true
+      view.font = UIFontMetrics(forTextStyle: .body).scaledFont(
+        for: .monospacedSystemFont(ofSize: 17, weight: .regular))
+      view.accessibilityLabel = title
+      view.accessibilityIdentifier = title
+      view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+      return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+      guard view.text != text else { return }
+      // Appending preserves the native selection and its handles while output arrives.
+      if text.hasPrefix(view.text) {
+        view.textStorage.append(
+          NSAttributedString(
+            string: String(text.dropFirst(view.text.count)), attributes: view.typingAttributes))
+      } else {
+        view.text = text
+      }
+    }
+  }
+#endif
 
 #if os(macOS)
   private struct SessionActions {

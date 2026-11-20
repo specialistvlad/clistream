@@ -8,7 +8,7 @@ options:
 packages:
   SwiftTerm:
     url: https://github.com/migueldeicaza/SwiftTerm.git
-    exactVersion: 1.13.0
+    exactVersion: 1.14.0
 settings:
   base:
     CLISTREAM_APP_ID: com.vlk.clistream
