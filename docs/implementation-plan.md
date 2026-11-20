@@ -13,7 +13,7 @@
 
 ## Server activity logs
 
-The Linux and macOS daemon records broker events to standard error and a bounded private JSON-lines file by default. Global flag `--no-log-file` selects standard error alone. The broker assigns connection IDs, observes roles from session operations and waits for close records on shutdown. Supervisors, Go clients and Apple clients use their existing wire operations. All operator controls belong to the daemon. The Apple interaction design and client UI therefore require no logging controls.
+The Linux and macOS daemon records broker events to standard error and a bounded private JSON-lines file by default. Global flag `--log-file=FALSE` selects standard error alone. The broker assigns connection IDs, observes roles from session operations and waits for close records on shutdown. Supervisors, Go clients and Apple clients use their existing wire operations. All operator controls belong to the daemon. The Apple interaction design and client UI therefore require no logging controls.
 
 Compare default file and stderr records byte for byte and verify foreground pairing with live console events. Exercise both destinations, concurrent records, rotation, write failure and payload privacy with race-enabled Go and CLI tests on both systems. Use the four-container deployment for separate Linux supervisors and the shared-session harness for simultaneous native Mac, iPhone, iPad and CLI participants. [Operator guide](deployment.md#server-activity-logs) · [Execution record](verification.md)
 
@@ -60,3 +60,7 @@ Generate the hostname-and-token URL in the shared Go identity package. The Linux
 ## Go command names, help and workspace controls
 
 Ship `clistreamd`, `clistreams` and `clistream` on Linux and macOS. Group help by operator task and validate command operands before enrollment or connection. Open the chosen workspace once on the supervisor, default to the launch directory and reject file channels when disabled. Verify explicit and default roots, terminal and forwarded HTTP access with files disabled, release archive contents and saved identity reuse across the executable rename. Native macOS, iPhone and iPad tests and fixture migration remain deferred.
+
+## Session-first Go commands
+
+Use the existing revision-checked lifecycle requests on Linux and macOS. Resolve the session to a child run for file operations. Share atomic file publication and directory-descriptor checks between both Go builds. Negotiate completed-run retrieval separately, retain the most recent result in supervisor memory, and let the client restore normal terminal scrollback for finished text commands. Verify scripts, fast exits, explicit I/O modes, workspace boundaries, concurrent copies and custom logs in the Go suites and cross-host deployment. Native macOS, iPhone and iPad implementation and verification are deferred at the operator’s request.

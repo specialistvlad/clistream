@@ -43,7 +43,7 @@ type LocalOutput struct {
 func Start(path string, args []string, mode string, ports map[string]string, root *files.Root, managed bool, output LocalOutput, observe func(string, string)) (*Process, error) {
 	p := &Process{observe: observe, managed: managed, Root: root, Cmd: exec.Command(path, args...), ports: ports, out: map[string]*history{}}
 	if mode == "pty" {
-		h := newHistory()
+		h := newTerminalHistory()
 		p.out["pty"] = h
 		t, e := pty.StartWithSize(p.Cmd, &pty.Winsize{Rows: output.Rows, Cols: output.Cols})
 		if e != nil {
@@ -112,11 +112,11 @@ func (p *Process) Wait() int {
 		p.terminal.Close()
 	}
 	p.mu.Lock()
-	p.closing = true
-	p.mu.Unlock()
 	for _, h := range p.out {
 		h.finish(code)
 	}
+	p.closing = true
+	p.mu.Unlock()
 	done := make(chan struct{})
 	go func() { p.readers.Wait(); close(done) }()
 	select {
@@ -163,7 +163,7 @@ func (p *Process) Handle(s *quic.Stream, m wire.Message) (e error) {
 		case "stdin", "stdout", "stderr", "pty":
 			op = m.Channel
 			terminal = true
-		case "fs/get", "fs/put", "fs/list":
+		case "fs/get", "fs/put", "fs/list", "fs/upload", "fs/cp", "fs/mv", "fs/rm", "fs/mkdir", "fs/rmdir":
 			op = m.Channel
 		default:
 			if dest, ok := p.ports[m.Channel]; ok {
@@ -263,4 +263,47 @@ func (p *Process) Handle(s *quic.Stream, m wire.Message) (e error) {
 			return e
 		}
 	}
+}
+
+// Result streams bounded output for the selected run without opening its input.
+func (p *Process) Result(s *quic.Stream) error {
+	p.mu.Lock()
+	finished := p.closing
+	p.mu.Unlock()
+	if !finished {
+		return errors.New("run is still active")
+	}
+	if err := wire.Write(s, wire.Message{Op: "ok"}); err != nil {
+		return err
+	}
+	var exit wire.Message
+	for _, channel := range []string{"pty", "stdout", "stderr"} {
+		h := p.out[channel]
+		if h == nil {
+			continue
+		}
+		h.mu.Lock()
+		alternate, truncated := h.alternate, h.start > 0
+		h.mu.Unlock()
+		if alternate {
+			return wire.Write(s, wire.Message{Op: "exit", Channel: "alternate", Code: h.code})
+		}
+		if truncated {
+			if err := wire.Write(s, wire.Message{Op: "truncated", Channel: channel}); err != nil {
+				return err
+			}
+		}
+		err := h.stream(s.Context(), func(m wire.Message) error {
+			if m.Op == "exit" {
+				exit = m
+				return nil
+			}
+			m.Channel = channel
+			return wire.Write(s, m)
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return wire.Write(s, exit)
 }

@@ -310,8 +310,18 @@ func (f *fixture) reject(account, program string, args ...string) string {
 
 func (f *fixture) sessions(account string) []wire.Session {
 	f.t.Helper()
+	var rows []struct {
+		wire.Session
+		Run string
+	}
 	var items []wire.Session
-	check(f.t, json.Unmarshal([]byte(f.run(account, client, "list")), &items))
+	check(f.t, json.Unmarshal([]byte(f.run(account, client, "list")), &rows))
+	for _, row := range rows {
+		if row.Run != "" {
+			row.Session.ID = row.Run
+			items = append(items, row.Session)
+		}
+	}
 	return items
 }
 

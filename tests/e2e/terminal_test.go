@@ -239,12 +239,14 @@ func TestManagedSupervisors(t *testing.T) {
 		id := p.sessionID()
 		first.see("Ctrl-G Home")
 		v := f.start("a", client, "attach", id)
-		v.see("<private argument>\n<>\n<a b;$HOME>\n")
+		v.see("<private argument>\r\n<>\r\n<a b;$HOME>\r\n")
 		return v
 	}
 	v := attach()
 	first.send("done\r")
 	v.expect(23)
+	first.see("Press Enter")
+	first.send("\r")
 	first.see("Stopped")
 	f.server.stop()
 	first.see("Disconnected")

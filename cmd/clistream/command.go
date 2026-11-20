@@ -142,7 +142,8 @@ func (d *dashboardUI) submitCommand() {
 		d.notice = err.Error()
 		return
 	}
-	res, err := wire.Request(d.conn, wire.Message{Op: "run-command", ID: d.target.ID, Run: d.target.Info.ID, Revision: d.target.Revision, Command: argv})
+	cols, rows := d.size()
+	res, err := wire.Request(d.conn, wire.Message{Cols: cols, Rows: rows, Op: "run-command", ID: d.target.ID, Run: d.target.Info.ID, Revision: d.target.Revision, Command: argv})
 	if res.Error == "invalid command" {
 		d.notice = "Check the executable on the host."
 		return
@@ -163,9 +164,17 @@ func (d *dashboardUI) submitCommand() {
 			d.notice = "Launch failed. Edit the command to try again."
 			return
 		}
-		if err == nil && res.Run != "" && row.Info.ID == res.Run {
+		if err == nil && res.Run != "" {
 			d.line.Reset()
-			if d.attach(row) != nil {
+			if row.Info.ID == res.Run && d.attach(row) == nil {
+				if row.RunResult {
+					d.replayRun = res.Run
+				}
+				return
+			}
+			if row.RunResult {
+				d.showResult(row, res.Run)
+			} else {
 				d.notice = "Run ended before attachment."
 			}
 			return

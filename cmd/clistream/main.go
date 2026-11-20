@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -33,20 +34,48 @@ func run() (int, error) {
 	end := flag.Bool("send-eof", false, "close shared child stdin at local EOF in pipe mode")
 	flag.Usage = help
 	cliopts.Parse()
-	action := flag.Arg(0)
-	automatic := action == "" || strings.HasPrefix(action, "clistream://")
-	if automatic && flag.NArg() > 1 {
-		return 1, errors.New("supply only the pairing link")
-	}
-	if !automatic {
-		if err := cliopts.Validate("clistream", flag.Args(), commands); err != nil {
-			return 1, err
-		}
-	}
+	args := flag.Args()
 	var link string
-	if automatic {
-		link = action
-		action = "attach"
+	if len(args) > 0 && strings.HasPrefix(args[0], "clistream://") {
+		link, args = args[0], args[1:]
+	}
+	automatic := len(args) == 0
+	action, id := "attach", ""
+	var operands []string
+	if !automatic {
+		action = args[0]
+		if _, global := commands[action]; global {
+			if err := cliopts.Validate("clistream", args, commands); err != nil {
+				return 1, err
+			}
+			if len(args) > 1 {
+				id, operands = args[1], args[2:]
+			}
+		} else {
+			if len(args) < 2 || args[0] == "" {
+				return 1, errors.New("usage: clistream SESSION_ID ACTION [ARG ...]")
+			}
+			id, action, operands = args[0], args[1], args[2:]
+			switch action {
+			case "stop", "start", "restart":
+				if len(operands) != 0 {
+					return 1, errors.New("unexpected session action arguments")
+				}
+			case "edit":
+				if len(operands) > 0 && operands[0] == "--" {
+					operands = operands[1:]
+				}
+				if len(operands) == 0 {
+					return 1, errors.New("usage: clistream SESSION_ID edit -- PROGRAM [ARG ...]")
+				}
+			case "fs":
+				if err := validateFS(operands); err != nil {
+					return 1, err
+				}
+			default:
+				return 1, errors.New("usage: clistream SESSION_ID {start|stop|restart|edit|fs}")
+			}
+		}
 	}
 	// Reserve stderr for the attached child's error stream. Operators can opt into transport diagnostics.
 	if action == "attach" {
@@ -62,7 +91,7 @@ func run() (int, error) {
 		return 0, err
 	}
 	if action == "attach" && term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
-		return dashboard(link, flag.Arg(1))
+		return dashboard(link, id)
 	}
 	directory, saved, e := identity.CLIProfile(context.Background(), "client", link)
 	if e != nil {
@@ -76,42 +105,75 @@ func run() (int, error) {
 		return 1, e
 	}
 	defer c.CloseWithError(0, "")
-	items, e := client.List(c)
+	caps, e := wire.Capabilities(c)
+	if e != nil {
+		return 1, e
+	}
+	rows, e := listRows(c, slices.Contains(caps, wire.ManagedSupervisors), slices.Contains(caps, wire.EditCommand), slices.Contains(caps, wire.RunResult))
 	if e != nil {
 		if automatic && strings.Contains(e.Error(), "client authorization required") {
 			return 1, errors.New("device is no longer authorized. Request a fresh pairing link from clistreamd")
 		}
 		return 1, e
 	}
-	if automatic {
-		if items == nil {
-			items = []wire.Session{}
+	if automatic || action == "list" {
+		type listing struct {
+			wire.Session
+			Run   string
+			State string
 		}
-		action = "list"
-	}
-	if action == "list" {
+		items := make([]listing, 0, len(rows))
+		for _, row := range rows {
+			info := row.Info
+			info.ID = row.ID
+			items = append(items, listing{info, row.Info.ID, stateLabel(row)})
+		}
 		return 0, json.NewEncoder(os.Stdout).Encode(items)
 	}
-	id := flag.Arg(1)
-	for _, item := range items {
-		if item.ID != id {
+	for _, row := range rows {
+		item := row.Info
+		if id == "" || (row.ID != id && item.ID != id) {
 			continue
 		}
 		switch action {
-		case "ls":
-			path := flag.Arg(2)
-			if path == "" {
-				path = "."
+		case "start", "stop", "restart", "edit":
+			if id != row.ID {
+				return 1, errors.New("use the stable session ID from clistream list")
 			}
-			return 0, client.Files(c, id, path, func(i wire.FileEntry) error { return json.NewEncoder(os.Stdout).Encode(i) })
-		case "get":
-			return 0, client.Get(c, id, flag.Arg(2), flag.Arg(3))
-		case "put":
-			return 0, client.Put(c, id, flag.Arg(3), flag.Arg(2))
+			if action == "start" && item.ID != "" {
+				return 1, errors.New("session is already running")
+			}
+			if (action == "stop" || action == "restart") && item.ID == "" {
+				return 1, errors.New("session is stopped")
+			}
+			if row.Revision == 0 {
+				return 1, errors.New("session was started in attach-only mode")
+			}
+			m := wire.Message{Op: action, ID: row.ID, Run: item.ID, Revision: row.Revision}
+			if term.IsTerminal(int(os.Stdin.Fd())) {
+				if cols, rows, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
+					m.Cols, m.Rows = uint16(cols), uint16(rows)
+				}
+			}
+			if action == "edit" {
+				m.Op = "run-command"
+				for _, arg := range operands {
+					m.Command = append(m.Command, []byte(arg))
+				}
+			}
+			_, err := wire.Request(c, m)
+			return 0, err
+		}
+		id = item.ID
+		if id == "" {
+			return 1, errors.New("session is stopped")
+		}
+		if action == "fs" {
+			return 0, runFS(c, id, operands)
 		}
 		if action == "forward" {
-			name := flag.Arg(2)
-			l, e := forward.Start(c, id, name, item.Ports[name], flag.Arg(3))
+			name := operands[0]
+			l, e := forward.Start(c, id, name, item.Ports[name], operands[1])
 			if e != nil {
 				return 1, e
 			}

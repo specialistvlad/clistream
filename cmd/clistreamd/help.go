@@ -26,6 +26,6 @@ func help() {
   clistreamd revoke FINGERPRINT   Disconnect the device and remove its enrollment.
   --qr=false                      Hide QR codes in the terminal pairing display.
   clistreamd --qr invite          Include a QR code with a scripted invitation.`},
-		cliopts.Section{Title: "Logging", Body: `  --no-log-file    Write activity to stderr only. By default the server also
-                   writes to server.log in its private state directory.`})
+		cliopts.Section{Title: "Logging", Body: `  --log-file=TRUE|FALSE|PATH    Also write activity to a rotating file. TRUE uses
+                                private server.log (default). FALSE uses stderr only.`})
 }

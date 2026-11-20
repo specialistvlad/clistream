@@ -66,7 +66,7 @@ func retry(ctx context.Context, c *console, delay time.Duration, attempt dialFun
 }
 
 func publishState(c *quic.Conn, state wire.Supervisor) error {
-	res, err := wire.Request(c, wire.Message{Op: "publish", Supervisor: &state, Capabilities: []string{wire.EditCommand}})
+	res, err := wire.Request(c, wire.Message{Op: "publish", Supervisor: &state, Capabilities: []string{wire.EditCommand, wire.RunResult}})
 	if res.Error == "client authorization required" {
 		return denied{res.Error}
 	}

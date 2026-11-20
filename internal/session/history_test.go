@@ -46,3 +46,14 @@ func TestSlowSubscriberCanReattachWithinBoundedHistory(t *testing.T) {
 		t.Fatalf("replay length %d, exit %d, err %v", replay.Len(), exitCode, err)
 	}
 }
+
+func TestAlternateScreenSurvivesHistoryTruncation(t *testing.T) {
+	h := newTerminalHistory()
+	h.Write([]byte("\x1b[?10"))
+	h.Write([]byte("49h"))
+	h.Write(bytes.Repeat([]byte("x"), historyBytes+32768))
+	h.Write([]byte("\x1b[?1049l"))
+	if !h.alternate || h.start == 0 {
+		t.Fatal("lost the alternate-screen flag when the entry sequence scrolled out")
+	}
+}

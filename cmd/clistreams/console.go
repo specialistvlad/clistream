@@ -95,7 +95,7 @@ func (c *console) stopped(label string) {
 		c.program.Send(childStopped{label})
 	}
 }
-func (c *console) start(runID, path string, args []string, mode string, ports map[string]string, root *files.Root, managed bool, name string) (*session.Process, error) {
+func (c *console) start(runID, path string, args []string, mode string, ports map[string]string, root *files.Root, managed bool, name string, cols, rows uint16) (*session.Process, error) {
 	output := session.LocalOutput{Stdout: os.Stdout, Stderr: os.Stderr, Cols: 80, Rows: 24}
 	if c.logOnly {
 		output.DetachTerminal = true
@@ -113,6 +113,9 @@ func (c *console) start(runID, path string, args []string, mode string, ports ma
 			output.Stderr = output.Stdout
 		}
 		c.program.Send(child)
+	}
+	if cols > 0 && rows > 0 {
+		output.Cols, output.Rows = cols, rows
 	}
 	p, err := session.Start(path, args, mode, ports, root, managed, output, func(operation, outcome string) {
 		c.record(activity.Event{Name: "channel", Session: runID, Operation: operation, Outcome: outcome})

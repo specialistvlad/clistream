@@ -721,5 +721,25 @@
     ],
     "appleEvidence": "acceptance.json#managedSupervisorRestart",
     "result": "passed"
+  },
+  "sessionCommands": {
+    "date": "2026-11-20",
+    "platforms": [
+      "macOS arm64",
+      "Linux arm64"
+    ],
+    "endToEndCasesPerPlatform": 45,
+    "suites": [
+      "make test e2e",
+      "make test-deployment",
+      "historical-peer compatibility on macOS"
+    ],
+    "cases": [
+      "TestSessionCommands",
+      "TestCompletedCommand",
+      "TestAlternateScreenSurvivesHistoryTruncation",
+      "TestActivityLog"
+    ],
+    "result": "passed"
   }
 }

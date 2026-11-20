@@ -196,7 +196,7 @@ func TestDisplayedInvitesShareRedemptionAcrossListeners(t *testing.T) {
 func TestConnectionActivity(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "server")
 	var output bytes.Buffer
-	log := activity.Open(dir, true, &output)
+	log := activity.Open("", &output)
 	server, config, err := New(dir, nil, identity.DeviceKeys{}, log)
 	if err != nil {
 		t.Fatal(err)

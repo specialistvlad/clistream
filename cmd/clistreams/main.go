@@ -40,7 +40,7 @@ func run() (int, error) {
 	interactive := flag.Bool("interactive", false, "show the child terminal or use child streams when redirected")
 	local := flag.Bool("local-input", true, "forward local stdin with --interactive (pipe EOF closes child stdin)")
 	workspace := flag.String("workspace", ".", "folder shared with clients")
-	noFiles := flag.Bool("no-files", false, "disable workspace file access")
+	shareFiles := flag.Bool("files", true, "share workspace files")
 	ports := map[string]string{}
 	flag.Func("share-port", "name=tcp:127.0.0.1:port or name=udp:[::1]:port", func(v string) error {
 		k, s, ok := strings.Cut(v, "=")
@@ -55,8 +55,8 @@ func run() (int, error) {
 	const inviteHelp = "Use the link displayed by clistreamd or printed by clistreamd invite."
 	flag.Usage = help
 	cliopts.Parse()
-	if *noFiles && cliopts.Supplied("workspace") {
-		return 1, errors.New("--workspace and --no-files cannot be combined")
+	if !*shareFiles && cliopts.Supplied("workspace") {
+		return 1, errors.New("--workspace and --files=FALSE cannot be combined")
 	}
 	if *pair {
 		if flag.NArg() != 0 {
@@ -91,7 +91,7 @@ func run() (int, error) {
 		return 1, e
 	}
 	var root *files.Root
-	if !*noFiles {
+	if *shareFiles {
 		root, e = files.Open(*workspace)
 		if e != nil {
 			return 1, fmt.Errorf("--workspace: %w", e)
@@ -115,7 +115,7 @@ func run() (int, error) {
 		exports[strings.TrimPrefix(k, "port/")], _, _ = strings.Cut(v, ":")
 	}
 	info := wire.Session{Name: filepath.Base(path), Mode: ioMode, Host: host, OS: runtime.GOOS, Ports: exports}
-	reg := registration{dir: directory, server: saved, info: info}
+	reg := registration{autoMode: *mode == "auto", dir: directory, server: saved, info: info}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer cancel()
 	console, closeConsole := startConsole(ctx, cancel, terminal && *interactive, *local, info.Name, saved.Address)
@@ -190,7 +190,7 @@ func run() (int, error) {
 		console.program.Send(attachOnly{})
 	}
 	runID := console.lastSession
-	p, e := reg.console.start(runID, path, args[1:], ioMode, ports, root, false, info.Name)
+	p, e := reg.console.start(runID, path, args[1:], ioMode, ports, root, false, info.Name, 0, 0)
 	if e != nil {
 		if console.logOnly {
 			return 1, nil

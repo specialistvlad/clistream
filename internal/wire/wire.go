@@ -31,6 +31,7 @@ type FileEntry struct {
 
 // Supervisor describes a controller and its currently attachable run.
 type Supervisor struct {
+	RunResult       bool `json:",omitempty"`
 	EditableCommand bool `json:",omitempty"`
 	ID              string
 	Info            Session
@@ -39,6 +40,7 @@ type Supervisor struct {
 	Failed          bool `json:",omitempty"`
 }
 
+const RunResult = "run-result-v1"
 const EditCommand = "edit-command-v1"
 const ManagedSupervisors = "managed-supervisors-v1"
 

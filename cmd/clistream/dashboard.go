@@ -22,12 +22,16 @@ import (
 )
 
 type connectionResult struct {
+	result        bool
 	commandEditor bool
 	conn          *quic.Conn
 	managed       bool
 	err           error
 }
 type dashboardUI struct {
+	result             bool
+	replayRun          string
+	pending            tea.Cmd
 	commandEditor      bool
 	line               textinput.Model
 	width, height      int
@@ -50,26 +54,36 @@ type dashboardUI struct {
 	attachment         *viewport
 }
 
-func (d *dashboardUI) refresh() error {
+func listRows(c *quic.Conn, managed, editor, result bool) ([]wire.Supervisor, error) {
 	var rows []wire.Supervisor
-	if d.managed {
+	if managed {
 		op := "supervisors"
-		if d.commandEditor {
+		if editor {
 			op = "command-supervisors"
 		}
-		res, err := wire.Request(d.conn, wire.Message{Op: op})
+		if result {
+			op = "result-supervisors"
+		}
+		res, err := wire.Request(c, wire.Message{Op: op})
 		if err != nil {
-			return err
+			return nil, err
 		}
 		rows = res.Supervisors
 	} else {
-		items, err := client.List(d.conn)
+		items, err := client.List(c)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, v := range items {
 			rows = append(rows, wire.Supervisor{ID: v.ID, Info: v})
 		}
+	}
+	return rows, nil
+}
+func (d *dashboardUI) refresh() error {
+	rows, err := listRows(d.conn, d.managed, d.commandEditor, d.result)
+	if err != nil {
+		return err
 	}
 	var id string
 	if len(d.rows) > 0 {
@@ -90,6 +104,7 @@ func (d *dashboardUI) request(op string) (wire.Message, error) {
 	if op == "apply" {
 		m.Args = d.args
 	}
+	m.Cols, m.Rows = d.size()
 	return wire.Request(d.conn, m)
 }
 func (d *dashboardUI) apply() {
@@ -200,6 +215,7 @@ func (d *dashboardUI) connect() tea.Cmd {
 		if err == nil {
 			var caps []string
 			caps, err = wire.Capabilities(result.conn)
+			result.result = slices.Contains(caps, wire.RunResult)
 			result.managed = slices.Contains(caps, wire.ManagedSupervisors)
 			result.commandEditor = slices.Contains(caps, wire.EditCommand)
 		}
@@ -252,6 +268,10 @@ func (d *dashboardUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if before != d.attachment && d.attachment != nil {
 		cmd = tea.Batch(cmd, readViewport(d.attachment))
 	}
+	if d.pending != nil {
+		cmd = tea.Batch(cmd, d.pending)
+		d.pending = nil
+	}
 	return d, cmd
 }
 
@@ -269,6 +289,7 @@ func (d *dashboardUI) update(msg tea.Msg) tea.Cmd {
 		}
 		d.link = ""
 		d.commandEditor = ev.commandEditor
+		d.result = ev.result
 		d.managed = ev.managed
 		d.page = "table"
 		if err := d.refresh(); err != nil {
@@ -276,7 +297,7 @@ func (d *dashboardUI) update(msg tea.Msg) tea.Cmd {
 			break
 		}
 		if d.direct != "" {
-			i := slices.IndexFunc(d.rows, func(v wire.Supervisor) bool { return v.Info.ID == d.direct })
+			i := slices.IndexFunc(d.rows, func(v wire.Supervisor) bool { return v.ID == d.direct || v.Info.ID == d.direct })
 			if i < 0 {
 				d.code, d.err = 1, errors.New("unknown session")
 				return tea.Quit
@@ -303,7 +324,13 @@ func (d *dashboardUI) update(msg tea.Msg) tea.Cmd {
 					d.code, d.err = rec.code, rec.err
 					return tea.Quit
 				}
+				replay := d.replayRun != "" && d.target.Info.ID == d.replayRun
 				d.detach()
+				if replay {
+					d.showResult(d.target, d.replayRun)
+					d.replayRun = ""
+					return nil
+				}
 				d.notice = fmt.Sprintf("Child exited · exit %d", rec.code)
 				if rec.err != nil {
 					d.notice = "Attachment ended"
@@ -445,6 +472,10 @@ func (d *dashboardUI) tableKey(k string) {
 	case "down":
 		d.index = min(len(d.rows)-1, d.index+1)
 	case "enter":
+		if d.target.Info.ID == "" && d.target.Exit != nil && d.target.RunResult {
+			d.showResult(d.target, "")
+			return
+		}
 		if d.target.Info.ID != "" {
 			if err := d.attach(d.target); err != nil {
 				d.notice = "Session unavailable"

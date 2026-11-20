@@ -116,8 +116,8 @@ func TestRunBoundChannels(t *testing.T) {
 		_, err = c.Read(b)
 		equal(t, err, io.EOF)
 	}
-	f.reject("a", client, "ls", old)
-	f.run("a", client, "ls", next)
+	f.reject("a", client, old, "fs", "ls")
+	f.run("a", client, next, "fs", "ls")
 }
 
 // relay introduces bounded delay, deterministic loss and a change of upstream source port.

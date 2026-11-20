@@ -16,14 +16,15 @@ func help() {
 		cliopts.Section{Title: "Terminal and input", Body: `  --interactive          Use the child terminal locally, or its streams in a pipe.
   --local-input=false    With --interactive, view output without sending local input.
   --io-mode MODE         auto (default), pipe, or pty. Auto uses a PTY when both
-                         stdin and stdout are terminals and pipes otherwise.`},
+                         stdin and stdout are terminals and pipes otherwise. Remote
+                         starts use the requesting client’s terminal and size.`},
 		cliopts.Section{Title: "Session lifetime", Body: `  By default, enrolled clients can start another run after the program exits.
   --once    Share one run and exit with the child's status.`},
 		cliopts.Section{Title: "Filesystem", Body: `  By default, enrolled devices can browse, download, and upload files in the
   folder where you start clistreams.
   --workspace DIR    Share another folder. Relative paths start in the launch
                      directory. The program keeps its original working directory.
-  --no-files         Turn off file sharing for this supervisor.
+  --files=TRUE|FALSE  Enable shared file operations (default TRUE).
 
   clistreams --workspace ./reports my-program`},
 		cliopts.Section{Title: "Port forwarding", Body: `  --share-port NAME=PROTO:LOOPBACK:PORT

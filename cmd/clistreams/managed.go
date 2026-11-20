@@ -96,11 +96,23 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 	var restore func()
 	var run *childRun
 	var ended <-chan struct{}
-	start := func() {
+	var completed *session.Process
+	var completedID string
+	start := func(request wire.Message) {
+		if reg.autoMode {
+			state.Info.Mode = reg.info.Mode
+			if request.Op != "" {
+				state.Info.Mode = "pipe"
+				if request.Rows > 0 && request.Cols > 0 {
+					state.Info.Mode = "pty"
+				}
+			}
+		}
+
 		state.Revision++
 		state.Exit = nil
 		runID := uniqueID()
-		p, err := reg.console.start(runID, path, args, state.Info.Mode, ports, root, true, state.Info.Name)
+		p, err := reg.console.start(runID, path, args, state.Info.Mode, ports, root, true, state.Info.Name, request.Cols, request.Rows)
 		state.Failed = err != nil
 		if err != nil {
 			if reg.console.program == nil && !reg.console.logOnly {
@@ -130,13 +142,14 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 		run.close()
 		reg.console.exit(state.Info.ID, run.code)
 		reg.console.stopped(fmt.Sprintf("Stopped · exit %d", run.code))
+		completed, completedID = run.process, state.Info.ID
 		state.Exit = &run.code
 		state.Revision++
 		state.Info.ID = ""
 		run = nil
 		ended = nil
 	}
-	start()
+	start(wire.Message{})
 	defer func() {
 		if run != nil {
 			run.process.KillGroup()
@@ -279,6 +292,29 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 				}()
 				continue
 			}
+			if m.Op == "result" && m.ID == state.ID {
+				var p *session.Process
+				switch {
+				case run != nil && m.Run == state.Info.ID:
+					p = run.process
+				case completed != nil && (m.Run == completedID || (run == nil && m.Run == "" && m.Revision == state.Revision)):
+					p = completed
+				}
+				if p == nil {
+					wire.Fail(st, errors.New("run output unavailable"))
+					st.Close()
+					st.CancelRead(0)
+					continue
+				}
+				go func() {
+					defer st.Close()
+					defer st.CancelRead(0)
+					if err := p.Result(st); err != nil {
+						wire.Fail(st, err)
+					}
+				}()
+				continue
+			}
 			outcome := "completed"
 			response := wire.Message{Op: "ok"}
 			if m.ID != state.ID || m.Run != state.Info.ID || m.Revision != state.Revision {
@@ -312,7 +348,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 					oldPath, oldArgs, oldInfo := path, args, state.Info
 					path, args = argv[0], argv[1:]
 					state.Info.Name = filepath.Base(path)
-					start()
+					start(m)
 					if state.Failed {
 						path, args, state.Info = oldPath, oldArgs, oldInfo
 						outcome = "failed"
@@ -336,7 +372,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 					args = m.Args
 				}
 				if m.Op != "stop" {
-					start()
+					start(m)
 				}
 				publish()
 				if state.Failed {

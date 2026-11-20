@@ -234,6 +234,8 @@ func (d *dashboardUI) View() tea.View {
 		v := d.rows[d.index]
 		if v.Info.ID != "" {
 			keys += "   Enter Attach"
+		} else if v.RunResult && v.Exit != nil {
+			keys += "   Enter Output"
 		}
 		if v.Revision != 0 {
 			if v.Info.ID != "" {

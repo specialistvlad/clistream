@@ -37,7 +37,7 @@ func TestQuietDashboardRefresh(t *testing.T) {
 }
 
 func TestActivityLog(t *testing.T) {
-	for _, mode := range []string{"default", "console", "fallback"} {
+	for _, mode := range []string{"default", "console", "fallback", "custom"} {
 		t.Run(mode, func(t *testing.T) {
 			f := setup(t)
 			f.server.stop()
@@ -48,7 +48,10 @@ func TestActivityLog(t *testing.T) {
 				check(t, os.Mkdir(f.journal(), 0700))
 			}
 			if mode == "console" {
-				flags = append(flags, "--no-log-file")
+				flags = append(flags, "--log-file=FALSE")
+			}
+			if mode == "custom" {
+				flags = append(flags, "--log-file="+filepath.Join(f.base, "custom.log"))
 			}
 			f.startServer(flags...)
 			link := strings.TrimSpace(f.run("srv", daemon, "invite"))
@@ -59,10 +62,10 @@ func TestActivityLog(t *testing.T) {
 			f.echo(v, "private-terminal")
 			file := filepath.Join(f.base, "upload")
 			write(t, file, "private-content")
-			f.run("a", client, "put", id, file, "private-name")
-			f.run("b", client, "get", id, "private-name", file+"2")
-			f.run("a", client, "ls", id)
-			f.reject("a", client, "put", id, file, "private-name")
+			f.run("a", client, id, "fs", "cp", "local:"+file, "private-name")
+			f.run("b", client, id, "fs", "cp", "private-name", "local:"+file+"2")
+			f.run("a", client, id, "fs", "ls")
+			f.reject("a", client, id, "fs", "cp", "local:"+file, "missing/private-name")
 			f.reject("srv", daemon, "private-admin")
 			f.server.stop()
 			console := f.server.diagnostics.contents()
@@ -77,6 +80,9 @@ func TestActivityLog(t *testing.T) {
 			}
 			if mode == "default" {
 				equal(t, read(t, f.journal()), original+journal.String())
+			}
+			if mode == "custom" {
+				equal(t, read(t, filepath.Join(f.base, "custom.log")), journal.String())
 			}
 			if mode == "console" {
 				equal(t, read(t, f.journal()), original)
@@ -102,6 +108,10 @@ func TestActivityLog(t *testing.T) {
 					}
 				case "channel_open":
 					streams[[2]any{e.Connection, e.Stream}]++
+				case "channel_rejected":
+					if e.Session == id {
+						ops[e.Operation+" "+e.Outcome] = true
+					}
 				case "channel_close":
 					streams[[2]any{e.Connection, e.Stream}]--
 					if e.Session == id {
@@ -115,7 +125,7 @@ func TestActivityLog(t *testing.T) {
 			for _, n := range streams {
 				equal(t, n, 0)
 			}
-			for _, op := range []string{"fs/get confirmed", "fs/list confirmed", "fs/put confirmed", "fs/put failed"} {
+			for _, op := range []string{"fs/get confirmed", "fs/list confirmed", "fs/upload confirmed", "fs/upload failed"} {
 				equal(t, ops[op], true)
 			}
 			found := false
@@ -170,7 +180,7 @@ func TestNoLogFile(t *testing.T) {
 		if !existing {
 			check(t, os.Remove(f.journal()))
 		}
-		f.startServer("--no-log-file")
+		f.startServer("--log-file=FALSE")
 		link := strings.TrimSpace(f.run("srv", daemon, "invite"))
 		f.run("a", client, link)
 		f.reject("srv", daemon, "private-stderr-marker")
@@ -196,7 +206,7 @@ func TestSupervisorActivityDefault(t *testing.T) {
 	p.diagnostics.until(t, "Child started")
 	id := f.sessions("a")[0].ID
 	write(t, filepath.Join(f.work, "private-file"), "private-content")
-	f.run("a", client, "get", id, "private-file", filepath.Join(f.base, "copy"))
+	f.run("a", client, id, "fs", "cp", "private-file", "local:"+filepath.Join(f.base, "copy"))
 	v := f.start("a", client, "attach", id)
 	v.send("private-remote\n")
 	v.expect(0)

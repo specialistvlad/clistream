@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -36,7 +37,7 @@ func main() {
 func run() (err error) {
 	listen := flag.String("listen", "127.0.0.1:7443", "UDP listener")
 	addr := flag.String("advertise", "", "host:port clients can reach")
-	noFile := flag.Bool("no-log-file", false, "disable server.log and keep logging server activity to stderr")
+	logFile := flag.String("log-file", "TRUE", "TRUE, FALSE or activity log path")
 	qr := flag.Bool("qr", true, "render invitation QR")
 	var names []string
 	flag.Func("interface", "interface name or loopback (repeatable)", func(name string) error { names = append(names, name); return nil })
@@ -53,6 +54,15 @@ func run() (err error) {
 	dir := identity.Default("server")
 	if e := identity.EnsurePrivateDir(dir); e != nil {
 		return e
+	}
+	logPath := *logFile
+	switch {
+	case strings.EqualFold(logPath, "TRUE"):
+		logPath = filepath.Join(dir, "server.log")
+	case strings.EqualFold(logPath, "FALSE"):
+		logPath = ""
+	case logPath == "":
+		return errors.New("--log-file requires TRUE, FALSE or a file path")
 	}
 	sock := filepath.Join(dir, "admin.sock")
 	lock, e := os.OpenFile(filepath.Join(dir, "daemon.lock"), os.O_CREATE|os.O_RDWR, 0600)
@@ -90,7 +100,7 @@ func run() (err error) {
 	}
 	// Keep serving and recording to disk if a stderr pipe closes.
 	signal.Ignore(syscall.SIGPIPE)
-	log := activity.Open(dir, *noFile, os.Stderr)
+	log := activity.Open(logPath, os.Stderr)
 	defer log.Close()
 	log.Record(activity.Event{Name: "daemon_start"})
 	defer func() {

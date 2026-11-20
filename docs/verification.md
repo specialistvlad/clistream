@@ -4,6 +4,12 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Session commands and completed output · November 20, 2026
+
+On macOS arm64 and Linux arm64, `make test e2e` passed the race-enabled package tests, vet, requirements trace and 45 end-to-end cases. Both systems exercised immediate command replacement, stable session IDs, copying and renaming inside the workspace, atomic concurrent replacement, custom logging, and a fast command that produced 120 lines and exited with status 7. The macOS run also launched the installed Codex CLI with `--help`. The dashboard displayed the result and returned to an interactive shell in the same session.
+
+`make test-deployment` passed across four Linux containers and with a native macOS CLI stopping, starting, restarting, editing and attaching to a Linux session. The historical-peer compatibility suite passed on macOS. Native app changes and verification on Mac, iPhone and iPad were deferred.
+
 ## Supervisor rename, grouped help and workspace controls · November 20, 2026
 
 On macOS and Linux arm64, `make test e2e` passed the race-enabled package tests, vet, requirements trace and 43 CLI cases. The CLI cases checked help with an unpaired account, rejected retired spellings and invalid operands, and executed both pairing commands printed by the daemon. Mixed-version checks on both systems enrolled through the historical supervisor executable and launched `clistreams` with that account’s existing identity.

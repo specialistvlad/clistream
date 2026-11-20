@@ -131,19 +131,22 @@ func TestDeployment(t *testing.T) {
 			c.docker(c.command(host, true, "clistreams", link, "/bin/sh")...)
 		}
 	}
-	var sessions []wire.Session
+	var sessions []struct {
+		wire.Session
+		Run string
+	}
 	c.wait("viewer", func(s string) bool { return json.Unmarshal([]byte(s), &sessions) == nil && len(sessions) == 2 }, "clistream", "list")
 	hosts := map[string]bool{}
 	ids := map[string]bool{}
 	for _, item := range sessions {
 		host, id := item.Host, item.ID
 		hosts[host] = true
-		ids[id] = true
-		c.docker(c.command("viewer", false, "clistream", "get", id, "origin", "/tmp/"+host)...)
+		ids[item.Run] = true
+		c.docker(c.command("viewer", false, "clistream", id, "fs", "cp", "origin", "local:/tmp/"+host)...)
 		if got := c.docker("exec", c.prefix+"-viewer", "cat", "/tmp/"+host); got != host {
 			t.Fatal("workspace mismatch")
 		}
-		if _, err := c.invoke("", c.command("viewer", false, "clistream", "get", id, "../outside", "/tmp/private")...); err == nil {
+		if _, err := c.invoke("", c.command("viewer", false, "clistream", id, "fs", "cp", "../outside", "local:/tmp/private")...); err == nil {
 			t.Fatal("outside file accepted")
 		}
 		input := fmt.Sprintf("cat origin; for path in /workspace/../outside %q; do test ! -r \"$path\" && ! (echo changed > \"$path\") || exit 8; done; echo confined\n", sentinel)
@@ -226,6 +229,11 @@ func TestLinuxSupervisorMacClient(t *testing.T) {
 	if len(items) != 1 || items[0].OS != "linux" {
 		t.Fatal("Linux session missing")
 	}
+	id := items[0].ID
+	run("", id, "stop")
+	run("", id, "start")
+	run("", id, "restart")
+	run("", id, "edit", "--", "cat")
 	if out := run("mac-to-linux\n", "--send-eof", "attach", items[0].ID); out != "mac-to-linux\n" {
 		t.Fatal("cross-platform echo differs")
 	}

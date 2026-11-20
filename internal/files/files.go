@@ -47,6 +47,9 @@ func valid(p string) bool {
 	return true
 }
 func (r *Root) open(p string, directory bool) (*os.File, error) {
+	if directory {
+		p = strings.TrimSuffix(p, "/")
+	}
 	if !valid(p) {
 		return nil, errors.New("invalid workspace path")
 	}
@@ -91,7 +94,22 @@ func (r *Root) Handle(s io.ReadWriter, m wire.Message) error {
 	case "fs/list":
 		dir, e := r.open(m.Path, true)
 		if e != nil {
-			return e
+			f, err := r.open(m.Path, false)
+			if err != nil {
+				return e
+			}
+			defer f.Close()
+			info, err := f.Stat()
+			if err != nil {
+				return err
+			}
+			if err = wire.Write(s, wire.Message{Op: "ok"}); err != nil {
+				return err
+			}
+			if err = wire.Write(s, wire.Message{Op: "entry", Entry: &wire.FileEntry{Name: path.Base(m.Path), Size: info.Size(), Modified: info.ModTime().UnixNano()}}); err != nil {
+				return err
+			}
+			return wire.Write(s, wire.Message{Op: "end"})
 		}
 		defer dir.Close()
 		if e = wire.Write(s, wire.Message{Op: "ok"}); e != nil {
@@ -131,37 +149,34 @@ func (r *Root) Handle(s io.ReadWriter, m wire.Message) error {
 			return e
 		}
 		return Send(s, f)
-	case "fs/put":
-		if !valid(m.Path) || m.Path == "." {
-			return errors.New("invalid destination")
+	case "fs/put", "fs/upload":
+		dest := m.Path
+		if m.Channel == "fs/upload" {
+			if len(m.Args) != 1 || !valid(m.Args[0]) || path.Base(m.Args[0]) != m.Args[0] {
+				return errors.New("invalid source name")
+			}
+			var err error
+			dest, err = r.destination(dest, m.Args[0])
+			if err != nil {
+				return err
+			}
 		}
-		dir, e := r.open(path.Dir(m.Path), true)
-		if e != nil {
-			return e
+		err := r.writeFile(dest, m.Channel == "fs/upload", func(f *os.File) error {
+			if err := wire.Write(s, wire.Message{Op: "ok"}); err != nil {
+				return err
+			}
+			return Receive(s, f)
+		})
+		if err != nil {
+			return err
 		}
-		defer dir.Close()
-		fd := int(dir.Fd())
-		var b [16]byte
-		rand.Read(b[:])
-		tmp := ".clistream-upload-" + hex.EncodeToString(b[:])
-		n, e := unix.Openat(fd, tmp, unix.O_WRONLY|unix.O_NOFOLLOW|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC, 0600)
-		if e != nil {
-			return e
+		return wire.Write(s, wire.Message{Op: "ok"})
+	case "fs/cp", "fs/mv", "fs/rm", "fs/mkdir", "fs/rmdir":
+		if err := wire.Write(s, wire.Message{Op: "ok"}); err != nil {
+			return err
 		}
-		f := os.NewFile(uintptr(n), tmp)
-		defer f.Close()
-		defer unix.Unlinkat(fd, tmp, 0)
-		if e = wire.Write(s, wire.Message{Op: "ok"}); e != nil {
-			return e
-		}
-		if e = Receive(s, f); e != nil {
-			return e
-		}
-		if e = f.Sync(); e != nil {
-			return e
-		}
-		if e = unix.Linkat(fd, tmp, fd, path.Base(m.Path), 0); e != nil {
-			return e
+		if err := r.change(m); err != nil {
+			return err
 		}
 		return wire.Write(s, wire.Message{Op: "ok"})
 	}
@@ -201,4 +216,120 @@ func Receive(r io.Reader, w io.Writer) error {
 			return fmt.Errorf("transfer failed: %s", m.Error)
 		}
 	}
+}
+
+func (r *Root) destination(dest, name string) (string, error) {
+	requiresDir := strings.HasSuffix(dest, "/")
+	dest = strings.TrimSuffix(dest, "/")
+	if !valid(dest) {
+		return "", errors.New("invalid destination")
+	}
+	if d, err := r.open(dest, true); err == nil {
+		d.Close()
+		dest = path.Join(dest, name)
+	} else if requiresDir {
+		return "", errors.New("destination must be a directory")
+	}
+	if f, err := r.open(dest, false); err == nil {
+		f.Close()
+	} else {
+		dir, err := r.open(path.Dir(dest), true)
+		if err != nil {
+			return "", err
+		}
+		defer dir.Close()
+		var st unix.Stat_t
+		if err = unix.Fstatat(int(dir.Fd()), path.Base(dest), &st, unix.AT_SYMLINK_NOFOLLOW); !errors.Is(err, unix.ENOENT) {
+			return "", errors.New("invalid destination")
+		}
+	}
+	return dest, nil
+}
+func (r *Root) writeFile(dest string, replace bool, write func(*os.File) error) error {
+	if !valid(dest) || dest == "." {
+		return errors.New("invalid destination")
+	}
+	dir, e := r.open(path.Dir(dest), true)
+	if e != nil {
+		return e
+	}
+	defer dir.Close()
+	fd := int(dir.Fd())
+	var b [16]byte
+	rand.Read(b[:])
+	tmp := ".clistream-upload-" + hex.EncodeToString(b[:])
+	n, e := unix.Openat(fd, tmp, unix.O_WRONLY|unix.O_NOFOLLOW|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC, 0600)
+	if e != nil {
+		return e
+	}
+	f := os.NewFile(uintptr(n), tmp)
+	defer f.Close()
+	defer unix.Unlinkat(fd, tmp, 0)
+	if e = write(f); e != nil {
+		return e
+	}
+	if e = f.Sync(); e != nil {
+		return e
+	}
+	if replace {
+		return unix.Renameat(fd, tmp, fd, path.Base(dest))
+	}
+	if e = unix.Linkat(fd, tmp, fd, path.Base(dest), 0); e != nil {
+		return e
+	}
+
+	return nil
+}
+func (r *Root) change(m wire.Message) error {
+	src := strings.TrimSuffix(m.Path, "/")
+	requiresDir := src != m.Path
+	if !valid(src) || src == "." {
+		return errors.New("invalid workspace path")
+	}
+	parent, err := r.open(path.Dir(src), true)
+	if err != nil {
+		return err
+	}
+	defer parent.Close()
+	fd, name := int(parent.Fd()), path.Base(src)
+	if m.Channel == "fs/mkdir" {
+		return unix.Mkdirat(fd, name, 0700)
+	}
+	if requiresDir && (m.Channel == "fs/rm" || m.Channel == "fs/cp") {
+		return errors.New("expected a regular file")
+	}
+	directory := m.Channel == "fs/rmdir" || requiresDir
+	file, err := r.open(src, directory)
+	if err != nil && m.Channel == "fs/mv" {
+		file, err = r.open(src, true)
+	}
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	switch m.Channel {
+	case "fs/rm":
+		return unix.Unlinkat(fd, name, 0)
+	case "fs/rmdir":
+		return unix.Unlinkat(fd, name, unix.AT_REMOVEDIR)
+	}
+	if len(m.Args) != 1 {
+		return errors.New("expected destination")
+	}
+	dest, err := r.destination(m.Args[0], name)
+	if err != nil {
+		return err
+	}
+	if dest == src {
+		return errors.New("source and destination are the same")
+	}
+	if m.Channel == "fs/cp" {
+		return r.writeFile(dest, true, func(out *os.File) error { _, err := io.Copy(out, file); return err })
+	}
+	dir, err := r.open(path.Dir(dest), true)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return unix.Renameat(fd, name, int(dir.Fd()), path.Base(dest))
 }

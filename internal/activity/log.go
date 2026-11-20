@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
+
 	"strconv"
 	"sync"
 	"syscall"
@@ -47,8 +47,8 @@ type Log struct {
 	size, limit int64
 }
 
-func Open(dir string, noFile bool, stderr io.Writer) *Log {
-	return OpenJournal(filepath.Join(dir, "server.log"), noFile, func(_ Event, data []byte) { stderr.Write(data) }, func(err error) {
+func Open(path string, stderr io.Writer) *Log {
+	return OpenJournal(path, path == "", func(_ Event, data []byte) { stderr.Write(data) }, func(err error) {
 		fmt.Fprintf(stderr, "clistreamd: activity log unavailable (%v), writing events to stderr\n", err)
 	})
 }

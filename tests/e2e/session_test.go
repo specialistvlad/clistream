@@ -289,26 +289,24 @@ func TestFiles(t *testing.T) {
 	check(t, os.Mkdir(filepath.Join(f.work, "folder"), 0700))
 	check(t, os.Symlink(f.base, filepath.Join(f.work, "escape")))
 	check(t, os.Link(source, filepath.Join(f.work, "hardlink")))
-	f.run("a", client, "put", id, source, "folder/file")
-	f.run("b", client, "get", id, "folder/file", target)
+	f.run("a", client, id, "fs", "cp", "local:"+source, "folder/file")
+	f.run("b", client, id, "fs", "cp", "folder/file", "local:"+target)
 	if read(t, target) != string(data) {
 		t.Fatal("transfer differs")
 	}
 	write(t, filepath.Join(f.work, "folder", "local-change"), "")
 	names := map[string]bool{}
-	for row := range strings.SplitSeq(strings.TrimSpace(f.run("a", client, "ls", id, "folder")), "\n") {
-		var v struct{ Name string }
-		check(t, json.Unmarshal([]byte(row), &v))
-		names[v.Name] = true
+	for row := range strings.SplitSeq(strings.TrimSpace(f.run("a", client, id, "fs", "ls", "folder")), "\n") {
+		names[row] = true
 	}
 	equal(t, len(names), 2)
 	equal(t, names["local-change"] && names["file"], true)
 	f.echo(v, "after")
 	for _, name := range []string{"../source", "/etc/passwd", "escape/source", "hardlink"} {
-		f.reject("a", client, "get", id, name, target+"2")
+		f.reject("a", client, id, "fs", "cp", name, "local:"+target+"2")
 	}
-	for _, name := range []string{"../outside", "escape/outside", "folder/file"} {
-		f.reject("a", client, "put", id, source, name)
+	for _, name := range []string{"../outside", "escape/outside", "hardlink"} {
+		f.reject("a", client, id, "fs", "cp", "local:"+source, name)
 	}
 	if _, err := os.Stat(filepath.Join(f.base, "outside")); !os.IsNotExist(err) {
 		t.Fatal("unexpected outside file")
@@ -326,18 +324,13 @@ func TestConcurrentUploads(t *testing.T) {
 		path := filepath.Join(f.base, account+".bin")
 		write(t, path, string(data))
 		payloads = append(payloads, string(data))
-		workers = append(workers, f.start(account, client, "put", id, path, "winner"))
+		workers = append(workers, f.start(account, client, id, "fs", "cp", "local:"+path, "winner"))
 	}
-	winners := 0
-	for i, p := range workers {
-		if p.wait() == 0 {
-			winners++
-			if read(t, filepath.Join(f.work, "winner")) != payloads[i] {
-				t.Fatal("winning upload differs")
-			}
-		}
+	for _, p := range workers {
+		p.expect(0)
 	}
-	equal(t, winners, 1)
+	got := read(t, filepath.Join(f.work, "winner"))
+	equal(t, got == payloads[0] || got == payloads[1], true)
 	tmp, err := filepath.Glob(filepath.Join(f.work, ".clistream-upload-*"))
 	check(t, err)
 	equal(t, len(tmp), 0)

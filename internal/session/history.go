@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"github.com/charmbracelet/x/ansi"
 	"sync"
 
 	"github.com/specialistvlad/clistream/internal/wire"
@@ -11,20 +12,42 @@ import (
 const historyBytes = 1024 * 1024
 
 type history struct {
-	mu       sync.Mutex
-	next     chan struct{}
-	chunks   [][]byte
-	start    int64
-	size     int
-	finished bool
-	code     int
+	mu        sync.Mutex
+	next      chan struct{}
+	chunks    [][]byte
+	start     int64
+	size      int
+	parser    *ansi.Parser
+	alternate bool
+	finished  bool
+	code      int
 }
 
 func newHistory() *history { return &history{next: make(chan struct{})} }
-func (h *history) wake()   { close(h.next); h.next = make(chan struct{}) }
+func newTerminalHistory() *history {
+	h := newHistory()
+	h.parser = ansi.NewParser()
+	h.parser.SetDataSize(64)
+	h.parser.SetHandler(ansi.Handler{HandleCsi: func(cmd ansi.Cmd, params ansi.Params) {
+		if cmd.Prefix() != '?' || cmd.Final() != 'h' {
+			return
+		}
+		for _, p := range params {
+			switch p.Param(0) {
+			case 47, 1047, 1049:
+				h.alternate = true
+			}
+		}
+	}})
+	return h
+}
+func (h *history) wake() { close(h.next); h.next = make(chan struct{}) }
 func (h *history) Write(p []byte) (int, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.parser != nil && !h.alternate {
+		h.parser.Parse(p)
+	}
 	for left := p; len(left) > 0; {
 		n := min(len(left), 32768)
 		h.chunks = append(h.chunks, append([]byte(nil), left[:n]...))

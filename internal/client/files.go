@@ -35,6 +35,10 @@ func Files(c *quic.Conn, id, path string, visit func(wire.FileEntry) error) erro
 	}
 }
 func Get(c *quic.Conn, id, path, dest string) error {
+	return get(c, id, path, dest, false)
+}
+func Download(c *quic.Conn, id, path, dest string) error { return get(c, id, path, dest, true) }
+func get(c *quic.Conn, id, path, dest string, replace bool) error {
 	s, _, e := wire.Open(c, wire.Message{Op: "open", ID: id, Channel: "fs/get", Path: path})
 	if e != nil {
 		return e
@@ -53,9 +57,16 @@ func Get(c *quic.Conn, id, path, dest string) error {
 	if e = f.Sync(); e != nil {
 		return e
 	}
-	return os.Link(f.Name(), dest)
+	if !replace {
+		return os.Link(f.Name(), dest)
+	}
+	return os.Rename(f.Name(), dest)
 }
 func Put(c *quic.Conn, id, path, source string) error {
+	return put(c, id, path, source, false)
+}
+func Upload(c *quic.Conn, id, path, source string) error { return put(c, id, path, source, true) }
+func put(c *quic.Conn, id, path, source string, replace bool) error {
 	f, e := os.Open(source)
 	if e != nil {
 		return e
@@ -65,7 +76,12 @@ func Put(c *quic.Conn, id, path, source string) error {
 	if e != nil || !i.Mode().IsRegular() {
 		return errors.New("upload a regular file")
 	}
-	s, _, e := wire.Open(c, wire.Message{Op: "open", ID: id, Channel: "fs/put", Path: path})
+	m := wire.Message{Op: "open", ID: id, Channel: "fs/put", Path: path}
+	if replace {
+		m.Channel = "fs/upload"
+		m.Args = []string{filepath.Base(source)}
+	}
+	s, _, e := wire.Open(c, m)
 	if e != nil {
 		return e
 	}

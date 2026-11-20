@@ -50,25 +50,42 @@ clistreams --io-mode pipe -- your-command --your-option
 clistreams --interactive --local-input=false -- /bin/cat
 ```
 
-Use the first command to pair a new account and launch Claude. Later launches on that account can omit the link. The supervisor runs the supplied program directly and passes through its arguments. It uses a PTY when both input and output are terminals and pipes when either is redirected. Any version can run this way, including Claude and Codex. Use `--io-mode pipe` or `--io-mode pty` to override I/O selection.
+Use the first command to pair a new account and launch Claude. Later launches on that account can omit the link. The supervisor runs the supplied program directly and passes through its arguments. Auto mode checks the launching terminal for each run. The initial run uses the supervisor’s terminal. Remote starts use the client’s terminal dimensions when available and pipes for redirected commands. Any version can run this way, including Claude and Codex. Use `--io-mode pipe` or `--io-mode pty` to override I/O selection.
+
+## Control a session from the command line
+
+Run `clistream list` and copy the session’s `ID`. This identifies the same supervisor across stops, starts and command changes. The `Run` field identifies its current child and is empty while stopped. Lifecycle commands exit when the supervisor acknowledges the request. A one-shot supervisor supports attachment for its single run.
+
+```sh
+clistream "$ID" stop
+clistream "$ID" start
+clistream "$ID" restart
+clistream "$ID" edit -- codex --help
+```
+
+`edit` immediately launches the supplied executable and arguments. In the dashboard, press **Enter** on a stopped session to read its latest output in normal terminal scrollback. Press **Enter** again to return, then **R** to edit and launch another command.
 
 ## Workspace files and forwarded ports
 
 ```sh
-clistream ls ID .
-clistream put ID ./local.txt remote.txt
-clistream get ID remote.txt ./download.txt
+clistream "$ID" fs ls
+clistream "$ID" fs mkdir reports
+clistream "$ID" fs cp local:./notes.txt reports/
+clistream "$ID" fs mv reports/notes.txt reports/summary.txt
+clistream "$ID" fs cp reports/summary.txt local:./download.txt
+clistream "$ID" fs rm reports/summary.txt
+clistream "$ID" fs rmdir reports
 clistreams --share-port web=tcp:127.0.0.1:8080 --share-port echo=udp:127.0.0.1:9000 -- your-command
 clistream forward ID web 127.0.0.1:8081
 ```
 
-By default, enrolled devices can browse, download and upload files in the directory where you start `clistreams`. Run `clistreams --workspace ./reports my-program` to share the reports folder while running the program in the launch directory. Use `--no-files` to disable file access for that supervisor. [Session folder selection](docs/requirements.md#session-folder-selection)
+By default, enrolled devices can browse, download and upload files in the directory where you start `clistreams`. Run `clistreams --workspace ./reports my-program` to share the reports folder while running the program in the launch directory. Use `--files=FALSE` to disable file access for that supervisor. [Session folder selection](docs/requirements.md#session-folder-selection)
 
-Transfers stream in chunks and preserve existing destination files. In the Apple app, attach and select **Files** to browse, upload or save a file. On iPhone and iPad, Upload imports a copy of the selected local document. Canceling the picker keeps the current remote folder. The visible directory refreshes every two seconds. A session's **Forward** button displays the loopback address where an exported service is available on that device.
+Go CLI file paths start at the shared folder. Use `local:` for the client side of a copy. Copying to a directory uses the source name, and copying to an existing regular file replaces it atomically. Use `clistream [OPTIONS] [PAIRING_LINK] SESSION_ID fs COMMAND` to pair and operate in one invocation. In the Apple app, attach and select **Files** to browse, upload or save a file. On iPhone and iPad, Upload imports a copy of the selected local document. Canceling the picker keeps the current remote folder. The visible directory refreshes every two seconds. A session's **Forward** button displays the loopback address where an exported service is available on that device.
 
 ## Administration and development
 
-The daemon prints each JSON activity event to the server console (stderr) and appends the same record to `server.log` in its private state directory. Follow it with `tail -F /path/to/state/server.log`. Start the daemon with `clistreamd --no-log-file` for console-only logging. The log records connections, disconnects, sessions, file operations and forwards. Terminal and file contents stay private. [Server activity logs](docs/deployment.md#server-activity-logs)
+The daemon prints each JSON activity event to the server console (stderr) and appends the same record to `server.log` in its private state directory. Follow it with `tail -F /path/to/state/server.log`. Start the daemon with `clistreamd --log-file=FALSE` for console-only logging or `--log-file=PATH` to choose the rotating file. The log records connections, disconnects, sessions, file operations and forwards. Terminal and file contents stay private. [Server activity logs](docs/deployment.md#server-activity-logs)
 
 `clistreamd devices` lists enrolled key fingerprints. `clistreamd revoke FINGERPRINT` removes that device and closes active connections. On upgrade, previously enrolled supervisors gain permission to control every session. A holder of a valid invitation can enroll again after revocation. Press **p** to replace outstanding invitations. Global flags precede subcommands. Long options require two dashes. Use `--help` for usage. All three commands use the OS account’s configuration directory.
 

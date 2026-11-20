@@ -15,10 +15,11 @@ import (
 var errLegacyRole = errors.New("registration denied. Pair this device with the server again")
 
 type registration struct {
-	dir     string
-	server  identity.Profile
-	info    wire.Session
-	console *console
+	autoMode bool
+	dir      string
+	server   identity.Profile
+	info     wire.Session
+	console  *console
 }
 
 func (r registration) connect(ctx context.Context) (*quic.Conn, error) {

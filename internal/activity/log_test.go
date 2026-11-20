@@ -26,10 +26,10 @@ func records(t *testing.T, data []byte) []Event {
 func TestAppendAndRotate(t *testing.T) {
 	dir := t.TempDir()
 	var stderr bytes.Buffer
-	l := Open(dir, false, &stderr)
+	l := Open(filepath.Join(dir, "server.log"), &stderr)
 	l.Record(Event{Name: "initial"})
 	l.Close()
-	l = Open(dir, false, &stderr)
+	l = Open(filepath.Join(dir, "server.log"), &stderr)
 	defer l.Close()
 	var writers sync.WaitGroup
 	for range 40 {
@@ -88,7 +88,7 @@ func TestLogFallback(t *testing.T) {
 				}
 			}
 			var stderr bytes.Buffer
-			l := Open(dir, false, &stderr)
+			l := Open(filepath.Join(dir, "server.log"), &stderr)
 			defer l.Close()
 			switch mode {
 			case "write":

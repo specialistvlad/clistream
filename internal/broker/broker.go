@@ -402,7 +402,7 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 		}
 	}
 	switch m.Op {
-	case "command", "run-command", "arguments", "start", "stop", "restart", "apply":
+	case "result", "command", "run-command", "arguments", "start", "stop", "restart", "apply":
 		ev.Name = "supervisor_request"
 		ev.Operation = m.Op
 		ev.Role = "client"
@@ -422,11 +422,12 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 	case "capabilities":
 		ev.Name = "capabilities"
 		s.mu.Unlock()
-		return wire.Write(st, wire.Message{Op: "ok", Capabilities: []string{wire.ManagedSupervisors, wire.EditCommand}})
+		return wire.Write(st, wire.Message{Op: "ok", Capabilities: []string{wire.ManagedSupervisors, wire.EditCommand, wire.RunResult}})
 	case "publish":
 		ev.Name = "supervisor_publish"
 		ev.Role = "supervisor"
 		if m.Supervisor != nil {
+			m.Supervisor.RunResult = slices.Contains(m.Capabilities, wire.RunResult)
 			m.Supervisor.EditableCommand = slices.Contains(m.Capabilities, wire.EditCommand)
 		}
 		err := s.publish(c, m.Supervisor)
@@ -437,11 +438,46 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 		ev.Supervisor = m.Supervisor.ID
 		ev.Session = m.Supervisor.Info.ID
 		return wire.Write(st, wire.Message{Op: "ok"})
-	case "command-supervisors", "supervisors":
+	case "result":
+		target, ok := s.controllers[m.ID]
+		if !ok || !target.state.RunResult || s.devices[s.peers[target.conn]] == "" {
+			s.mu.Unlock()
+			return errors.New("supervisor unavailable")
+		}
+		s.mu.Unlock()
+		up, response, err := wire.Open(target.conn, m)
+		if err != nil {
+			return err
+		}
+		defer up.CancelRead(0)
+		defer up.Close()
+		up.SetReadDeadline(time.Now().Add(10 * time.Second))
+		st.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		if err = wire.Write(st, response); err != nil {
+			return err
+		}
+		for {
+			record, err := wire.Read(up)
+			if err != nil {
+				return err
+			}
+			if err = wire.Write(st, record); err != nil {
+				return err
+			}
+			if record.Op == "exit" || record.Op == "error" {
+				return nil
+			}
+		}
+	case "result-supervisors", "command-supervisors", "supervisors":
 		ev.Name = "supervisor_list"
 		ev.Role = "client"
 		clientRole.Store(true)
 		rows := s.supervisors()
+		if m.Op != "result-supervisors" {
+			for i := range rows {
+				rows[i].RunResult = false
+			}
+		}
 		if m.Op == "supervisors" {
 			for i := range rows {
 				rows[i].EditableCommand = false
@@ -514,7 +550,7 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 }
 func channelOperation(channel string, ports map[string]string) string {
 	switch channel {
-	case "stdin", "stdout", "stderr", "pty", "fs/list", "fs/get", "fs/put":
+	case "stdin", "stdout", "stderr", "pty", "fs/list", "fs/get", "fs/put", "fs/upload", "fs/cp", "fs/mv", "fs/rm", "fs/mkdir", "fs/rmdir":
 		return channel
 	}
 	if name, ok := strings.CutPrefix(channel, "port/"); ok {
@@ -540,7 +576,7 @@ func observeResult(ev *activity.Event, m wire.Message) {
 			ev.Outcome = "confirmed"
 		}
 	case "ok":
-		if ev.Operation == "fs/put" {
+		if strings.HasPrefix(ev.Operation, "fs/") {
 			ev.Outcome = "confirmed"
 		}
 	case "exit":

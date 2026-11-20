@@ -45,7 +45,7 @@ For F10, every user-facing action offered on iPhone or iPad must work by touch a
 
 The executable path identifies the program to run. The optional folder path identifies the contents to stream. The operator can choose the application's folder or any other folder available to the supervisor. For example, a supervisor started in `/work/project` can run `/opt/tools/report` and share `/data/results`. Omitting the folder in the same launch shares `/work/project`. All clients attached to that session use the same folder for file operations.
 
-**Requirements change, November 20, 2026.** Folder selection replaces the earlier requirement for host filesystem isolation. The supervised command runs with its normal operating-system permissions. Use `--workspace DIR` for an explicit shared folder or `--no-files` to disable browsing and transfers. The selected root and the child’s launch directory are independent. [Implementation plan](implementation-plan.md)
+**Requirements change, November 20, 2026.** Folder selection replaces the earlier requirement for host filesystem isolation. The supervised command runs with its normal operating-system permissions. Use `--workspace DIR` for an explicit shared folder or `--files=FALSE` to disable browsing and transfers. The selected root and the child’s launch directory are independent. [Implementation plan](implementation-plan.md)
 
 ## Nonfunctional and engineering requirements
 
@@ -67,3 +67,5 @@ The executable path identifies the program to run. The optional folder path iden
 4. **The owner can deploy and test the release.** Provide runnable binaries and server deployment instructions. For Apple beta delivery, the owner must be able to install the build through TestFlight, pair to a reachable server and interact with a supervised CLI.
 
 The [requirements audit](test-results/requirements-audit.md) maps each requirement to executable checks. The [verification record](verification.md) identifies the platforms tested, completed workflows, external provider limits and TestFlight status. See the [implementation plan](implementation-plan.md) and [deployment instructions](deployment.md).
+
+For F3, F5, F6 and F9, the Go client must expose the lifetime session ID in `clistream list` while running and stopped. Scripts can start, stop, restart or immediately replace a command using this ID. The dashboard must display the output and exit status of short-lived commands and allow the same session to resume interactive use. Session-scoped filesystem commands list, copy, rename and remove regular files and manage directories. The client uses `local:` for a local copy endpoint.
