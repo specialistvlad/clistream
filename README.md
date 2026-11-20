@@ -60,6 +60,7 @@ The file service roots paths at the directory where the supervisor started. Tran
 
 `clistreamd devices` lists enrolled key fingerprints and roles. `clistreamd revoke FINGERPRINT` removes that device and closes active connections. Global flags precede subcommands. `-state DIR` chooses a separate private identity directory for any binary.
 
+- [Product requirements and acceptance criteria](docs/requirements.md)
 - [Deployment and Apple build instructions](docs/deployment.md)
 - [Security model and workspace boundary](docs/security.md)
 - [Wire protocol](docs/protocol.md)
