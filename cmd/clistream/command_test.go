@@ -1,6 +1,7 @@
 package main
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"reflect"
 	"testing"
 )
@@ -23,19 +24,29 @@ func TestCommandRoundTrip(t *testing.T) {
 }
 
 func TestCommandCursor(t *testing.T) {
-	l := commandLine{}
-	l.insert("foo 界e\u0301")
-	l.remove(l.adjacent(true))
-	if l.text != "foo 界" {
-		t.Fatal(l)
+	d := dashboardUI{page: "command", width: 40, height: 10, line: newCommandInput("codex")}
+	for _, r := range " --help" {
+		d.update(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
-	l.pos = l.word(true)
-	if l.pos != len("foo ") {
-		t.Fatal(l)
+	if got := d.line.Value(); got != "codex --help" {
+		t.Fatal(got)
 	}
-	l.remove(l.adjacent(false))
-	l.insert("again")
-	if l.text != "foo again" || l.word(false) != len(l.text) {
-		t.Fatal(l)
+	d.update(tea.KeyPressMsg{Code: tea.KeyHome})
+	for range 4 {
+		d.update(tea.KeyPressMsg{Code: tea.KeyRight})
+	}
+	view := d.View()
+	if view.Cursor.X != 7 || view.Cursor.Y != 4 {
+		t.Fatal(view.Cursor)
+	}
+	d.update(tea.KeyPressMsg{Code: tea.KeyDelete})
+	d.update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	if got := d.line.Value(); got != "codex --help" {
+		t.Fatal(got)
+	}
+	d.line = newCommandInput("界e\u0301")
+	d.update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	if d.line.Value() != "界" {
+		t.Fatal(d.line.Value())
 	}
 }

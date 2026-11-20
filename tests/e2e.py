@@ -277,6 +277,26 @@ while True:
         self.assertEqual(view.process.wait(5), 0)
         self.assertTrue(all(child.poll() is None for child in apps.values()))
 
+    def test_restart_command_widget(self):
+        executable = self.work / "codex"
+        executable.write_text('#!/bin/sh\nprintf "argc=%s arg=%s\\n" "$#" "$1"\nread value\n')
+        executable.chmod(0o700)
+        child = self.spawn([SUP, "-state", self.base / "supervisor", "-local-input=false", "codex"],
+                           env={**os.environ, "PATH": str(self.work) + os.pathsep + os.environ["PATH"]})
+        before = status_line(child.stderr, b"session ").split()[1]
+        ui = DashboardTerminal(self)
+        ui.until(b"R Restart")
+        ui.send(b"r")
+        ui.until(b"Enter Restart & attach")
+        # Type into the prefill, repair an omission in the middle, and submit.
+        ui.send(b" --hlp\x1b[D\x1b[De")
+        termios.tcsetwinsize(ui.fd, (12, 28))
+        os.kill(ui.process.pid, signal.SIGWINCH)
+        ui.send(b"\r")
+        after = status_line(child.stderr, b"session ").split()[1]
+        self.assertNotEqual(before, after)
+        ui.until(b"argc=1 arg=--help")
+
     def test_managed_supervisors(self):
         executable = self.work / "worker"
         executable.write_text('#!/bin/sh\nprintf "<%s>\\n" "$@"\nread value\nexit 23\n')

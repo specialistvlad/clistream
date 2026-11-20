@@ -27,7 +27,7 @@ Track acceptance against the eleven functional requirements and the engineering 
 
 ## Interactive terminal and managed supervision · November 20, 2026
 
-The Linux and macOS daemon, supervisor and CLI share the registry, lifecycle protocol, Unix process-group handling and terminal implementation. The Go client uses Ultraviolet for the outer screen and x/vt for child output and input encoding. Native Mac, iPhone and iPad clients use the existing running-session protocol and receive an exit event for the old run. Management controls are delivered in the Go client. [Approved feature specification](terminal-client-design.md)
+The Linux and macOS daemon, supervisor and CLI share the registry, lifecycle protocol, Unix process-group handling and terminal implementation. The Go client uses Bubble Tea v2 for terminal interaction, Bubbles for the command field, and x/vt for child output and input encoding. Native Mac, iPhone and iPad clients use the existing running-session protocol and receive an exit event for the old run. Management controls are delivered in the Go client. [Approved feature specification](terminal-client-design.md)
 
 Run `make test e2e` on Linux and macOS, the four-host Linux deployment suite, and the compatibility harness with the previous binaries. Exercise terminal clear, alternate screen, resize, input, stale actions, argument round trips, loss of a restart acknowledgement, reconnection and one-shot status. Run `apple/test-shared.py` with both simulators and native macOS. All four viewers must observe the first exit and exchange input again on the distinct replacement run. [Execution record](verification.md)
 
@@ -38,3 +38,5 @@ The single-run flag aliases `-once` in the shared Linux and macOS supervisor. Th
 ## Editable restart command
 
 Deliver the single-line editor in the shared Linux and macOS Go dashboard. Negotiate support in the broker and supervisor, validate the executable and driver on the supervisor host, and bind automatic attachment to the acknowledged run. Retain legacy managed actions and single-run disconnect behavior. Native macOS, iPhone and iPad use their existing run-bound attachments. Verify quoting, cursor editing, stale requests, launch errors and recovery, mixed-version peers, both Go platform suites, Linux multi-host deployment and four-client replacement on Apple.
+
+Use the same widget on Linux and macOS. The daemon, supervisor and native Apple clients continue using the existing run protocol. Verify incremental redraws in a real pseudo-terminal, cursor position after each character, grapheme deletion, resizing and the argument vector received by the restarted child. Run both Go platform suites, mixed-version compatibility and the shared Apple session harness.

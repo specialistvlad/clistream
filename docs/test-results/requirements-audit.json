@@ -714,6 +714,8 @@
       "TestCommandRoundTrip",
       "TestCommandCursor",
       "TestCommandScrollAndResize",
+      "TestRestartWidgetTerminalCells",
+      "test_restart_command_widget",
       "test_managed_supervisors",
       "test_previous_managed_peers"
     ],

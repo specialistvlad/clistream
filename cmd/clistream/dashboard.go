@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/muesli/cancelreader"
-	"golang.org/x/term"
 
 	"github.com/quic-go/quic-go"
 	"github.com/specialistvlad/clistream/internal/client"
@@ -29,8 +29,13 @@ type connectionResult struct {
 }
 type dashboardUI struct {
 	commandEditor      bool
-	line               commandLine
-	screen             *uv.TerminalScreen
+	line               textinput.Model
+	width, height      int
+	ctx                context.Context
+	dir, link, direct  string
+	code               int
+	err                error
+	refreshAt          time.Time
 	page, host, notice string
 	frame              int
 	rows               []wire.Supervisor
@@ -104,7 +109,6 @@ func (d *dashboardUI) detach() {
 		v.close()
 		d.attachment = nil
 	}
-	d.screen.SetMouseMode(uv.MouseModeNone)
 	d.page = "table"
 }
 func (d *dashboardUI) disconnect(err error) {
@@ -115,7 +119,7 @@ func (d *dashboardUI) disconnect(err error) {
 	}
 	d.page = "lost"
 	d.notice = err.Error()
-	d.line = commandLine{}
+	d.line.Reset()
 	d.rows = nil
 	d.args = nil
 }
@@ -128,9 +132,7 @@ func (d *dashboardUI) attach(target wire.Supervisor) error {
 		d.attachment.close()
 	}
 	d.target = target
-	d.attachment = newViewport(a, d.target.Info.Mode, d.screen.Width(), max(1, d.screen.Height()-2))
-	d.screen.SetMouseEncoding(uv.MouseEncodingSGR)
-	d.screen.SetMouseMode(uv.MouseModeMotion)
+	d.attachment = newViewport(a, d.target.Info.Mode, d.width, max(1, d.height-2))
 	d.page = "attached"
 	d.notice = ""
 	return nil
@@ -164,48 +166,9 @@ func (d *dashboardUI) cycle(direction int) bool {
 }
 
 func dashboard(dir, link, direct string) (int, error) {
-	fd := int(os.Stdin.Fd())
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
 	defer cancel()
-	winch := make(chan os.Signal, 1)
-	signal.Notify(winch, syscall.SIGWINCH)
-	defer signal.Stop(winch)
-	original, err := term.MakeRaw(fd)
-	if err != nil {
-		return 1, err
-	}
-	defer term.Restore(fd, original)
-	reader, err := cancelreader.NewReader(os.Stdin)
-	if err != nil {
-		return 1, err
-	}
-	defer reader.Close()
-	events := make(chan uv.Event)
-	readDone := make(chan error, 1)
-	go func() {
-		readDone <- uv.NewTerminalReader(reader, os.Getenv("TERM")).StreamEvents(ctx, events)
-		close(events)
-	}()
-	defer func() {
-		cancel()
-		reader.Cancel()
-		for range events {
-		}
-	}()
-	s := uv.NewTerminalScreen(os.Stdout, os.Environ())
-	defer func() { s.Reset(); s.Flush() }()
-	w, h, _ := term.GetSize(fd)
-	if w < 1 || h < 1 {
-		w, h = 80, 24
-	}
-	s.Resize(w, h)
-	s.EnterAltScreen()
-	s.EnableBracketedPaste()
-	s.SetKeyboardEnhancements(&uv.KeyboardEnhancements{DisambiguateEscapeCodes: true})
-	if err := s.Flush(); err != nil {
-		return 1, err
-	}
-	d := dashboardUI{screen: s, host: "server"}
+	d := &dashboardUI{ctx: ctx, dir: dir, link: link, direct: direct, page: "connecting", host: "server", width: 80, height: 24}
 	if link != "" {
 		if invite, err := identity.ParseInvitation(link); err == nil {
 			d.host = invite.Address
@@ -219,94 +182,126 @@ func dashboard(dir, link, direct string) (int, error) {
 			d.conn.CloseWithError(0, "finished")
 		}
 	}()
-	ready := make(chan connectionResult)
-	connect := func() {
-		d.page = "connecting"
-		d.notice = ""
-		invitation := link
-		go func() {
-			directory, p, err := identity.CLIProfile(ctx, dir, "client", invitation)
-			var result connectionResult
-			if err == nil {
-				result.conn, err = identity.Dial(ctx, directory, p)
-			}
-			if err == nil {
-				var caps []string
-				caps, err = wire.Capabilities(result.conn)
-				result.managed = slices.Contains(caps, wire.ManagedSupervisors)
-				result.commandEditor = slices.Contains(caps, wire.EditCommand)
-			}
-			if errors.Is(err, os.ErrNotExist) {
-				err = errors.New("No saved server. Run clistream PAIRING-LINK using the link from clistreamd.")
-			}
-			result.err = err
-			select {
-			case ready <- result:
-			case <-ctx.Done():
-				if result.conn != nil {
-					result.conn.CloseWithError(0, "finished")
-				}
-			}
-		}()
-	}
-	d.page = "connecting"
-	if err := d.draw(); err != nil {
+	_, err := tea.NewProgram(d, tea.WithContext(ctx), tea.WithoutSignalHandler(), tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout)).Run()
+	if err != nil && ctx.Err() == nil {
 		return 1, err
 	}
-	connect()
-	ticker := time.NewTicker(40 * time.Millisecond)
-	defer ticker.Stop()
-	var refreshAt time.Time
-	dirty := true
-	for {
-		var lost <-chan struct{}
-		if d.conn != nil {
-			lost = d.conn.Context().Done()
+	return d.code, d.err
+}
+
+func (d *dashboardUI) connect() tea.Cmd {
+	ctx, dir, invitation := d.ctx, d.dir, d.link
+	return func() tea.Msg {
+		directory, p, err := identity.CLIProfile(ctx, dir, "client", invitation)
+		var result connectionResult
+		if err == nil {
+			result.conn, err = identity.Dial(ctx, directory, p)
 		}
-		var output <-chan terminalRecord
-		if d.attachment != nil {
-			output = d.attachment.output
+		if err == nil {
+			var caps []string
+			caps, err = wire.Capabilities(result.conn)
+			result.managed = slices.Contains(caps, wire.ManagedSupervisors)
+			result.commandEditor = slices.Contains(caps, wire.EditCommand)
 		}
-		select {
-		case <-ctx.Done():
-			return 0, nil
-		case result := <-ready:
-			d.conn = result.conn
-			if result.err != nil {
-				d.disconnect(result.err)
-				break
+		if errors.Is(err, os.ErrNotExist) {
+			err = errors.New("No saved server. Run clistream PAIRING-LINK using the link from clistreamd.")
+		}
+		result.err = err
+		if result.conn != nil {
+			// A dial can finish after the dashboard has already quit.
+			stop := context.AfterFunc(ctx, func() { result.conn.CloseWithError(0, "finished") })
+			context.AfterFunc(result.conn.Context(), func() { stop() })
+		}
+		return result
+	}
+}
+
+type dashboardTick time.Time
+
+func (d *dashboardUI) tick() tea.Cmd {
+	delay := time.Second
+	if d.page == "connecting" {
+		delay = 100 * time.Millisecond
+	}
+	return tea.Tick(delay, func(now time.Time) tea.Msg { return dashboardTick(now) })
+}
+func (d *dashboardUI) Init() tea.Cmd { return tea.Batch(d.connect(), d.tick()) }
+
+type viewportOutput struct {
+	source  *viewport
+	records []terminalRecord
+}
+
+func readViewport(v *viewport) tea.Cmd {
+	return func() tea.Msg {
+		first, ok := <-v.output
+		if !ok {
+			return nil
+		}
+		batch := viewportOutput{source: v, records: []terminalRecord{first}}
+		for range len(v.output) {
+			batch.records = append(batch.records, <-v.output)
+		}
+		return batch
+	}
+}
+
+func (d *dashboardUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	before := d.attachment
+	cmd := d.update(msg)
+	if before != d.attachment && d.attachment != nil {
+		cmd = tea.Batch(cmd, readViewport(d.attachment))
+	}
+	return d, cmd
+}
+
+func (d *dashboardUI) update(msg tea.Msg) tea.Cmd {
+	if d.conn != nil && d.conn.Context().Err() != nil {
+		d.direct = ""
+		d.disconnect(errors.New("Connection closed"))
+	}
+	switch ev := msg.(type) {
+	case connectionResult:
+		d.conn = ev.conn
+		if ev.err != nil {
+			d.disconnect(ev.err)
+			break
+		}
+		d.link = ""
+		d.commandEditor = ev.commandEditor
+		d.managed = ev.managed
+		d.page = "table"
+		if err := d.refresh(); err != nil {
+			d.disconnect(err)
+			break
+		}
+		if d.direct != "" {
+			i := slices.IndexFunc(d.rows, func(v wire.Supervisor) bool { return v.Info.ID == d.direct })
+			if i < 0 {
+				d.code, d.err = 1, errors.New("unknown session")
+				return tea.Quit
 			}
-			link = ""
-			d.commandEditor = result.commandEditor
-			d.managed = result.managed
-			d.page = "table"
-			if err := d.refresh(); err != nil {
-				d.disconnect(err)
-				break
+			d.index = i
+			d.target = d.rows[i]
+			if err := d.attach(d.target); err != nil {
+				d.code, d.err = 1, err
+				return tea.Quit
 			}
-			if direct != "" {
-				i := slices.IndexFunc(d.rows, func(v wire.Supervisor) bool { return v.Info.ID == direct })
-				if i < 0 {
-					return 1, errors.New("unknown session")
-				}
-				d.index = i
-				d.target = d.rows[i]
-				if err := d.attach(d.target); err != nil {
-					return 1, err
-				}
-			}
-		case <-lost:
-			direct = ""
-			d.disconnect(errors.New("Connection closed"))
-		case rec := <-output:
+		}
+	case viewportOutput:
+		if ev.source != d.attachment {
+			return nil
+		}
+		for _, rec := range ev.records {
 			if rec.done {
 				if d.conn.Context().Err() != nil {
-					direct = ""
+					d.direct = ""
 					d.disconnect(errors.New("Connection closed"))
 					break
 				}
-				if direct != "" {
-					return rec.code, rec.err
+				if d.direct != "" {
+					d.code, d.err = rec.code, rec.err
+					return tea.Quit
 				}
 				d.detach()
 				d.notice = fmt.Sprintf("Child exited · exit %d", rec.code)
@@ -318,128 +313,125 @@ func dashboard(dir, link, direct string) (int, error) {
 				}
 			} else {
 				d.attachment.term.Write(rec.data)
-				dirty = true
-				continue
 			}
-		case now := <-ticker.C:
-			d.frame++
-			if d.page == "table" && now.After(refreshAt) {
-				if err := d.refresh(); err != nil {
-					d.disconnect(err)
+		}
+		if d.attachment == ev.source {
+			return readViewport(ev.source)
+		}
+	case dashboardTick:
+		now := time.Time(ev)
+		d.frame++
+		if d.page == "table" && now.After(d.refreshAt) {
+			if err := d.refresh(); err != nil {
+				d.disconnect(err)
+			}
+			d.refreshAt = now.Add(time.Second)
+		}
+		return d.tick()
+	case tea.WindowSizeMsg:
+		d.width, d.height = max(1, ev.Width), max(1, ev.Height)
+		if d.attachment != nil {
+			d.attachment.resize(d.width, max(1, d.height-2))
+		}
+	case tea.PasteMsg:
+		if d.page == "attached" {
+			d.attachment.term.Paste(ev.Content)
+			return nil
+		} else if d.page == "command" {
+			d.notice = ""
+			return d.updateInput(ev)
+		} else if d.page == "edit" {
+			d.appendText(ev.Content)
+		}
+	case tea.MouseClickMsg:
+		if d.attachment != nil {
+			d.attachment.mouse(uv.MouseClickEvent(ev))
+		}
+	case tea.MouseReleaseMsg:
+		if d.attachment != nil {
+			d.attachment.mouse(uv.MouseReleaseEvent(ev))
+		}
+	case tea.MouseMotionMsg:
+		if d.attachment != nil {
+			d.attachment.mouse(uv.MouseMotionEvent(ev))
+		}
+	case tea.MouseWheelMsg:
+		if d.attachment != nil {
+			d.attachment.mouse(uv.MouseWheelEvent(ev))
+		}
+	case tea.KeyPressMsg:
+		key := uv.KeyPressEvent(ev)
+		k := strings.ToLower(ev.String())
+		switch d.page {
+		case "attached":
+			switch {
+			case key.MatchString("ctrl+]") || ev.Code == 0x1d:
+				if d.cycle(1) {
+					d.direct = ""
 				}
-				refreshAt = now.Add(time.Second)
-				dirty = true
-			}
-			if !dirty && d.page != "connecting" {
-				continue
-			}
-		case <-winch:
-			w, h, err := term.GetSize(fd)
-			if err == nil && w > 0 && h > 0 {
-				s.Resize(w, h)
-				if d.attachment != nil {
-					d.attachment.resize(w, max(1, h-2))
+			case key.MatchString("ctrl+["):
+				if d.cycle(-1) {
+					d.direct = ""
 				}
-			}
-		case event, ok := <-events:
-			if !ok {
-				return 0, <-readDone
-			}
-			if d.conn != nil && d.conn.Context().Err() != nil {
-				direct = ""
-				d.disconnect(errors.New("Connection closed"))
-				break
-			}
-			switch ev := event.(type) {
-			case uv.PasteEvent:
-				if d.page == "attached" {
-					d.attachment.term.Paste(ev.Content)
-					continue
-				} else if d.page == "command" {
-					d.line.insert(strings.NewReplacer("\r\n", " ", "\r", " ", "\n", " ").Replace(ev.Content))
-					d.notice = ""
-				} else if d.page == "edit" {
-					d.appendText(ev.Content)
-				}
-			case uv.MouseEvent:
-				if d.page == "attached" {
-					d.attachment.mouse(ev)
-				}
-				continue
-			case uv.KeyPressEvent:
-				k := strings.ToLower(ev.String())
-				switch d.page {
-				case "attached":
-					switch {
-					case ev.MatchString("ctrl+]") || ev.Code == 0x1d:
-						if d.cycle(1) {
-							direct = ""
-						}
-					case ev.MatchString("ctrl+["):
-						if d.cycle(-1) {
-							direct = ""
-						}
-					case ev.MatchString("ctrl+g") || ev.Code == 7:
-						d.detach()
-						direct = ""
-					default:
-						if d.attachment.mode == "pipe" && ev.Code == uv.KeyEnter {
-							d.attachment.term.SendText("\n")
-						} else {
-							d.attachment.term.SendKey(ev)
-						}
-						continue
-					}
-				case "connecting", "lost":
-					if k == "q" || k == "ctrl+c" {
-						return 0, nil
-					}
-					if k == "r" && d.page == "lost" {
-						direct = ""
-						connect()
-					}
-				case "confirm":
-					switch k {
-					case "tab", "left", "right":
-						d.confirm = !d.confirm
-					case "esc":
-						d.page = "table"
-					case "enter":
-						if d.confirm {
-							d.apply()
-						} else {
-							d.page = "table"
-						}
-					}
-				case "command":
-					switch k {
-					case "esc":
-						d.page = "table"
-						d.line = commandLine{}
-						d.notice = ""
-					case "enter":
-						d.submitCommand()
-					default:
-						d.line.key(ev)
-						d.notice = ""
-					}
-				case "edit":
-					d.editKey(ev)
-				case "table":
-					if k == "q" || k == "ctrl+c" {
-						return 0, nil
-					}
-					d.tableKey(k)
-				}
+			case key.MatchString("ctrl+g") || ev.Code == 7:
+				d.detach()
+				d.direct = ""
 			default:
-				continue
+				if d.attachment.mode == "pipe" && ev.Code == uv.KeyEnter {
+					d.attachment.term.SendText("\n")
+				} else {
+					d.attachment.term.SendKey(key)
+				}
+				return nil
 			}
+		case "connecting", "lost":
+			if k == "q" || k == "ctrl+c" {
+				return tea.Quit
+			}
+			if k == "r" && d.page == "lost" {
+				d.direct = ""
+				d.page = "connecting"
+				return d.connect()
+			}
+		case "confirm":
+			switch k {
+			case "tab", "left", "right":
+				d.confirm = !d.confirm
+			case "esc":
+				d.page = "table"
+			case "enter":
+				if d.confirm {
+					d.apply()
+				} else {
+					d.page = "table"
+				}
+			}
+		case "command":
+			switch k {
+			case "esc":
+				d.page = "table"
+				d.line.Reset()
+				d.notice = ""
+			case "enter":
+				d.submitCommand()
+			default:
+				d.notice = ""
+				return d.updateInput(ev)
+			}
+		case "edit":
+			d.editKey(key)
+		case "table":
+			if k == "q" || k == "ctrl+c" {
+				return tea.Quit
+			}
+			d.tableKey(k)
 		}
-		if err := d.draw(); err != nil {
-			return 1, err
+	default:
+		if d.page == "command" {
+			return d.updateInput(msg)
 		}
-		dirty = false
 	}
+	return nil
 }
 
 func (d *dashboardUI) tableKey(k string) {

@@ -7,7 +7,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	uv "github.com/charmbracelet/ultraviolet"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/rivo/uniseg"
 	"github.com/specialistvlad/clistream/internal/wire"
 )
@@ -84,106 +86,44 @@ func parseCommand(line string) ([][]byte, error) {
 	return argv, nil
 }
 
-type commandLine struct {
-	text string
-	pos  int
+func newCommandInput(value string) textinput.Model {
+	input := textinput.New()
+	input.Prompt = "› "
+	input.SetVirtualCursor(false)
+	input.SetValue(value)
+	input.CursorEnd()
+	input.Focus()
+	return input
 }
 
-func (l *commandLine) insert(text string) {
-	l.text = l.text[:l.pos] + text + l.text[l.pos:]
-	l.pos += len(text)
-}
-
-func (l commandLine) adjacent(left bool) int {
-	if left {
-		g := uniseg.NewGraphemes(l.text[:l.pos])
-		last := 0
-		for g.Next() {
-			last, _ = g.Positions()
-		}
-		return last
-	}
-	g := uniseg.NewGraphemes(l.text[l.pos:])
-	if g.Next() {
-		_, end := g.Positions()
-		return l.pos + end
-	}
-	return l.pos
-}
-
-func (l commandLine) word(left bool) int {
-	// Word shortcuts use whitespace boundaries, like a shell's Ctrl-W.
-	if left {
-		for l.pos > 0 {
-			r, n := utf8.DecodeLastRuneInString(l.text[:l.pos])
-			if !unicode.IsSpace(r) {
-				break
+// Bubbles indexes the value by rune. Apply its character-edit actions to a
+// whole grapheme so an arrow or Backspace cannot split a combining sequence.
+func (d *dashboardUI) updateInput(msg tea.Msg) tea.Cmd {
+	steps := 1
+	if press, ok := msg.(tea.KeyPressMsg); ok {
+		km := d.line.KeyMap
+		backward := key.Matches(press, km.CharacterBackward, km.DeleteCharacterBackward)
+		if backward || key.Matches(press, km.CharacterForward, km.DeleteCharacterForward) {
+			value := []rune(d.line.Value())
+			pos := d.line.Position()
+			if backward {
+				g := uniseg.NewGraphemes(string(value[:pos]))
+				for g.Next() {
+					steps = len(g.Runes())
+				}
+			} else {
+				g := uniseg.NewGraphemes(string(value[pos:]))
+				if g.Next() {
+					steps = len(g.Runes())
+				}
 			}
-			l.pos -= n
-		}
-		for l.pos > 0 {
-			r, n := utf8.DecodeLastRuneInString(l.text[:l.pos])
-			if unicode.IsSpace(r) {
-				break
-			}
-			l.pos -= n
-		}
-	} else {
-		for l.pos < len(l.text) {
-			r, n := utf8.DecodeRuneInString(l.text[l.pos:])
-			if !unicode.IsSpace(r) {
-				break
-			}
-			l.pos += n
-		}
-		for l.pos < len(l.text) {
-			r, n := utf8.DecodeRuneInString(l.text[l.pos:])
-			if unicode.IsSpace(r) {
-				break
-			}
-			l.pos += n
 		}
 	}
-	return l.pos
-}
-
-func (l *commandLine) remove(to int) {
-	a, b := min(to, l.pos), max(to, l.pos)
-	l.text = l.text[:a] + l.text[b:]
-	l.pos = a
-}
-
-func (l *commandLine) key(ev uv.KeyPressEvent) {
-	switch ev.String() {
-	case "left", "ctrl+b":
-		l.pos = l.adjacent(true)
-	case "right", "ctrl+f":
-		l.pos = l.adjacent(false)
-	case "home", "ctrl+a":
-		l.pos = 0
-	case "end", "ctrl+e":
-		l.pos = len(l.text)
-	case "ctrl+left", "alt+b":
-		l.pos = l.word(true)
-	case "ctrl+right", "alt+f":
-		l.pos = l.word(false)
-	case "ctrl+w", "alt+backspace":
-		l.remove(l.word(true))
-	case "alt+d":
-		l.remove(l.word(false))
-	case "ctrl+u":
-		l.remove(0)
-	case "ctrl+k":
-		l.remove(len(l.text))
-	case "backspace":
-		l.remove(l.adjacent(true))
-	case "delete", "ctrl+d":
-		l.remove(l.adjacent(false))
-	default:
-		if ev.Text != "" {
-			l.insert(ev.Text)
-		}
+	var cmd tea.Cmd
+	for range steps {
+		d.line, cmd = d.line.Update(msg)
 	}
+	return cmd
 }
 
 func (d *dashboardUI) openCommand() {
@@ -192,13 +132,12 @@ func (d *dashboardUI) openCommand() {
 		d.notice = "Command unavailable"
 		return
 	}
-	text := formatCommand(res.Command)
-	d.line = commandLine{text, len(text)}
+	d.line = newCommandInput(formatCommand(res.Command))
 	d.page = "command"
 }
 
 func (d *dashboardUI) submitCommand() {
-	argv, err := parseCommand(d.line.text)
+	argv, err := parseCommand(d.line.Value())
 	if err != nil {
 		d.notice = err.Error()
 		return
@@ -225,13 +164,13 @@ func (d *dashboardUI) submitCommand() {
 			return
 		}
 		if err == nil && res.Run != "" && row.Info.ID == res.Run {
-			d.line = commandLine{}
+			d.line.Reset()
 			if d.attach(row) != nil {
 				d.notice = "Run ended before attachment."
 			}
 			return
 		}
 	}
-	d.line = commandLine{}
+	d.line.Reset()
 	d.notice = "Request ended. Check the current run."
 }

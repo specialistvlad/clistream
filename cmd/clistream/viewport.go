@@ -43,6 +43,7 @@ func newViewport(a *client.Attachment, mode string, w, h int) *viewport {
 		v.sendSize(w, h)
 	}
 	go func() {
+		defer close(v.output)
 		code, err := a.Receive(func(_ string, data []byte) error {
 			if mode == "pipe" {
 				data = bytes.ReplaceAll(data, []byte("\n"), []byte("\r\n"))

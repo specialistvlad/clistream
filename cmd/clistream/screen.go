@@ -6,6 +6,8 @@ import (
 	"strings"
 	"unicode"
 
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/specialistvlad/clistream/internal/wire"
@@ -46,24 +48,20 @@ func prefixWidth(rows []wire.Supervisor) int {
 	}
 	return width
 }
-func (d *dashboardUI) draw() error {
-	s := d.screen
-	w, h := s.Width(), s.Height()
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			s.SetCell(x, y, &uv.EmptyCell)
-		}
-	}
+func (d *dashboardUI) View() tea.View {
+	w, h := d.width, d.height
+	s := uv.NewScreenBuffer(w, h)
+	view := tea.View{AltScreen: true}
 	cell := func(x, y, end int, text string) {
 		if x < end && y >= 0 && y < h {
-			uv.NewStyledString(printable(text)).Draw(s, image.Rect(x, y, end, y+1))
+			uv.NewStyledString(printable(text)).Draw(&s, image.Rect(x, y, end, y+1))
 		}
 	}
 	line := func(y int, text string) { cell(0, y, w, text) }
 	title := "CLIStream Client"
 	keys := "Q Quit"
 	target := d.target.Info.Name + " on " + d.target.Info.Host
-	s.HideCursor()
+
 	switch d.page {
 	case "connecting":
 		title += " │ " + d.host
@@ -78,6 +76,7 @@ func (d *dashboardUI) draw() error {
 		} else {
 			title += " │ Attached to " + target
 		}
+		view.MouseMode = tea.MouseModeAllMotion
 		v := d.attachment.term
 		for y := 0; y < min(v.Height(), h-2); y++ {
 			for x := 0; x < min(w, v.Width()); {
@@ -95,15 +94,15 @@ func (d *dashboardUI) draw() error {
 		}
 		if !v.CursorHidden() {
 			p := v.CursorPosition()
-			s.SetCursorPosition(p.X, p.Y+2)
-			s.ShowCursor()
+			view.Cursor = tea.NewCursor(p.X, p.Y+2)
+
 		}
 		leave := "Home"
 		if d.target.Revision == 0 {
 			leave = "Disconnect"
 		}
 		keys = "Ctrl-G " + leave + "   Ctrl-[ Previous   Ctrl-] Next"
-		if s.StringWidth(keys) > w {
+		if ansi.StringWidth(keys) > w {
 			keys = "^G " + leave + "   ^[ Prev   ^] Next"
 		}
 		if d.notice != "" {
@@ -132,18 +131,36 @@ func (d *dashboardUI) draw() error {
 		}
 		title += " │ " + verb + " " + target
 		keys = "Enter " + verb + " & attach   Esc Cancel"
-		if s.StringWidth(keys) > w {
+		if ansi.StringWidth(keys) > w {
 			keys = "↵ " + verb + "   Esc Cancel"
 		}
-		line(3, "Command")
-		before := printable(d.line.text[:d.line.pos])
-		before = ansi.TruncateLeft(before, max(0, s.StringWidth(before)-max(0, w-3)), "")
-		line(4, "› "+before+d.line.text[d.line.pos:])
-		if h > 4 {
-			s.SetCursorPosition(min(w-1, 2+s.StringWidth(before)), 4)
-			s.ShowCursor()
+		// Use a bordered field when there is room, and keep the input visible on short terminals.
+		fieldY := min(4, h-1)
+		framed := h >= 7 && w >= 12
+		inset := 0
+		if framed {
+			inset = 1
 		}
-		line(6, d.notice)
+		if fieldY >= 4 {
+			line(2, "Command")
+		}
+		if width := max(1, w-2*inset-3); d.line.Width() != width {
+			d.line.SetWidth(width)
+			d.line.SetCursor(d.line.Position())
+		}
+		if fieldY >= 2 && w > 2 {
+			field := d.line.View()
+			top := fieldY
+			if framed {
+				field = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("6")).Render(field)
+				top--
+			}
+			uv.NewStyledString(field).Draw(&s, image.Rect(0, top, w, fieldY+inset+1))
+			view.Cursor = d.line.Cursor()
+			view.Cursor.X += inset
+			view.Cursor.Y = fieldY
+		}
+		line(fieldY+inset+1, d.notice)
 	case "edit":
 		title += " │ Edit arguments │ " + target
 		line(2, "Executable   "+d.target.Info.Name)
@@ -158,11 +175,11 @@ func (d *dashboardUI) draw() error {
 			if i == d.arg {
 				runes := []rune(text)
 				before := printable(string(runes[:d.cursor]))
-				available := max(1, w-s.StringWidth(prefix)-1)
-				before = ansi.TruncateLeft(before, max(0, s.StringWidth(before)-available), "")
+				available := max(1, w-ansi.StringWidth(prefix)-1)
+				before = ansi.TruncateLeft(before, max(0, ansi.StringWidth(before)-available), "")
 				text = before + string(runes[d.cursor:])
-				s.SetCursorPosition(min(w-1, s.StringWidth(prefix+before)), 3+i-first)
-				s.ShowCursor()
+				view.Cursor = tea.NewCursor(min(w-1, ansi.StringWidth(prefix+before)), 3+i-first)
+
 			}
 			line(3+i-first, prefix+text)
 		}
@@ -171,10 +188,10 @@ func (d *dashboardUI) draw() error {
 			verb = "Restart"
 		}
 		keys = "Ctrl-R " + verb + " with these arguments   ↑↓ Select   Enter Add   Ctrl-D Remove   Esc Cancel"
-		if s.StringWidth(keys) > w {
+		if ansi.StringWidth(keys) > w {
 			keys = "↑↓ Select  ↵ Add  ^D Remove  ^R " + verb + "  Esc Cancel"
 		}
-		if s.StringWidth(keys) > w {
+		if ansi.StringWidth(keys) > w {
 			keys = "↑↓  ↵ Add  ^D Del  ^R Run  Esc"
 		}
 	case "table":
@@ -257,10 +274,10 @@ func (d *dashboardUI) draw() error {
 			}
 		}
 		keys += "   Q Quit"
-		if s.StringWidth(keys) > w {
+		if ansi.StringWidth(keys) > w {
 			keys = strings.NewReplacer("   ", " ", "↑↓ Select", "↑↓", " Edit arguments", " Edit", " Edit command", " Edit").Replace(keys)
 		}
-		if s.StringWidth(keys) > w {
+		if ansi.StringWidth(keys) > w {
 			keys = strings.NewReplacer("Enter Attach", "↵", "R Restart", "R", "R Start", "R", "S Stop", "S", "E Edit", "E", "Q Quit", "Q").Replace(keys)
 		}
 	}
@@ -282,6 +299,6 @@ func (d *dashboardUI) draw() error {
 			x += max(1, c.Width)
 		}
 	}
-	s.Render()
-	return s.Flush()
+	view.Content = s.Render()
+	return view
 }

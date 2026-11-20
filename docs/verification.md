@@ -4,6 +4,10 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Bubble Tea dashboard and command widget · November 20, 2026
+
+A real PTY test typed ` --help` into a prefilled `codex` command and decoded successive terminal updates to verify the visible text and cursor after each key. A second PTY test corrected a character in the middle, resized and submitted the command. The replacement reported one argument, `--help`. The Go race tests also checked grapheme deletion, horizontal scrolling, the fixed header and emulator output. The macOS and Linux CLI suites each ran 38 cases, with two optional skips on macOS and five on Linux. Mixed-version compatibility and the shared Mac, iPhone simulator, iPad simulator and Go session passed.
+
 ## Single-line Start and Restart · November 20, 2026
 
 The macOS and Linux `make test e2e` runs passed, including the Go race tests and vet. The CLI suite ran 37 cases per platform with two optional skips on macOS and five on Linux. The dashboard tests changed the executable, preserved empty and spaced arguments, reloaded the last command after broker reconnection, rejected a stale concurrent request and attached to the acknowledged replacement. Invalid syntax and a missing executable left the current run available. An executable with a missing interpreter failed after the old run ended, and correcting the draft successfully started another run.
