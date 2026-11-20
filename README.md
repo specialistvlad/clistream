@@ -66,4 +66,3 @@ The file service roots paths at the directory where the supervisor started. Tran
 Run `make test e2e` for race-enabled Go tests, vet and multi-process acceptance tests. Use `make apple` on macOS with Xcode and XcodeGen to build the shared Go XCFramework and generate the Xcode project.
 
 [MIT license](LICENSE)
-

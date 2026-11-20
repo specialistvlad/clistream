@@ -27,4 +27,3 @@ apple/test-device.sh macOS
 ```
 
 The Go suite and black-box tests were run on Apple Silicon macOS. Linux arm64 binaries were executed in Docker, with the same black-box harness. The Go 1.27.4 vulnerability scan reported zero reachable known vulnerabilities. Module-level advisories outside the reachable call graph are reported by the scanner. These local checks cover loopback operation and do not measure Internet latency, prolonged load or reachability through a production firewall.
-

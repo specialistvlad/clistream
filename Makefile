@@ -9,4 +9,3 @@ e2e: build
 apple:
 	apple/build-core.sh
 	cd apple && xcodegen generate
-

@@ -34,6 +34,12 @@ func run() (int, error) {
 	end := flag.Bool("eof", false, "close shared child stdin at local EOF in pipe mode")
 	flag.Parse()
 	action := flag.Arg(0)
+	// Reserve stderr for the attached child's error stream. Operators can opt into transport diagnostics.
+	if action == "attach" {
+		if _, set := os.LookupEnv("QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING"); !set {
+			os.Setenv("QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING", "true")
+		}
+	}
 	if action == "pair" {
 		var link string
 		if _, e := fmt.Fscanln(os.Stdin, &link); e != nil {

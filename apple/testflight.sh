@@ -14,4 +14,3 @@ cat > "$plist" <<EOF
 <plist version="1.0"><dict><key>method</key><string>app-store-connect</string><key>destination</key><string>upload</string><key>signingStyle</key><string>automatic</string><key>teamID</key><string>$DEVELOPMENT_TEAM</string><key>manageAppVersionAndBuildNumber</key><false/></dict></plist>
 EOF
 xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$plist" -exportPath "build/release/upload-$platform-$build_number" "${auth[@]}"
-

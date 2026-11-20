@@ -29,4 +29,3 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: download), payload)
     }
 }
-

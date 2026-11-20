@@ -13,4 +13,3 @@ The supervisor opens the launch directory once. Directory lookup walks pinned de
 Use a dedicated workspace without credentials, sensitive files, mounted volumes or concurrent privileged administrators moving directory trees. The file service constrains its own filesystem operations. The terminal runs the command under the supervisor user's OS permissions. Commands typed into it and services reached through port forwarding have their own access rules. For a process-level boundary, run the entire supervisor and target inside a dedicated VM or container with only the intended workspace mounted.
 
 Compression runs inside encrypted QUIC and uses a fresh Snappy block for each record. This avoids a shared compression dictionary across devices, files, invitations or keystrokes. A single record can still expose its approximate compressed size. TLS negotiates its standard TLS 1.3 AEAD suite. The implementation has not undergone an independent security audit.
-

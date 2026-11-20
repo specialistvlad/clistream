@@ -156,4 +156,3 @@ final class Connection: ObservableObject {
         } catch { status = error.localizedDescription }
     }
 }
-

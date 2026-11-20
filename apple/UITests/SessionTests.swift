@@ -22,4 +22,3 @@ final class SessionTests: XCTestCase {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "fixture.txt")).firstMatch.waitForExistence(timeout: 10))
     }
 }
-

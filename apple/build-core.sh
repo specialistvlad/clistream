@@ -21,4 +21,3 @@ for sdk in iphonesimulator macosx; do
 done
 rm -rf "$out/Core.xcframework"
 xcodebuild -create-xcframework -library "$out/iphoneos-arm64.a" -headers "$out/headers" -library "$out/iphonesimulator.a" -headers "$out/headers" -library "$out/macosx.a" -headers "$out/headers" -output "$out/Core.xcframework"
-

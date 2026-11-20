@@ -4,4 +4,3 @@
 3. Implement process drivers, terminal fan-out, local interaction and explicit port exports.
 4. Share the client library between the Unix CLI and a native Apple terminal.
 5. Exercise both platforms, two simultaneous clients, unauthorized access, replay, port exports and terminal behavior. Record executed checks and release gates in verification.md.
-

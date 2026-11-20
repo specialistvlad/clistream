@@ -97,4 +97,3 @@ struct WorkspaceBrowser: View {
         } catch { message = error.localizedDescription }
     }
 }
-

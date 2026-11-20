@@ -47,4 +47,3 @@ struct LiveTerminal: UIViewRepresentable {
     func updateUIView(_ view: TerminalView, context: Context) {}
 }
 #endif
-

@@ -98,4 +98,3 @@ struct BrowserView: View {
         }.padding(.horizontal)
     }
 }
-
