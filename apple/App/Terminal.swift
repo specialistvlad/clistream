@@ -25,13 +25,28 @@ final class TerminalDelegate: NSObject, TerminalViewDelegate {
   func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
 }
 
+private func visibleText(in view: TerminalView) -> String {
+  let terminal = view.getTerminal()
+  return (0..<terminal.rows).compactMap {
+    terminal.getLine(row: $0)?.translateToString(trimRight: true)
+  }
+  .joined(separator: "\n").trimmingCharacters(in: .newlines)
+}
+
 #if os(macOS)
+  private final class AccessibleTerminal: TerminalView {
+    override func accessibilityValue() -> Any? { visibleText(in: self) }
+  }
+
   struct LiveTerminal: NSViewRepresentable {
     let connection: Connection
     func makeCoordinator() -> TerminalDelegate { TerminalDelegate(connection) }
     func makeNSView(context: Context) -> TerminalView {
-      let view = connection.terminal ?? TerminalView(frame: .zero)
+      let view = connection.terminal ?? AccessibleTerminal(frame: .zero)
       view.terminalDelegate = context.coordinator
+      view.setAccessibilityElement(true)
+      view.setAccessibilityRole(.textArea)
+      view.setAccessibilityLabel("Terminal")
       view.setAccessibilityIdentifier("session-terminal")
       connection.install(view)
       DispatchQueue.main.async { view.window?.makeFirstResponder(view) }
@@ -40,12 +55,34 @@ final class TerminalDelegate: NSObject, TerminalViewDelegate {
     func updateNSView(_ view: TerminalView, context: Context) {}
   }
 #else
+  private final class TouchTerminal: TerminalView {
+    override var accessibilityValue: String? {
+      get { visibleText(in: self) }
+      set { super.accessibilityValue = newValue }
+    }
+
+    override func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+      if recognizer is UITapGestureRecognizer, !isFirstResponder, allowMouseReporting,
+        getTerminal().mouseMode != .off
+      {
+        _ = becomeFirstResponder()
+      }
+      return super.gestureRecognizerShouldBegin(recognizer)
+    }
+  }
+
   struct LiveTerminal: UIViewRepresentable {
     let connection: Connection
     func makeCoordinator() -> TerminalDelegate { TerminalDelegate(connection) }
     func makeUIView(context: Context) -> TerminalView {
-      let view = connection.terminal ?? TerminalView(frame: .zero)
+      let view = connection.terminal ?? TouchTerminal(frame: .zero)
+      if connection.terminal == nil {
+        // A steady initial caret also respects Reduce Motion. A child can
+        // subsequently select its own cursor style with DECSCUSR.
+        view.getTerminal().setCursorStyle(.steadyBlock)
+      }
       view.terminalDelegate = context.coordinator
+      view.accessibilityLabel = "Terminal"
       view.accessibilityIdentifier = "session-terminal"
       connection.install(view)
       DispatchQueue.main.async { _ = view.becomeFirstResponder() }

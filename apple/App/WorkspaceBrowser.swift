@@ -37,8 +37,10 @@ struct WorkspaceBrowser: View {
         .safeAreaInset(edge: .bottom) {
           HStack {
             transferActions
-          }.font(.body).buttonStyle(.bordered).padding().frame(maxWidth: .infinity)
-          .background(.bar)
+          }.font(.body).buttonStyle(.plain).foregroundStyle(Color(uiColor: .label))
+          .padding(.horizontal).frame(maxWidth: .infinity)
+          .background(Color(uiColor: .systemBackground))
+          .overlay(alignment: .top) { Divider() }
         }
       #endif
       .fileImporter(isPresented: $importer, allowedContentTypes: [.data], onCompletion: imported)
@@ -177,8 +179,24 @@ struct WorkspaceBrowser: View {
   }
 
   @ViewBuilder private var transferActions: some View {
-    Button("Upload") { importer = true }.disabled(active)
-    Button("Done") { dismiss() }.keyboardShortcut(.cancelAction).disabled(active)
+    #if os(iOS)
+      Button {
+        importer = true
+      } label: {
+        Text("Upload").padding(.horizontal).frame(minHeight: 44)
+      }
+      .disabled(active)
+      Spacer()
+      Button {
+        dismiss()
+      } label: {
+        Text("Done").padding(.horizontal).frame(minHeight: 44)
+      }
+      .keyboardShortcut(.cancelAction).disabled(active)
+    #else
+      Button("Upload") { importer = true }.disabled(active)
+      Button("Done") { dismiss() }.keyboardShortcut(.cancelAction).disabled(active)
+    #endif
   }
 
   private func open(_ name: String) {

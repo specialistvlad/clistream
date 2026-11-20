@@ -30,6 +30,16 @@ class ReverseUDP(socketserver.BaseRequestHandler):
 
 
 def run(root, stack, suite, command):
+    if simulator := os.environ.get("SIMULATOR_ID"):
+        settings = {"appearance": "light"} if suite == "files" else {}
+        if suite == "touch":
+            settings = {"appearance": "dark", "increase_contrast": "enabled", "content_size": "accessibility-large"}
+        for setting, value in settings.items():
+            action = ["xcrun", "simctl", "ui", simulator, setting]
+            previous = subprocess.check_output(action, text=True).strip()
+            if previous != value:
+                subprocess.run([*action, value], check=True)
+                stack.callback(subprocess.run, [*action, previous], check=True)
     work = root / "workspace"
     work.mkdir()
     (work / "inbox" / "nested").mkdir(parents=True)
@@ -150,9 +160,15 @@ def run(root, stack, suite, command):
             "-u",
             "-c",
             """
-import os, sys, tty
+import os, signal, sys, tty
 tty.setraw(0)
-os.write(1, b'\\x1b[2 qCOPYME terminal selection test\\r\\n')
+sizes = open(sys.argv[1] + ".sizes", "w", buffering=1)
+def record_size(*args):
+    cols, rows = os.get_terminal_size(0)
+    sizes.write(f"{cols} {rows}\\n")
+signal.signal(signal.SIGWINCH, record_size)
+record_size()
+os.write(1, b'\\x1b[2 q\\x1b[?25lCOPYME terminal selection test\\r\\n')
 os.write(1, b'\\x1b[?1000h\\x1b[?1006h')
 with open(sys.argv[1], 'wb', buffering=0) as captured:
     while data := os.read(0, 4096):
@@ -275,8 +291,20 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
         assert b"\x1b[<0;1;1M" in received, (
             f"missing mouse press in first cell: {received!r}"
         )
+        expected_presses = 2
+        if simulator:
+            model = subprocess.check_output(
+                ["xcrun", "simctl", "getenv", simulator, "SIMULATOR_MODEL_IDENTIFIER"], text=True
+            ).strip()
+            if model.startswith("iPad"):
+                expected_presses += 1
+                assert b"\x04" in received, f"missing hardware Control-D: {received!r}"
+        assert received.count(b"\x1b[<0;1;1M") == expected_presses, received
+        resize_events = Path(str(capture) + ".sizes").read_text().splitlines()
+        sizes = [tuple(map(int, line.split())) for line in resize_events]
+        columns = {cols for cols, rows in sizes if cols > 0 and rows > 0}
+        assert len(columns) >= 2, f"no child terminal width change: {sizes}"
         if os.environ.get("SIMULATOR_ID"):
-            assert received.count(b"\x1b[<0;1;1M") == 2, "expected two deliberate cell taps"
             assert b"\x1b[A" in received and b"\x03" in received, (
                 f"missing terminal keys: {received!r}"
             )

@@ -98,10 +98,18 @@ final class SessionTests: XCTestCase {
     let app = try await pairedApp(session: "CLISTREAM_UI_PTY")
     let view = app.descendants(matching: .any)["session-terminal"].firstMatch
     XCTAssertTrue(view.waitForExistence(timeout: 10), app.debugDescription)
+    let rendered = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value CONTAINS %@", "COPYME terminal"), object: view)
+    XCTAssertEqual(XCTWaiter.wait(for: [rendered], timeout: 10), .completed)
     let origin = view.coordinate(withNormalizedOffset: .zero)
     let cell = origin.withOffset(CGVector(dx: 4, dy: 4))
     #if os(macOS)
       cell.click()
+      let window = app.windows.firstMatch
+      let corner = window.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 1))
+        .withOffset(CGVector(dx: -2, dy: -2))
+      corner.click(forDuration: 0.1, thenDragTo: corner.withOffset(CGVector(dx: -96, dy: -48)))
+      view.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 4, dy: 4)).click()
     #else
       cell.tap()
       tap(app.buttons["Keys"])
@@ -111,7 +119,12 @@ final class SessionTests: XCTestCase {
       tap(app.buttons["Control-C"])
       XCUIDevice.shared.orientation = .landscapeLeft
       defer { XCUIDevice.shared.orientation = .portrait }
-      view.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 4, dy: 4)).tap()
+      let rotated = view.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 4, dy: 4))
+      rotated.tap()
+      if UIDevice.current.userInterfaceIdiom == .pad {
+        rotated.click()
+        view.typeKey("d", modifierFlags: [.control])
+      }
     #endif
     tap(app.buttons["Detach"])
   }

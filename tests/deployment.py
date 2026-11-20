@@ -3,6 +3,7 @@
 import contextlib
 import json
 import os
+import shlex
 import subprocess
 import tempfile
 import time
@@ -144,8 +145,11 @@ def verify(root, resources):
             "attach",
             sid,
             data=(
-                b"cat origin; test ! -r /outside && ! (echo changed >/outside) && echo confined\n"
-            ),
+                "cat origin; "
+                f"for path in /workspace/../outside {shlex.quote(str(sentinel))}; do "
+                'test ! -r "$path" && ! (echo changed > "$path") || exit 8; '
+                "done; echo confined\n"
+            ).encode(),
         )
         assert response.stdout == (host + "confined\n").encode(), response.stdout
     assert sentinel.read_text() == "host-only"
