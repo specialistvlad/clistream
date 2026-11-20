@@ -169,7 +169,7 @@ def run(root, stack, suite, command):
             "-u",
             "-c",
             """
-import os, signal, sys, tty
+import os, signal, sys, time, tty
 tty.setraw(0)
 sizes = open(sys.argv[1] + ".sizes", "w", buffering=1)
 def record_size(*args):
@@ -179,6 +179,9 @@ signal.signal(signal.SIGWINCH, record_size)
 record_size()
 os.write(1, b'\\x1b[2 q\\x1b[?25l')
 if sys.argv[2] == "scroll":
+    os.write(1, b'scroll-ready')
+    while not os.path.exists(sys.argv[1] + ".history"):
+        time.sleep(0.05)
     for number in range(350):
         os.write(1, f"history-{number:03d}\\r\\n".encode())
     os.write(1, b'history-end')
@@ -207,6 +210,8 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
     # invitation. Only this private runner may request one client invite per case.
     route = "/" + os.urandom(24).hex() + "/"
     available = {"PIPE", "PTY", "FILES", "PORTS", "DRIVERS", "QR"}
+    if suite == "scroll":
+        available.add("HISTORY")
     if simulator and suite == "terminal":
         model = subprocess.check_output(
             ["xcrun", "simctl", "getenv", simulator, "SIMULATOR_MODEL_IDENTIFIER"], text=True
@@ -235,6 +240,9 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
                     self.send_error(503, "Simulator hardware input failed")
                     return
                 payload = b"delivered"
+            elif purpose == "HISTORY":
+                Path(str(capture) + ".history").touch()
+                payload = b"released"
             elif purpose == "QR":
                 qr = subprocess.check_output(server)
                 payload = subprocess.check_output([APP / "build/test-qr"], input=qr)
@@ -302,7 +310,10 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
     worker = threading.Thread(target=signal_upload, daemon=True)
     worker.start()
     try:
-        subprocess.run(command, cwd=APP, env=env, check=True, timeout=420)
+        # Each terminal-key check opens a native menu and waits for UIKit to
+        # finish animating. A cold hosted simulator can spend minutes there.
+        timeout = 720 if simulator and suite == "terminal" else 420
+        subprocess.run(command, cwd=APP, env=env, check=True, timeout=timeout)
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as failure:
         stage = "Timed out" if isinstance(failure, subprocess.TimeoutExpired) else "XCTest failed"
         observed = (root / "observer.out").read_bytes().splitlines()

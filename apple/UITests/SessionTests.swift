@@ -216,21 +216,26 @@ final class SessionTests: XCTestCase {
     @MainActor func testScrollSessionsAndTerminalHistory() async throws {
       let app = try await pairedApp(session: "CLISTREAM_UI_PTY", scrollList: true)
       let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
+      assertText("scroll-ready", in: terminal)
+      tap(app.buttons["Keys"])
+      tap(app.buttons["Hide Keyboard"])
+      XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 12))
+      let started = try await fixtureResponse("HISTORY")
+      XCTAssertEqual(started, "released")
       let tail = NSPredicate(format: "value CONTAINS %@", "history-end")
       XCTAssertEqual(
         XCTWaiter.wait(
           for: [XCTNSPredicateExpectation(predicate: tail, object: terminal)],
-          timeout: 10), .completed)
-      terminal.swipeDown()
+          timeout: 20), .completed, "The live terminal did not display the final history marker")
+      let start = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+      let end = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85))
+      start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
       let history = NSPredicate(
         format: "value CONTAINS %@ AND NOT (value CONTAINS %@)", "history-", "history-end")
       XCTAssertEqual(
         XCTWaiter.wait(
           for: [XCTNSPredicateExpectation(predicate: history, object: terminal)],
-          timeout: 8), .completed)
-      tap(app.buttons["Keys"])
-      tap(app.buttons["Hide Keyboard"])
-      XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 6))
+          timeout: 15), .completed, "A downward drag did not expose earlier terminal lines")
       tap(app.buttons["Keys"])
       tap(app.buttons["Show Keyboard"])
       XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 6))
