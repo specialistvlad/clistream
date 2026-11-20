@@ -32,7 +32,7 @@ class ReverseUDP(socketserver.BaseRequestHandler):
 def run(root, stack, command):
     work = root / "workspace"
     work.mkdir()
-    (work / "inbox").mkdir()
+    (work / "inbox" / "nested").mkdir(parents=True)
     (root / "outside").write_text("private")
     (work / "escape").symlink_to(root)
     name = f"CLITest-{os.urandom(4).hex()}"
@@ -137,11 +137,33 @@ def run(root, stack, command):
         ],
         "pty",
     )
+    # Capture bytes at the child, beyond the UI, terminal emulator and broker.
+    capture = root / "terminal-input"
+    ui_pty = session(
+        "pty",
+        [
+            sys.executable,
+            "-u",
+            "-c",
+            """
+import os, sys, tty
+tty.setraw(0)
+os.write(1, b'COPYME terminal selection test\\r\\n')
+os.write(1, b'\\x1b[?1000h\\x1b[?1006h')
+with open(sys.argv[1], 'wb', buffering=0) as captured:
+    while data := os.read(0, 4096):
+        captured.write(data)
+""",
+            str(capture),
+        ],
+        "ui-pty",
+    )
     launch(viewer + ["attach", sid], "observer")
     env = os.environ.copy()
     env.update(
         TEST_RUNNER_CLISTREAM_SESSION=sid,
         TEST_RUNNER_CLISTREAM_PTY_SESSION=pty,
+        TEST_RUNNER_CLISTREAM_UI_PTY=ui_pty,
         TEST_RUNNER_CLISTREAM_FILENAME=name,
         TEST_RUNNER_CLISTREAM_SAVE_DIR=str(saved),
     )
@@ -191,15 +213,53 @@ def run(root, stack, command):
     qr = subprocess.check_output(server)
     decoded = subprocess.check_output([APP / "build/test-qr"], input=qr)
     env["TEST_RUNNER_CLISTREAM_LINK"] = decoded.decode().strip()
-    subprocess.run(command, cwd=APP, env=env, check=True, timeout=420)
+
+    # An independent writer produces output while the UI is inside Files.
+    def signal_upload():
+        target = work / "inbox/nested" / f"{name}.txt"
+        while not finished.wait(0.05):
+            if target.exists():
+                subprocess.run(
+                    viewer + ["attach", sid],
+                    input=b"workspace-finished\n",
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=3,
+                    check=False,
+                )
+                return
+
+    finished = threading.Event()
+
+    def sender():
+        try:
+            signal_upload()
+        except subprocess.TimeoutExpired:
+            pass  # The viewer stays attached after local EOF until stopped.
+
+    worker = threading.Thread(target=sender, daemon=True)
+    worker.start()
+    try:
+        subprocess.run(command, cwd=APP, env=env, check=True, timeout=420)
+    finally:
+        finished.set()
+        worker.join(5)
     for label in ("pipe", "observer"):
         assert b"out:hosted-apple-echo" in (root / (label + ".out")).read_bytes()
         assert b"err:hosted-apple-echo" in (root / (label + ".err")).read_bytes()
     expected = bytes(range(256)) * 937 + bytes(range(147))
     assert len(expected) == 240019
     assert (work / "inbox/apple.bin").read_bytes() == expected
-    assert b"out:apple-client-echo" in (root / "observer.out").read_bytes()
-    assert (work / "inbox" / f"{name}.txt").read_bytes() == sample
+    assert b"out:echo" in (root / "observer.out").read_bytes()
+    assert (work / "inbox/nested" / f"{name}.txt").read_bytes() == sample
+    received = capture.read_bytes()
+    assert b"\x1b[<0;1;1M" in received, (
+        f"missing mouse press in first cell: {received!r}"
+    )
+    if os.environ.get("SIMULATOR_ID"):
+        assert b"\x1b[A" in received and b"\x03" in received, (
+            f"missing terminal keys: {received!r}"
+        )
     print(
         "PASS: verified child, independent CLI viewer, and workspace bytes", flush=True
     )

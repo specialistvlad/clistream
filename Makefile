@@ -13,3 +13,7 @@ apple:
 .PHONY: dist
 dist:
 	python3 scripts/dist.py
+
+.PHONY: test-deployment
+test-deployment:
+	python3 tests/deployment.py

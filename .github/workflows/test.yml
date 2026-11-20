@@ -15,3 +15,46 @@ jobs:
         with:
           go-version-file: go.mod
       - run: make test e2e
+      - if: runner.os == 'Linux'
+        run: make test-deployment
+  apple:
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [macOS, iPhone, iPad]
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: command -v xcodegen || brew install xcodegen
+      - run: make apple
+      - name: Run app-hosted and UI tests
+        env:
+          DEVICE: ${{ matrix.device }}
+        run: |
+          if [[ "$DEVICE" == macOS ]]; then
+            apple/test-device.sh macOS
+          else
+            simulator=$(xcrun simctl list devices available --json | jq -er --arg device "$DEVICE" '
+              [.devices | to_entries[] | select(.key | contains("SimRuntime.iOS-")) |
+               .value[] | select(.name | startswith($device))][0].udid // error("missing simulator")')
+            SIMULATOR_ID="$simulator" apple/test-device.sh
+          fi
+      - name: Record individual XCTest outcomes
+        if: always()
+        run: |
+          bundle=$(find apple/build -path '*/Logs/Test/*.xcresult' -type d | sort | tail -1)
+          if [[ -n "$bundle" && -f "$bundle/Info.plist" ]]; then
+            xcrun xcresulttool get test-results tests --path "$bundle" |
+              jq '[.. | objects | select(.nodeType? == "Test Case") | {test: .nodeIdentifier, result, duration}]' > test-cases.json
+            cat test-cases.json
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apple-${{ matrix.device }}-tests
+          path: test-cases.json
+          if-no-files-found: ignore
