@@ -16,7 +16,7 @@
 1. Sign short-lived role-bound invitations and share redemption across selected listeners.
 2. Display a copyable CLI command and QR code in an interactive terminal. Support replacement with **p** and the local administration socket.
 3. Reconnect from the saved device profile and wait for, attach to, or select a session. Use the same invitation decoder for Apple confirmation.
-4. Accept an optional supervisor invitation before the executable, save enrollment, and stream the child using its detected driver and I/O mode. Exercise first use, saved enrollment, argument forwarding, and terminal and redirected launches.
+4. Accept an optional supervisor invitation before the executable, save enrollment, and stream the child using automatic I/O selection and a generic driver by default. Enable application-specific features on explicit request. Exercise first use, saved enrollment, argument forwarding, and terminal and redirected launches.
 5. Exercise concurrent redemption, tampering, expiry, terminal interaction and iPhone/iPad handoff. Verify tap-to-open from Messages on a physical iPhone with an updated build before claiming that workflow.
 
 Track acceptance against the ten functional requirements and the engineering checks in the [requirements audit](test-results/requirements-audit.md).

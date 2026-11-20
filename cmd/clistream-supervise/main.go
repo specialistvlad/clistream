@@ -36,7 +36,7 @@ func main() {
 func run() (int, error) {
 	dir := flag.String("state", identity.Default("supervisor"), "identity directory")
 	mode := flag.String("mode", "auto", "auto, pipe or pty")
-	name := flag.String("driver", "auto", "auto, generic, codex or claude")
+	name := flag.String("driver", "generic", "generic, or opt in to claude, codex or name-based auto selection")
 	listDrivers := flag.Bool("drivers", false, "list supported CLI versions and execution modes as JSON")
 	pair := flag.Bool("pair", false, "read supervisor invitation from stdin")
 	addr := flag.String("server", "", "override paired host:port (same pinned key)")

@@ -48,7 +48,9 @@ clistream-supervise -mode pipe -- your-command --your-option
 clistream-supervise -local-input=false -- /bin/cat
 ```
 
-The version-aware drivers select PTY for Claude Code **2.1.329** and Codex CLI **0.170.0**. Explicit `-mode pipe` or `-mode pty` overrides selection. Unrecognized versions require `-driver generic`. Commands beginning with `claude -p`, `claude --print` or `codex exec` select pipes automatically. Generic programs get a PTY when both supervisor input and output are terminals and pipes when either is redirected. Terminal and process credentials come from the machine running the supervisor.
+By default, the supervisor runs the supplied program directly and passes through its arguments. It uses a PTY when both input and output are terminals and pipes when either is redirected. Any version can run this way, including Claude and Codex. Use `-mode pipe` or `-mode pty` to override I/O selection.
+
+For application-specific behavior, opt in with `clistream-supervise -driver claude claude` or `clistream-supervise -driver codex codex`. These drivers recognize Claude Code **2.1.329** and Codex CLI **0.170.0**. They default to PTY and select pipes for commands beginning with `claude -p`, `claude --print` or `codex exec`. Terminal and process credentials come from the machine running the supervisor.
 
 Inspect the supported versions, default execution mode and available modes with `clistream-supervise -drivers`. The command prints JSON and works before enrollment.
 

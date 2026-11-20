@@ -371,7 +371,7 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
                     f"{driver} executable required for the Apple driver suite"
                 )
             env["TEST_RUNNER_CLISTREAM_" + driver.upper() + "_SESSION"] = session(
-                "pipe", [exe, *args], driver, env=process_env
+                "pipe", [exe, *args], driver, flags=["-driver", driver], env=process_env
             )
         env.update(
             TEST_RUNNER_CLISTREAM_CLAUDE_INPUT=endpoint.challenge,

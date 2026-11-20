@@ -466,10 +466,10 @@ class Live(BrokerFixture):
             "#!/bin/sh\nif test \"$1\" = --version; then echo 'codex-cli 0.0.0'; else exec cat; fi\n"
         )
         exe.chmod(0o700)
-        refused = self.run_cli(self.supervisor + ["--", exe], check=False)
+        refused = self.run_cli(self.supervisor + ["-driver", "codex", "--", exe], check=False)
         self.assertNotEqual(refused.returncode, 0)
         self.assertIn(b"-driver generic", refused.stderr)
-        _, sid = self.session(["-driver", "generic", "-local-input=false"], [exe])
+        _, sid = self.session(["-local-input=false"], [exe])
         item = next(
             x
             for x in json.loads(self.run_cli(self.a + ["list"]).stdout)
@@ -479,6 +479,16 @@ class Live(BrokerFixture):
         remote = self.spawn(self.a + ["-eof", "attach", sid])
         stdout, _ = remote.communicate(b"override works\n", timeout=8)
         self.assertEqual((remote.returncode, stdout), (0, b"override works\n"))
+
+    def test_default_launch_never_probes_named_programs(self):
+        for name in ("claude", "codex", "my-cli"):
+            with self.subTest(name=name):
+                exe = self.work / name
+                exe.write_text('#!/bin/sh\nprintf "%s\\n" "$@" >> "$0.log"\nprintf "%s" "$1"\n')
+                exe.chmod(0o700)
+                result = self.run_cli(self.supervisor + [exe, "--my-argument"])
+                self.assertEqual(result.stdout, b"--my-argument")
+                self.assertEqual(pathlib.Path(str(exe) + ".log").read_text(), "--my-argument\n")
 
     def test_interactive_driver_terminals(self):
         tested = []
@@ -496,7 +506,7 @@ class Live(BrokerFixture):
                     "CODEX_HOME": str(config),
                     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
                 }
-                _, sid = self.session(["-local-input=false"], [executable], env=env)
+                _, sid = self.session(["-driver", name, "-local-input=false"], [executable], env=env)
                 row = next(
                     s
                     for s in json.loads(self.run_cli(self.a + ["list"]).stdout)
@@ -532,7 +542,7 @@ class Live(BrokerFixture):
             if executable:
                 r = self.run_cli(
                     self.supervisor
-                    + ["-local-input=false", "--", executable, "--version"]
+                    + ["-driver", name, "-local-input=false", "--", executable, "--version"]
                 )
                 self.assertIn(b"session ", r.stderr)
                 self.assertTrue(r.stdout.strip())
@@ -544,7 +554,7 @@ class Live(BrokerFixture):
         executable = shutil.which(name)
         self.assertIsNotNone(executable, name + " installation required")
         proc, sid = self.session(
-            ["-local-input=false"], [executable, *args], **options
+            ["-driver", name, "-local-input=false"], [executable, *args], **options
         )
         items = json.loads(self.run_cli(self.a + ["list"]).stdout)
         self.assertEqual(next(s["Driver"] for s in items if s["ID"] == sid), name)
