@@ -33,16 +33,6 @@ struct WorkspaceBrowser: View {
 
   var body: some View {
     observedNavigation
-      #if os(iOS)
-        .safeAreaInset(edge: .bottom) {
-          HStack {
-            transferActions
-          }.font(.body).buttonStyle(.plain).foregroundStyle(Color(uiColor: .label))
-          .padding(.horizontal).frame(maxWidth: .infinity)
-          .background(Color(uiColor: .systemBackground))
-          .overlay(alignment: .top) { Divider() }
-        }
-      #endif
       .fileImporter(isPresented: $importer, allowedContentTypes: [.data], onCompletion: imported)
       .fileExporter(
         isPresented: $exporter, item: download, contentTypes: [.data],
@@ -103,9 +93,10 @@ struct WorkspaceBrowser: View {
         message = error
         return
       }
-      listings[folder] = (r.Entries ?? []).sorted {
+      let updated = (r.Entries ?? []).sorted {
         $0.Name.localizedStandardCompare($1.Name) == .orderedAscending
       }
+      if listings[folder] != updated { listings[folder] = updated }
       do { try await Task.sleep(for: .seconds(2)) } catch { return }
     }
   }
@@ -163,6 +154,16 @@ struct WorkspaceBrowser: View {
       if !message.isEmpty {
         Text(message).font(.caption).textSelection(.enabled).padding(.horizontal)
       }
+      #if os(iOS)
+        // Keep the actions in the active navigation page so VoiceOver can
+        // advance from its last file row to Upload and Done on compact screens.
+        HStack {
+          transferActions
+        }.font(.body).buttonStyle(.plain).foregroundStyle(Color(uiColor: .label))
+          .padding(.horizontal).frame(maxWidth: .infinity)
+          .background(Color(uiColor: .systemBackground))
+          .overlay(alignment: .top) { Divider() }
+      #endif
     }
     .navigationTitle(
       folder == "." ? session.Name + " Files" : URL(fileURLWithPath: folder).lastPathComponent

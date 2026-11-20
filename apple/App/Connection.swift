@@ -8,7 +8,7 @@ struct SessionInfo: Codable, Identifiable {
   var id: String { self.ID }
 }
 
-struct WorkspaceEntry: Decodable, Identifiable {
+struct WorkspaceEntry: Decodable, Identifiable, Equatable {
   let Name: String
   let Directory: Bool
   let Size, Modified: Int64

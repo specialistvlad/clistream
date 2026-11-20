@@ -11,11 +11,8 @@ final class SessionTests: XCTestCase {
     let app = try await pairedApp(session: "CLISTREAM_SESSION")
     for port in ["tcp", "udp"] {
       tap(app.buttons["Forward " + port])
-      XCTAssertTrue(
-        app.staticTexts.matching(
-          NSPredicate(
-            format: "label BEGINSWITH %@ OR value BEGINSWITH %@", "127.0.0.1:", "127.0.0.1:")
-        ).firstMatch.waitForExistence(timeout: 8), "Forwarded address missing for " + port)
+      let address = app.staticTexts["forward-address-" + port]
+      assertText("127.0.0.1:", in: address)
       tap(app.buttons["Stop " + port])
     }
     let input = app.textFields["session-input"]
@@ -26,14 +23,15 @@ final class SessionTests: XCTestCase {
       for letter in "echo" { tap(app.keyboards.keys[String(letter)]) }
       tap(app.buttons["Send"])
     #endif
-    for ch in ["out:", "err:"] {
-      XCTAssertTrue(
-        app.descendants(matching: .any).matching(
-          NSPredicate(
-            format: "label CONTAINS %@ OR value CONTAINS %@", ch + "echo",
-            ch + "echo")
-        ).firstMatch.waitForExistence(timeout: 10), "Pipe output missing " + ch + "echo")
+    func output(_ title: String) -> XCUIElement {
+      #if os(macOS)
+        return app.descendants(matching: .any)["pipe-" + title].firstMatch
+      #else
+        return app.textViews[title]
+      #endif
     }
+    assertText("out:echo", in: output("Standard output"))
+    assertText("err:echo", in: output("Standard error"))
     #if os(macOS)
       app.typeKey("e", modifierFlags: [.command])
       XCTAssertTrue(app.buttons["Upload"].waitForExistence(timeout: 10))
@@ -44,13 +42,17 @@ final class SessionTests: XCTestCase {
       tap(app.buttons["Files"])
     #endif
     openEntry(name + ".txt", in: app)
-    // Save the remote file through the system document picker, then re-import it
-    // from Recents into another remote directory. The fixture checks the bytes.
+    // Save through the system document picker, then re-import the same local
+    // file into another remote directory. The fixture checks the bytes.
     #if os(macOS)
       let saved = try XCTUnwrap(env["CLISTREAM_SAVE_DIR"])
       choosePath(saved, in: app)
       tap(app.buttons["OKButton"])
     #else
+      let storage = UIDevice.current.userInterfaceIdiom == .pad ? "On My iPad" : "On My iPhone"
+      let storageRow = app.cells[storage].firstMatch
+      let usedSidebar = storageRow.waitForExistence(timeout: 3) && storageRow.isHittable
+      if usedSidebar { storageRow.tap() }
       tap(app.buttons["Save"])
     #endif
     let completion = "Downloaded " + name + ".txt"
@@ -81,11 +83,19 @@ final class SessionTests: XCTestCase {
       choosePath(saved + "/" + name + ".txt", in: app)
       tap(app.buttons["OKButton"])
     #else
-      let recents = app.buttons["Recents"]
-      if recents.waitForExistence(timeout: 3) { recents.tap() }
       let pickerFile = app.descendants(matching: .any).matching(
         NSPredicate(format: "label BEGINSWITH %@", name)
       ).firstMatch
+      if usedSidebar {
+        tap(storageRow)
+      } else if !pickerFile.waitForExistence(timeout: 2) {
+        let browse = app.buttons["Browse"].firstMatch
+        if browse.waitForExistence(timeout: 4) { browse.tap() }
+        if !pickerFile.waitForExistence(timeout: 2) {
+          if !storageRow.exists && browse.isHittable { browse.tap() }
+          tap(storageRow)
+        }
+      }
       tap(pickerFile)
       let open = app.buttons["Open"]
       if open.exists { open.tap() }
@@ -105,13 +115,7 @@ final class SessionTests: XCTestCase {
       browse.buttons.element(boundBy: 0).tap()
     #endif
     tap(app.buttons["Done"])
-    XCTAssertTrue(
-      app.descendants(matching: .any).matching(
-        NSPredicate(
-          format: "label CONTAINS %@ OR value CONTAINS %@", "out:workspace-finished",
-          "out:workspace-finished")
-      ).firstMatch.waitForExistence(timeout: 10),
-      "Output from the other viewer was missing on return to Terminal")
+    assertText("out:workspace-finished", in: output("Standard output"))
     tap(app.buttons["EOF"])
     XCTAssertTrue(app.staticTexts["Process exited with status 0"].waitForExistence(timeout: 12))
     tap(app.buttons["Detach"])
@@ -165,15 +169,24 @@ final class SessionTests: XCTestCase {
     #if compiler(>=6.4)
       @available(iOS 27.0, *)
       @MainActor func testVoiceOverWorkspaceOrder() async throws {
+        let voice = XCUIDevice.shared.voiceOverService
+        let initiallyEnabled = voice.isEnabled
+        addTeardownBlock { @MainActor in
+          if initiallyEnabled && !voice.isEnabled { try voice.enable() }
+          if !initiallyEnabled && voice.isEnabled { try voice.disable() }
+        }
+        if initiallyEnabled { try voice.disable() }
         let app = try await pairedApp(session: "CLISTREAM_SESSION")
         tap(app.buttons["Files"])
         openEntry("inbox", in: app)
         XCTAssertTrue(app.navigationBars["inbox"].waitForExistence(timeout: 8))
-        let voice = XCUIDevice.shared.voiceOverService
-        let enabled = voice.isEnabled
-        if !enabled { try voice.enable() }
-        defer { if !enabled { try? voice.disable() } }
-        var readings = [try voice.currentSpeech().utterance]
+        try voice.enable()
+        XCTAssertTrue(voice.isEnabled)
+        // VoiceOver may enable with no focused element. Start by exploring
+        // the folder heading, then use the screen reader's next action.
+        app.navigationBars["inbox"].staticTexts["inbox"].firstMatch.tap()
+        var readings = [String]()
+        if let initial = try? voice.currentSpeech() { readings.append(initial.utterance) }
         for _ in 0..<20 {
           readings.append(try voice.moveForward().utterance)
           if ["nested", "Upload", "Done"].allSatisfy({ label in
@@ -300,12 +313,21 @@ final class SessionTests: XCTestCase {
       app.open(link)
       tap(app.buttons["Cancel"])
     }
-    app.open(link)
     #if os(macOS)
+      if session == "CLISTREAM_SESSION" {
+        app.activate()
+        app.typeKey("k", modifierFlags: [.command])
+        let field = app.secureTextFields["Pairing link"].firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 12), "Pairing link field did not appear")
+        field.typeText(invitation)
+      } else {
+        app.open(link)
+      }
       app.activate()
       XCTAssertTrue(app.buttons["Pair device"].waitForExistence(timeout: 12))
       app.typeKey(.return, modifierFlags: [])
     #else
+      app.open(link)
       tap(app.buttons["Pair device"])
     #endif
     if largeText {
@@ -315,12 +337,14 @@ final class SessionTests: XCTestCase {
       tap(app.buttons["Pair device"])
       tap(app.alerts.buttons["OK"])
     }
+    let target = app.descendants(matching: .any)["session-" + id].firstMatch
     #if os(macOS)
+      XCTAssertTrue(
+        target.waitForExistence(timeout: 30), "New server sessions failed to load after pairing")
       app.typeKey("r", modifierFlags: [.command])
     #else
       tap(app.buttons["Refresh"])
     #endif
-    let target = app.descendants(matching: .any)["session-" + id].firstMatch
     #if os(iOS)
       if scrollList {
         let list = app.collectionViews.firstMatch
@@ -373,6 +397,18 @@ final class SessionTests: XCTestCase {
       app.typeKey(.return, modifierFlags: [])
     }
   #endif
+
+  private func assertText(
+    _ text: String, in element: XCUIElement, file: StaticString = #filePath,
+    line: UInt = #line
+  ) {
+    XCTAssertTrue(element.waitForExistence(timeout: 10), file: file, line: line)
+    let predicate = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)
+    let appeared = XCTNSPredicateExpectation(predicate: predicate, object: element)
+    XCTAssertEqual(
+      XCTWaiter.wait(for: [appeared], timeout: 12), .completed,
+      "Missing " + text, file: file, line: line)
+  }
 
   private func tap(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
     #if os(macOS)

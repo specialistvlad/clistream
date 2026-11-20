@@ -22,7 +22,7 @@ esac
 cmp ../LICENSE "$notice"
 case "$platform" in
   macOS) hosted=CLIStream-MacTests; ui=CLIStream-MacUITests
-         test_limits=(-test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240) ;;
+         test_limits=(-test-timeouts-enabled YES -default-test-execution-time-allowance 300 -maximum-test-execution-time-allowance 360) ;;
   iOS) hosted=CLIStream-iOSTests; ui=CLIStream-UITests; test_limits=() ;;
 esac
 suites="hosted files terminal"

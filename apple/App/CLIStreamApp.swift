@@ -25,6 +25,7 @@ struct BrowserView: View {
   @State private var selection: String?
   @State private var folders = [String: WorkspaceLocation]()
   @FocusState private var inputFocused: Bool
+  @FocusState private var invitationFocused: Bool
   #if os(macOS)
     @FocusState private var sidebarFocused: Bool
   #endif
@@ -84,7 +85,8 @@ struct BrowserView: View {
                   Task { await connection.forward(name, item: session) }
                 }
                 if let address = connection.forwarding[name] {
-                  Text(address).textSelection(.enabled)
+                  Text(address).textSelection(.enabled).accessibilityIdentifier(
+                    "forward-address-" + name)
                 }
               }.padding(.horizontal)
             }
@@ -165,6 +167,7 @@ struct BrowserView: View {
           Text(fields?.first(where: { $0.name == "address" })?.value ?? "Server invitation")
         } else {
           SecureField("Pairing link", text: $invitation).textFieldStyle(.roundedBorder)
+            .focused($invitationFocused).onAppear { invitationFocused = true }
         }
         HStack {
           Button("Cancel") { pairing = nil }.keyboardShortcut(.cancelAction)
@@ -231,6 +234,7 @@ struct BrowserView: View {
         ScrollView {
           Text(String(decoding: data, as: UTF8.self)).font(.system(.body, design: .monospaced))
             .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("pipe-" + title)
         }
       #endif
     }.padding(.horizontal)

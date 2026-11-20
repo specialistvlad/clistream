@@ -30,7 +30,8 @@ jobs:
       matrix:
         device: [macOS, iPhone, iPad, shared]
     runs-on: macos-26
-    timeout-minutes: 35
+    # A cold iOS runtime must finish migrating before the per-case watchdogs start.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
