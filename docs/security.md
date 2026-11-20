@@ -10,6 +10,10 @@ The interactive server terminal issues signed invitations for any device. The Un
 
 Activity logs contain device key fingerprints, network endpoints, session and connection IDs, operation categories, UTC timestamps and outcomes. These fields can identify a device and when it used a session. Only the state-directory owner should have access. The daemon records metadata at connection and channel boundaries. It omits keys, invitations, commands, program names, file paths and contents, terminal input and output, export names, forwarded data and peer-supplied error text. With stderr logging, access and retention depend on the collecting service. [Retention and destination](deployment.md#server-activity-logs)
 
+## Supervisor management
+
+An enrolled key can retrieve arguments and manage every supervisor on its daemon. The broker checks the requester and the target’s enrollment before dispatch. The broker and supervisor check the expected run and revision. An argument edit supplies individual strings to the fixed executable. The child runs with the supervisor account’s permissions and interprets its own arguments. Argument values travel through the trusted broker and stay out of listings, activity records and lifecycle errors. The Go dashboard interprets terminal escape sequences inside the child viewport, filters control characters from labels and keeps paste separate from shortcuts.
+
 ## Workspace service
 
 The shared folder determines which files the file service presents to enrolled clients. The supervised program, including commands entered through its terminal, uses the host account's normal filesystem permissions. Services reached through port forwarding have their own access rules.

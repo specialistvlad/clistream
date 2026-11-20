@@ -15,7 +15,7 @@ from pathlib import Path
 
 APP = Path(__file__).resolve().parent
 sys.path.insert(0, str(APP.parent / "tests"))
-from e2e import BrokerFixture
+from e2e import BrokerFixture, status_line, DashboardTerminal, SUP, line
 
 
 class SharedAppleSession(BrokerFixture):
@@ -38,14 +38,24 @@ class SharedAppleSession(BrokerFixture):
         cls.package = APP / "build/accept-ios/Build/Products/Debug-iphonesimulator/CLIStreamSharedTestHost.app"
 
     def test_simultaneous_clients(self):
-        child, sid = self.session(
-            ["-mode", "pipe"],
-            [
-                "/bin/sh",
-                "-c",
-                'while IFS= read -r v; do echo "out:$v"; echo "err:$v" >&2; done',
-            ],
-        )
+        child = self.spawn([SUP, "-state", self.base / "supervisor", "-mode", "pipe", "/bin/sh", "-c",
+                            'while IFS= read -r v; do echo "out:$v"; echo "err:$v" >&2; done'])
+        first = status_line(child.stderr, b"session ").split()[1].decode()
+        dashboard = DashboardTerminal(self)
+        dashboard.until(b"R Restart")
+        expected = self.exercise_run(first, child, dashboard)
+        first_errors = [line(child.stderr) for _ in expected]
+        self.assertCountEqual(first_errors, [entry.replace(b"out:", b"err:", 1) for entry in expected])
+        second = status_line(child.stderr, b"session ").split()[1].decode()
+        self.assertNotEqual(first, second)
+        replacement_lines = self.exercise_run(second, child, None)
+        child.terminate()
+        self.assertEqual(child.wait(8), 0)
+        self.assertCountEqual(child.stdout.read().splitlines(keepends=True), expected + replacement_lines)
+        self.assertCountEqual(child.stderr.read().splitlines(keepends=True),
+                              [entry.replace(b"out:", b"err:", 1) for entry in replacement_lines])
+
+    def exercise_run(self, sid, child, dashboard):
         observer = self.spawn(self.a + ["attach", sid])
         reports = Path(tempfile.mkdtemp(prefix="shared-", dir=APP / "build"))
 
@@ -80,6 +90,7 @@ class SharedAppleSession(BrokerFixture):
             return {
                 **os.environ,
                 prefix + "CLISTREAM_SESSION": sid,
+                prefix + "CLISTREAM_EXPECT_EXIT": "128" if dashboard else "0",
                 prefix + "CLISTREAM_PARTICIPANT": name,
                 prefix + "CLISTREAM_FIXTURE": f"http://127.0.0.1:{service.server_port}{routes[name]}",
             }
@@ -119,14 +130,39 @@ class SharedAppleSession(BrokerFixture):
                     if name in records and records[name].exists():
                         self.fail(f"{name}: {json.loads(records[name].read_text()).get('failedStage')}")
                     self.assertLess(time.monotonic(), deadline, f"{name} did not attach")
-                line = observer.stdout.readline()
-                self.assertEqual(line, f"out:ready-{name}\n".encode())
-                ready_lines.add(line)
+                observed = observer.stdout.readline()
+                self.assertEqual(observed, f"out:ready-{name}\n".encode())
+                ready_lines.add(observed)
                 print(name, "attached to child", flush=True)
 
         # Only release the writers after all four clients are attached.
         observer.stdin.write(b"hosted-cli-echo\n")
         writers = [*routes, "cli"]
+        received_lines = list(ready_lines)
+        verified = set()
+        expected = {f"out:verified-{name}\n".encode() for name in routes}
+        with selectors.DefaultSelector() as sel:
+            sel.register(observer.stdout, selectors.EVENT_READ)
+            while verified != expected:
+                self.assertTrue(sel.select(90), "participants did not verify the run")
+                observed = observer.stdout.readline()
+                self.assertTrue(observed)
+                received_lines.append(observed)
+                if observed in expected:
+                    verified.add(observed)
+        if dashboard:
+            dashboard.send(b"r")
+            dashboard.until(b"[Cancel]")
+            dashboard.send(b"\t\r")
+        else:
+            child.stdin.close()
+        self.assertEqual(observer.wait(10), 128 if dashboard else 0)
+        stdout, stderr = observer.communicate(timeout=8)
+        received_lines.extend(stdout.splitlines(keepends=True))
+        all_lines = list(ready_lines | expected) + [f"out:hosted-{name}-echo\n".encode() for name in writers]
+        self.assertCountEqual(received_lines, all_lines)
+        self.assertCountEqual(stderr.splitlines(keepends=True),
+                              [entry.replace(b"out:", b"err:", 1) for entry in all_lines])
         for name, record in records.items():
             deadline = time.monotonic() + 120
             while not record.exists():
@@ -145,19 +181,6 @@ class SharedAppleSession(BrokerFixture):
             "xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(reports / "mac.xcresult")
         ]))
         self.assertEqual((summary["passedTests"], summary["skippedTests"], summary["failedTests"]), (1, 0, 0))
-        child.stdin.close()
-        self.assertEqual(child.wait(8), 0)
-        stdout, stderr = observer.communicate(timeout=8)
-        self.assertEqual(observer.returncode, 0)
-        echoes = [f"out:hosted-{name}-echo\n".encode() for name in writers]
-        self.assertCountEqual(stdout.splitlines(keepends=True), echoes)
-        expected = ready_lines.union(echoes)
-        self.assertCountEqual(child.stdout.read().splitlines(keepends=True), expected)
-        errors = {entry.replace(b"out:", b"err:", 1) for entry in expected}
-        self.assertCountEqual(stderr.splitlines(keepends=True), errors)
-        self.assertCountEqual(child.stderr.read().splitlines(keepends=True), errors)
-        self.daemon.terminate()
-        self.assertEqual(self.daemon.wait(8), 0)
         events = [json.loads(row) for row in (self.base / "server/server.log").read_text().splitlines()]
         attachments = {e["connection_id"]: e["device"] for e in events
                        if e["event"] == "channel_open" and e["session_id"] == sid and e["operation"] == "stdin"}
@@ -166,6 +189,7 @@ class SharedAppleSession(BrokerFixture):
         closed = {e["connection_id"] for e in events if e["event"] == "connection_close" and e["role"] == "client"}
         self.assertTrue(attachments.keys() <= closed)
         print("Verified four simultaneous clients. Results in", reports, flush=True)
+        return all_lines
 
 
 if __name__ == "__main__":

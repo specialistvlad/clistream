@@ -23,7 +23,7 @@ In a third terminal on the same OS account, run `clistream`. The two Go tools sh
 
 For scripts, `clistreamd invite` prints a single link. The older spellings `clistreamd supervisor`, `clistreamd invite supervisor` and `clistreamd invite client` also issue universal invitations. Both CLIs still accept invitations on stdin through `clistream pair` and `clistream-supervise -pair`.
 
-Run `clistream` to reconnect. It attaches to the sole session, offers a numbered choice for several, or waits for a supervisor. When input or output is redirected it prints the session list as JSON. Explicit `list`, `attach ID`, and `pair` (invitation on stdin) remain available to scripts. Type into either terminal. The shell exits for everyone when you run `exit`. To detach a remote CLI without affecting the shared process, press Ctrl-] in an interactive PTY attachment. In pipe mode, `clistream -eof attach ID` closes the child's shared stdin when the client's input ends.
+Run `clistream` to open the supervisor table. Select a running program with the arrow keys and press Enter to attach. Ctrl-] returns to the table. Use **S** to stop, **R** to restart or start, and **E** to edit arguments. The footer shows the available actions. When input or output is redirected it prints the session list as JSON. Explicit `list`, `attach ID`, and `pair` (invitation on stdin) remain available to scripts. Type into either terminal. The shell exits for every viewer when you run `exit`. Its supervisor stays available for another start. Use `clistream-supervise -once PROGRAM` in scripts that wait for the child’s status. In pipe mode, `clistream -eof attach ID` closes the child's shared stdin when the client's input ends.
 
 With Python 3.11+, `make dist` builds checksummed CLI archives in `dist/` for Linux and macOS on amd64 and arm64. Extract the matching archive on each host.
 
@@ -73,6 +73,7 @@ The daemon automatically appends JSON activity events to `server.log` in its pri
 On upgrade, the Go tools reuse the sole saved profile, or the client profile when both legacy profiles have the same address and server pin. If the servers differ, each tool keeps its existing connection until you explicitly pair with the shared server. Older daemons retain their original enrollment rules.
 
 - [Product requirements and acceptance criteria](docs/requirements.md)
+- [Interactive terminal client and supervisor controls](docs/terminal-client-design.md)
 - [Apple client interaction design](docs/apple-client-design.md)
 - [Deployment and Apple build instructions](docs/deployment.md)
 - [Security model and file-service permissions](docs/security.md)

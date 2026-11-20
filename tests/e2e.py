@@ -9,6 +9,7 @@ import pathlib
 import pty
 import re
 import selectors
+import signal
 import shutil
 import socket
 import statistics
@@ -64,7 +65,7 @@ class BrokerFixture(unittest.TestCase):
         self.work.mkdir()
         self.address = f"127.0.0.1:{port(socket.SOCK_DGRAM)}"
         self.server = [DAEMON, "-state", self.base / "server", "-qr=false"]
-        self.supervisor = [SUP, "-state", self.base / "supervisor"]
+        self.supervisor = [SUP, "-once", "-state", self.base / "supervisor"]
         self.a = [CLI, "-state", self.base / "a"]
         self.b = [CLI, "-state", self.base / "b"]
         self.start_server()
@@ -129,7 +130,236 @@ class BrokerFixture(unittest.TestCase):
         return p, msg.split()[1].decode()
 
 
+class DashboardTerminal:
+    def __init__(self, fixture, args=None):
+        self.fixture = fixture
+        self.fd, slave = pty.openpty()
+        fixture.addCleanup(os.close, self.fd)
+        try:
+            termios.tcsetwinsize(slave, (24, 100))
+            self.process = fixture.spawn(args or fixture.a, stdin=slave, stdout=slave, stderr=slave,
+                                         env={**os.environ, "TERM": "xterm-256color"})
+        finally:
+            os.close(slave)
+
+    def send(self, data):
+        os.write(self.fd, data)
+
+    def until(self, marker):
+        data = bytearray()
+        deadline = time.monotonic() + 12
+        with selectors.DefaultSelector() as sel:
+            sel.register(self.fd, selectors.EVENT_READ)
+            while marker not in data:
+                self.fixture.assertTrue(sel.select(max(0, deadline - time.monotonic())),
+                                        f"Missing {marker!r} in {data[-4096:]!r}")
+                data.extend(os.read(self.fd, 8192))
+        return data
+
+
 class Live(BrokerFixture):
+    def managed(self, cmd, flags=()):
+        return self.spawn([SUP, "-state", self.base / "supervisor", "-local-input=false", *flags, "--", *cmd],
+                          cwd=self.work)
+
+    def test_framed_terminal(self):
+        script = """
+import os, tty
+tty.setraw(0)
+os.write(1, b'\\x1b[?1049h' + b'fast output\\r\\n' * 400 + b'\\x1b[2J\\x1b[H\\x1b[?1000h\\x1b[?1006hVIEWPORT')
+while True:
+    b = os.read(0, 1)
+    if b == b'!':
+        size = os.get_terminal_size()
+        os.write(1, f'\\r\\nSIZE={size.columns},{size.lines}\\r\\n'.encode())
+    elif b == b'x':
+        os._exit(19)
+    else:
+        os.write(1, ('[%02x]' % b[0]).encode())
+"""
+        p = self.managed([sys.executable, "-c", script], ["-mode", "pty"])
+        sid = status_line(p.stderr, b"session ").split()[1]
+        t = DashboardTerminal(self)
+        t.until(b"R Restart")
+        t.send(b"S")
+        t.until(b"[Cancel]")
+        t.send(b"\r")
+        t.until(b"Enter Attach")
+        t.send(b"\r")
+        t.until(b"VIEWPORT")
+        t.send(b"s\x03\x1b[200~q\x1ds\x1b[201~\x1b[<0;5;8M!")
+        t.until(b"SIZE=100,22")
+        termios.tcsetwinsize(t.fd, (18, 73))
+        os.kill(t.process.pid, signal.SIGWINCH)
+        time.sleep(0.2)
+        t.send(b"!")
+        t.until(b"SIZE=73,16")
+        t.send(b"\x1d")
+        t.until(b"Enter Attach")
+        t.send(b"q")
+        self.assertEqual(t.process.wait(5), 0)
+        # The replay contains every child-bound byte, including the pasted detach key.
+        viewer = DashboardTerminal(self, self.b + ["attach", sid])
+        replay = viewer.until(b"SIZE=73,16")
+        for seq in (b"[73][03][71][1d][73]", b"[1b][5b][3c][30][3b][35][3b][37][4d]", b"CLIStream Client", b"Ctrl-] Detach"):
+            self.assertIn(seq, replay)
+        viewer.send(b"\x1d")
+        viewer.until(b"Enter Attach")
+        viewer.send(b"q")
+        self.assertEqual(viewer.process.wait(8), 0)
+        direct = DashboardTerminal(self, self.b + ["attach", sid])
+        direct.until(b"Ctrl-] Detach")
+        direct.send(b"x")
+        self.assertEqual(direct.process.wait(8), 19)
+        self.assertIsNone(p.poll())
+
+    def test_managed_supervisors(self):
+        executable = self.work / "worker"
+        executable.write_text('#!/bin/sh\nprintf "<%s>\\n" "$@"\nread value\nexit 23\n')
+        executable.chmod(0o700)
+        p = self.managed([str(executable), "private argument", ""])
+        old = status_line(p.stderr, b"session ").split()[1]
+        first, other = DashboardTerminal(self), DashboardTerminal(self, self.b)
+        for t in (first, other):
+            t.until(b"R Restart")
+            t.send(b"r")
+            t.until(b"[Cancel]")
+        first.send(b"\t\r")
+        replacement = status_line(p.stderr, b"session ").split()[1]
+        self.assertNotEqual(old, replacement)
+        other.send(b"\t\r")
+        other.until(b"Request failed")
+        self.assertEqual([r["ID"].encode() for r in json.loads(self.run_cli(self.a).stdout)], [replacement])
+        self.assertNotEqual(self.run_cli(self.a + ["attach", old], check=False).returncode, 0)
+        first.send(b"e")
+        first.until(b"private argument")
+        first.send(b"\x1b")
+        first.until(b"R Restart")
+        first.send(b"s")
+        first.until(b"[Cancel]")
+        first.send(b"\t\r")
+        first.until(b"R Start")
+        self.assertFalse(json.loads(self.run_cli(self.a).stdout))
+        first.send(b"e")
+        first.until(b"private argument")
+        first.send(b"\x1b[B\r\x1b[200~a b;$HOME\x1b[201~\x12")
+        first.until(b"[Cancel]")
+        first.send(b"\t\r")
+        edited = status_line(p.stderr, b"session ").split()[1]
+        remote = self.spawn(self.a + ["attach", edited])
+        self.assertEqual(line(remote.stdout), b"<private argument>\n")
+        self.assertEqual(line(remote.stdout), b"<>\n")
+        self.assertEqual(line(remote.stdout), b"<a b;$HOME>\n")
+        remote.stdin.write(b"done\n")
+        self.assertEqual(remote.wait(8), 23)
+        first.until(b"Stopped")
+        self.daemon.terminate()
+        self.daemon.wait(8)
+        first.until(b"Disconnected")
+        self.start_server()
+        first.send(b"r")
+        first.until(b"R Start")
+        first.send(b"r")
+        new = status_line(p.stderr, b"session ").split()[1]
+        viewer = self.spawn(self.a + ["attach", new])
+        self.assertEqual(line(viewer.stdout), b"<private argument>\n")
+        self.assertEqual(line(viewer.stdout), b"<>\n")
+        self.assertEqual(line(viewer.stdout), b"<a b;$HOME>\n")
+        executable.unlink()
+        first.send(b"r")
+        first.until(b"[Cancel]")
+        first.send(b"\t\r")
+        self.assertEqual(viewer.wait(8), 128)
+        first.until(b"Launch failed")
+        self.assertIsNone(p.poll())
+        p.terminate()
+        self.assertEqual(p.wait(8), 0)
+        log = (self.base / "server/server.log").read_bytes()
+        self.assertNotIn(b"private argument", log)
+        self.assertNotIn(b"a b;$HOME", log)
+        actions = [json.loads(row) for row in log.splitlines()]
+        actions = [event for event in actions if event["event"] == "supervisor_request"]
+        self.assertTrue(all(e["device"] and e["supervisor_id"] for e in actions))
+        self.assertEqual(len({e["supervisor_id"] for e in actions}), 1)
+        self.assertIn(("restart", old.decode(), "failed"),
+                      [(e["operation"], e.get("session_id"), e["outcome"]) for e in actions])
+
+    def test_run_bound_channels(self):
+        with socket.socket() as service:
+            service.bind(("127.0.0.1", 0))
+            service.listen()
+            service.settimeout(8)
+            export = "test=tcp:127.0.0.1:" + str(service.getsockname()[1])
+            p = self.managed(["cat"], ["-export", export])
+            old = status_line(p.stderr, b"session ").split()[1]
+            forward = self.spawn(self.a + ["forward", old, "test", "127.0.0.1:0"])
+            port = int(status_line(forward.stderr, b"forwarding ").split(b":")[-1])
+            console = DashboardTerminal(self)
+            console.until(b"R Restart")
+            with socket.create_connection(("127.0.0.1", port), timeout=8) as local:
+                remote, _ = service.accept()
+                with remote:
+                    remote.settimeout(8)
+                    local.sendall(b"old")
+                    self.assertEqual(remote.recv(3), b"old")
+                    console.send(b"r")
+                    console.until(b"[Cancel]")
+                    console.send(b"\t\r")
+                    new = status_line(p.stderr, b"session ").split()[1]
+                    self.assertEqual(remote.recv(1), b"")
+                    self.assertEqual(local.recv(1), b"")
+            self.assertNotEqual(old, new)
+            self.assertNotEqual(self.run_cli(self.a + ["ls", old], check=False).returncode, 0)
+            self.run_cli(self.a + ["ls", new])
+
+    def test_lost_restart_acknowledgement(self):
+        child = self.managed(["/bin/sh", "-c", 'echo $$ >> runs; echo ready; exec cat'])
+        first = status_line(child.stderr, b"session ").split()[1]
+        observer = self.spawn(self.b + ["attach", first])
+        self.assertEqual(line(observer.stdout), b"ready\n")
+        # Delay the exit acknowledgement, keeping restart in progress.
+        observer.send_signal(signal.SIGSTOP)
+        self.addCleanup(lambda: observer.poll() is None and observer.send_signal(signal.SIGCONT))
+        console = DashboardTerminal(self)
+        console.until(b"R Restart")
+        console.send(b"r")
+        console.until(b"[Cancel]")
+        console.send(b"\t\r")
+        old_pid = int((self.work / "runs").read_text())
+        deadline = time.monotonic() + 5
+        while True:
+            try:
+                os.kill(old_pid, 0)
+            except ProcessLookupError:
+                break
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.01)
+        console.process.kill()
+        console.process.wait(5)
+        observer.send_signal(signal.SIGCONT)
+        second = status_line(child.stderr, b"session ").split()[1]
+        self.assertNotEqual(first, second)
+        retry = DashboardTerminal(self)
+        retry.until(b"R Restart")
+        self.assertEqual(len((self.work / "runs").read_text().splitlines()), 2)
+        self.assertEqual(observer.wait(8), 128)
+        # Losing the broker while attached requires an explicit reattachment.
+        retry.send(b"\r")
+        retry.until(b"Ctrl-] Detach")
+        self.daemon.terminate()
+        self.daemon.wait(8)
+        retry.until(b"Disconnected")
+        retry.send(b"s")
+        self.start_server()
+        retry.send(b"r")
+        retry.until(b"R Restart")
+        self.assertEqual(json.loads(self.run_cli(self.a).stdout)[0]["ID"].encode(), second)
+        active_pid = int((self.work / "runs").read_text().splitlines()[-1])
+        child.terminate()
+        self.assertEqual(child.wait(8), 0)
+        with self.assertRaises(ProcessLookupError):
+            os.kill(active_pid, 0)
+
     def test_activity_log(self):
         log = self.base / "server/server.log"
         self.check_activity(log)
@@ -274,23 +504,27 @@ class Live(BrokerFixture):
         # Exercise the unquoted link exactly as a user would paste it into a shell.
         shell = shutil.which("zsh") or "/bin/sh"
         fd, viewer = terminal([shell, "-c", 'exec "$@" ' + fresh.decode(), "test", *guest])
-        until(fd, b"Waiting for a supervisor")
-        shared = self.spawn([SUP, "-state", self.base / "display-supervisor", fresh, "/bin/sh", "-c", "echo first-ready; while read -r x; do echo reply-$x; done"])
+        until(fd, b"Waiting for supervisors")
+        shared = self.spawn([SUP, "-once", "-state", self.base / "display-supervisor", fresh, "/bin/sh", "-c", "echo first-ready; while read -r x; do echo reply-$x; done"])
         status_line(shared.stderr, b"session ")
+        until(fd, b"Enter Attach")
+        os.write(fd, b"\r")
         until(fd, b"first-ready")
-        os.write(fd, b"shared-link-input\n")
+        os.write(fd, b"shared-link-input\r")
         until(fd, b"reply-shared-link-input")
         viewer.terminate()
         viewer.wait(5)
         self.assertEqual(len(json.loads(self.run_cli(guest).stdout)), 1)
         fd, viewer = terminal(guest)
+        until(fd, b"Enter Attach")
+        os.write(fd, b"\r")
         until(fd, b"first-ready")
         viewer.terminate()
         viewer.wait(5)
         self.session(["-mode", "pipe"], ["/bin/sh", "-c", "echo second-ready; cat"])
         fd, viewer = terminal(guest)
-        until(fd, b"Choose a session")
-        os.write(fd, b"2\n")
+        until(fd, b"Enter Attach")
+        os.write(fd, b"\x1b[B\r")
         until(fd, b"-ready")
         admin.terminate()
         self.assertEqual(len(json.loads(self.run_cli(guest).stdout)), 2)
@@ -312,7 +546,7 @@ class Live(BrokerFixture):
                 env, _ = self.account(first)
                 before = set(self.run_cli(self.server + ["devices"]).stdout.splitlines())
                 cli = [CLI, link]
-                sup = [SUP, link, "true"]
+                sup = [SUP, "-once", link, "true"]
                 if first == "concurrent":
                     with concurrent.futures.ThreadPoolExecutor(2) as pool:
                         jobs = [pool.submit(self.run_cli, cmd, env=env) for cmd in (cli, sup)]
@@ -321,7 +555,7 @@ class Live(BrokerFixture):
                 else:
                     self.run_cli(cli if first == "client" else sup, env=env)
                 self.run_cli([CLI], env=env)
-                self.run_cli([SUP, "true"], env=env)
+                self.run_cli([SUP, "-once", "true"], env=env)
                 after = set(self.run_cli(self.server + ["devices"]).stdout.splitlines())
                 self.assertEqual(len(after - before), 1)
                 other = self.run_cli([CLI, "-state", self.base / "isolated", "list"],
@@ -338,7 +572,7 @@ class Live(BrokerFixture):
                 after = set(self.run_cli(self.server + ["devices"]).stdout.splitlines())
                 enrolled = (after - before).pop().split()[0].decode()
             self.run_cli([CLI], env=env)
-            self.run_cli([SUP, "true"], env=env)
+            self.run_cli([SUP, "-once", "true"], env=env)
             if len(profiles) == 2:
                 # Revoking the supervisor key proves which identity both tools use.
                 key = (root / "supervisor/key.pem").read_bytes()
@@ -353,7 +587,7 @@ class Live(BrokerFixture):
                 self.start_server()
                 self.run_cli(self.server + ["revoke", enrolled])
                 self.run_cli([CLI], env=env)
-                self.run_cli([SUP, "true"], env=env)
+                self.run_cli([SUP, "-once", "true"], env=env)
                 self.assertEqual(key, (root / "supervisor/key.pem").read_bytes())
 
     def test_conflicting_default_servers(self):
@@ -364,8 +598,8 @@ class Live(BrokerFixture):
         a = self.run_cli(self.server + ["invite"]).stdout.strip()
         b = self.run_cli(second + ["invite"]).stdout.strip()
         self.run_cli([CLI, "-state", root / "client", a])
-        self.run_cli([SUP, "-state", root / "supervisor", b, "true"])
-        proc = self.spawn([SUP, "cat"], env=env)
+        self.run_cli([SUP, "-once", "-state", root / "supervisor", b, "true"])
+        proc = self.spawn([SUP, "-once", "cat"], env=env)
         sid = status_line(proc.stderr, b"session ").split()[1].decode()
         self.assertFalse(json.loads(self.run_cli([CLI], env=env).stdout))
         self.assertEqual(json.loads(self.run_cli([CLI, b], env=env).stdout)[0]["ID"], sid)
@@ -374,7 +608,7 @@ class Live(BrokerFixture):
         self.assertEqual(len(self.run_cli(second + ["devices"]).stdout.splitlines()), 1)
 
     def test_supervisor_positional_pair_and_launch(self):
-        sup = [SUP, "-state", self.base / "new-supervisor"]
+        sup = [SUP, "-once", "-state", self.base / "new-supervisor"]
         missing = self.run_cli(sup + ["/bin/sh"], check=False)
         self.assertIn(b"clistreamd invite", missing.stderr)
         output = self.run_cli([DAEMON, "-state", self.base / "server", "supervisor"]).stdout
@@ -650,7 +884,7 @@ class Live(BrokerFixture):
 
     def test_driver_catalog(self):
         unpaired = self.base / "unused-profile"
-        result = self.run_cli([SUP, "-state", unpaired, "-drivers"])
+        result = self.run_cli([SUP, "-once", "-state", unpaired, "-drivers"])
         self.assertFalse(unpaired.exists())
         drivers = json.loads(result.stdout)
         for name, version, default in [

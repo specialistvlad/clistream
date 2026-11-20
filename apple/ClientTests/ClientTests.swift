@@ -192,6 +192,15 @@ final class ClientTests: XCTestCase {
           && channels["stderr"]?.range(of: stderr) != nil
       }
     }
+    if let expected = ProcessInfo.processInfo.environment["CLISTREAM_EXPECT_EXIT"].flatMap(Int.init) {
+      try await send("verified-\(participant)")
+      try await consume(key, seconds: 90) { event in
+        guard let code = event.Exit else { return false }
+        XCTAssertEqual(code, expected)
+        return true
+      }
+    }
+
   }
 
   @MainActor

@@ -18,6 +18,8 @@ After pairing, show all sessions registered on that server. Use the CLI name as 
 
 Apple’s Food Truck sample demonstrates how a SwiftUI split view and navigation stack can share a selection across form factors. Use that pattern for sessions and their detail. [Apple multiplatform sample](https://developer.apple.com/documentation/swiftui/food-truck-building-a-swiftui-multiplatform-app) · [Designing for macOS](https://developer.apple.com/design/human-interface-guidelines/designing-for-macos)
 
+A stop or restart from the Go dashboard ends the current native attachment on Mac, iPhone and iPad. Each viewer receives the old run’s exit status. Refresh Sessions and select the replacement to open it. A stopped supervisor has no running session to display. [Supervisor actions](terminal-client-design.md)
+
 ## Interact with a running CLI
 
 - **Keyboard.** On iPhone and iPad, opening a pipe session leaves the software keyboard hidden so output is readable. Tap the input field to type. On Mac, Command-K opens Pair, Command-1 focuses Sessions, the arrow keys select a session, Command-E opens Files and Escape returns to the session. In PTY mode, send text, arrows, Escape and control keys to the running program. For example, Control-C goes to the child while Command-C copies a local text selection. Keep app commands available through standard menus. In pipe mode, provide a labeled input field and distinct, selectable stdout and stderr.

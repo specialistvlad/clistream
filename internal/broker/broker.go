@@ -29,20 +29,25 @@ type entry struct {
 	info wire.Session
 	conn *quic.Conn
 }
+type managedEntry struct {
+	state wire.Supervisor
+	conn  *quic.Conn
+}
 type Server struct {
-	log        *activity.Log
-	workers    sync.WaitGroup
-	auth       identity.Authenticator
-	mu         sync.Mutex
-	dir, pin   string
-	addresses  []string
-	signingKey ed25519.PrivateKey
-	slots      chan struct{}
-	now        func() time.Time
-	devices    map[string]string
-	invites    map[string]time.Time
-	sessions   map[string]entry
-	peers      map[*quic.Conn]string
+	controllers map[string]managedEntry
+	log         *activity.Log
+	workers     sync.WaitGroup
+	auth        identity.Authenticator
+	mu          sync.Mutex
+	dir, pin    string
+	addresses   []string
+	signingKey  ed25519.PrivateKey
+	slots       chan struct{}
+	now         func() time.Time
+	devices     map[string]string
+	invites     map[string]time.Time
+	sessions    map[string]entry
+	peers       map[*quic.Conn]string
 }
 
 func New(dir string, addresses []string, auth identity.Authenticator, log *activity.Log) (*Server, *tls.Config, error) {
@@ -51,7 +56,7 @@ func New(dir string, addresses []string, auth identity.Authenticator, log *activ
 		return nil, nil, e
 	}
 	s := &Server{
-		log: log, auth: auth, dir: dir, addresses: addresses, pin: identity.Pin(cert.Leaf),
+		controllers: map[string]managedEntry{}, log: log, auth: auth, dir: dir, addresses: addresses, pin: identity.Pin(cert.Leaf),
 		signingKey: cert.PrivateKey.(ed25519.PrivateKey), now: time.Now,
 		slots: make(chan struct{}, 128), devices: map[string]string{},
 		invites: map[string]time.Time{}, sessions: map[string]entry{}, peers: map[*quic.Conn]string{},
@@ -264,6 +269,13 @@ func (s *Server) connection(c *quic.Conn, peer activity.Event, start time.Time) 
 	defer func() {
 		s.mu.Lock()
 		delete(s.peers, c)
+		for id, v := range s.controllers {
+			if v.conn == c {
+				delete(s.controllers, id)
+				peer.Supervisor = id
+				peer.Role = "supervisor"
+			}
+		}
 		for id, v := range s.sessions {
 			if v.conn == c {
 				delete(s.sessions, id)
@@ -317,7 +329,7 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 	ev.Stream = &id
 	ev.Name = "request_rejected"
 	defer func() {
-		if err != nil {
+		if err != nil && ev.Outcome == "" {
 			ev.Outcome = "failed"
 		} else if ev.Outcome == "" {
 			ev.Outcome = "ok"
@@ -353,6 +365,11 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 		if !enrolled {
 			return errors.New("device enrollment required")
 		}
+		for _, v := range s.controllers {
+			if v.conn == c {
+				return errors.New("already registered")
+			}
+		}
 		if m.Info == nil || (m.Info.Mode != "pipe" && m.Info.Mode != "pty") {
 			return errors.New("registration denied")
 		}
@@ -378,9 +395,69 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 			ev.Operation = channelOperation(m.Channel, nil)
 		}
 	}
+	switch m.Op {
+	case "arguments", "start", "stop", "restart", "apply":
+		ev.Name = "supervisor_request"
+		ev.Operation = m.Op
+		ev.Role = "client"
+		clientRole.Store(true)
+		if validID(m.ID) {
+			ev.Supervisor = m.ID
+		}
+		if validID(m.Run) {
+			ev.Session = m.Run
+		}
+	}
 	if !enrolled {
 		s.mu.Unlock()
 		return errors.New("client authorization required")
+	}
+	switch m.Op {
+	case "capabilities":
+		ev.Name = "capabilities"
+		s.mu.Unlock()
+		return wire.Write(st, wire.Message{Op: "ok", Capabilities: []string{wire.ManagedSupervisors}})
+	case "publish":
+		ev.Name = "supervisor_publish"
+		ev.Role = "supervisor"
+		err := s.publish(c, m.Supervisor)
+		s.mu.Unlock()
+		if err != nil {
+			return err
+		}
+		ev.Supervisor = m.Supervisor.ID
+		ev.Session = m.Supervisor.Info.ID
+		return wire.Write(st, wire.Message{Op: "ok"})
+	case "supervisors":
+		ev.Name = "supervisor_list"
+		ev.Role = "client"
+		clientRole.Store(true)
+		rows := s.supervisors()
+		s.mu.Unlock()
+		sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })
+		return wire.Write(st, wire.Message{Op: "ok", Supervisors: rows})
+	case "arguments", "start", "stop", "restart", "apply":
+		target, ok := s.controllers[m.ID]
+		if !ok || s.devices[s.peers[target.conn]] == "" {
+			s.mu.Unlock()
+			return errors.New("supervisor unavailable")
+		}
+		if m.Revision != target.state.Revision || m.Run != target.state.Info.ID {
+			s.mu.Unlock()
+			return errors.New("stale supervisor")
+		}
+		s.mu.Unlock()
+		response, e := wire.Request(target.conn, m)
+		if e != nil {
+			if response.Op == "" {
+				ev.Outcome = "unconfirmed"
+			}
+			if response.Error == "stale supervisor" {
+				return errors.New("stale supervisor")
+			}
+			return errors.New("supervisor request failed")
+		}
+		return wire.Write(st, response)
 	}
 	if m.Op == "list" {
 		items := []wire.Session{}
@@ -495,3 +572,5 @@ func relay(a, b *quic.Stream, ev *activity.Event) {
 		}
 	}
 }
+
+func validID(id string) bool { _, err := hex.DecodeString(id); return len(id) == 24 && err == nil }

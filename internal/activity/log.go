@@ -23,6 +23,7 @@ type Event struct {
 	Device     string    `json:"device,omitempty"`
 	Address    string    `json:"address,omitempty"`
 	Role       string    `json:"role,omitempty"`
+	Supervisor string    `json:"supervisor_id,omitempty"`
 	Session    string    `json:"session_id,omitempty"`
 	Stream     *int64    `json:"stream_id,omitempty"`
 	Operation  string    `json:"operation,omitempty"`

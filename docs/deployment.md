@@ -8,13 +8,17 @@ Run `clistreamd` in a terminal under the service account to display its pairing 
 
 On the program host, run `clistream-supervise LINK PROGRAM [ARG ...]`. On the same OS account, `clistream` then connects with the saved key. On a second host, run `clistream LINK` within three minutes. Press **p** at the daemon terminal to replace outstanding links across all interfaces. For an upgrade, review previously enrolled supervisor keys before restarting the service, since those keys will gain control of every session. [Upgrade permissions](security.md)
 
+## Choose the supervisor lifetime
+
+On Linux and macOS, `clistream-supervise PROGRAM [ARG ...]` keeps the supervisor registered after the child exits or fails to launch. Select its row in `clistream` to start it again. Stop and Restart terminate the managed child’s process group with SIGKILL. Use the program’s own exit command when it needs to save work before quitting. The operator can change arguments for later runs of that supervisor. Restarting the supervisor itself restores its locally supplied arguments. Send SIGTERM to the supervisor to end supervision and its running child. For scripts that consume an exit status, use `clistream-supervise -once PROGRAM [ARG ...]`. A supervisor connecting to an older daemon reports its one-shot fallback. [Terminal controls](terminal-client-design.md)
+
 ## Server activity logs
 
 The serving daemon appends one JSON object per line to `server.log`. On Linux the default location is `${XDG_CONFIG_HOME:-$HOME/.config}/clistream/server/server.log`. On macOS it is `~/Library/Application Support/clistream/server/server.log`. With `-state DIR`, follow the file with `tail -F "DIR/server.log"`, substituting your state directory. Files have mode 0600. Before the next record would exceed 10 MiB, the daemon rotates the active log to `server.log.1` and keeps up to five previous files.
 
 Use `clistreamd -no-log-file` to send activity events to standard error. Set the flag on the serving process. For systemd append it to `ExecStart` and read events with `journalctl --user -u clistream`. For launchd add `<string>-no-log-file</string>` to `ProgramArguments` and configure `StandardErrorPath` if you want launchd to collect the output. If the daemon cannot open, write or rotate its own file, it reports the error and uses standard error for the rest of that run. Normal startup and diagnostic text can share standard error with JSON events.
 
-To follow one connection, select its `connection_id` from `connection_open` and find the matching `connection_close`. The close event includes the observed role, reason (`outcome`) and `duration_ms`. Use the device fingerprint to follow a reconnect, and `session_id` to find clients of the same supervisor. An orderly daemon stop drains connection and channel events before `daemon_stop`. An abrupt daemon kill or host power loss can leave an open event without a close.
+To follow one connection, select its `connection_id` from `connection_open` and find the matching `connection_close`. The close event includes the observed role, reason (`outcome`) and `duration_ms`. Use the device fingerprint to follow a reconnect, `supervisor_id` to follow lifecycle requests, and `session_id` to find clients of one run. An orderly daemon stop drains connection and channel events before `daemon_stop`. An abrupt daemon kill or host power loss can leave an open event without a close.
 
 ## Linux user service
 

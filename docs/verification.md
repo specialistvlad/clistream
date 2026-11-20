@@ -4,6 +4,20 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Framed terminal and managed supervisors · November 20, 2026
+
+| Environment | Executed check | Result |
+|---|---|---|
+| macOS 27.2 arm64, Go 1.27.4 | `make test e2e` | Race-enabled Go tests, vet and requirements trace passed. 33 CLI cases passed and two optional live-provider cases skipped. |
+| Debian Bookworm arm64, Go 1.27.4 | `make test e2e` | Go tests, vet and requirements trace passed. 30 CLI cases passed and five optional driver or provider cases skipped. |
+| Four Linux containers | `make test-deployment` | Two managed supervisors registered on separate hosts. Their session-specific input, workspace downloads and activity records matched the selected host. |
+| macOS, binaries from `bd2d7ab` | `CLISTREAM_LEGACY_BIN=/path/to/previous/bin python3 tests/compatibility.py` | Both directions passed. The new dashboard attached through the previous daemon, the new supervisor returned the child status there, and the previous CLI and supervisor interoperated with the new daemon. |
+| Native Mac, iPhone 17 Pro and iPad Pro 11-inch (M5) simulators, Go CLI | `apple/test-shared.py`, Xcode 27.1 | Four enrolled viewers exchanged input and observed all writers. A dashboard restart ended each old attachment with status 128. All four attached to the new run and repeated the exchange. Closing pipe input ended the replacement with status 0. |
+
+The PTY harness sent alternate-screen and clear sequences, rapid output, a pasted detach byte, Ctrl-C, a mouse click and a resize. The child received the expected bytes, viewport-relative mouse position and dimensions. A separate test decoded the outer renderer’s output and checked the title and footer cells before and after scrolling and detaching. A stale concurrent restart was rejected. Losing the requesting client while the old run was awaiting an exit acknowledgement produced exactly one replacement. The CLI recovered to the table after broker restart. Other checks covered edited empty and spaced arguments, launch failure, cancellation, old file and tunnel references, argument privacy and local termination. The four new CLI cases also passed against race-instrumented macOS binaries.
+
+Apple evidence comes from the simulator test host and app-hosted Mac XCTest. The live-provider skips require credentials or quota. The Linux driver skips require the supported Claude Code and Codex CLI executables. These are the remaining skips from the requested suites. [Feature specification](terminal-client-design.md) · [Machine-readable audit](test-results/requirements-audit.json)
+
 ## Server activity logging on November 20, 2026
 
 | Environment | Executed checks and outcomes |

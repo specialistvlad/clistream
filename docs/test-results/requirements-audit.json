@@ -651,5 +651,57 @@
     "liveAnthropic": "Separate provider request reached the account's weekly limit.",
     "testFlight": "Last upload returned FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED. Installation unverified.",
     "physicalCamera": "Simulator verified QR decoding and installed-app URL handoff. Physical camera untested."
+  },
+  "managedTerminal": {
+    "localDate": "2026-11-20",
+    "go": "1.27.4",
+    "platforms": {
+      "macOS": {
+        "architecture": "arm64",
+        "command": "make test e2e",
+        "goRaceTests": "passed",
+        "vet": "passed",
+        "requirementsTrace": "passed",
+        "cliPassed": 33,
+        "cliSkipped": {
+          "test_live_claude_task": "requires Claude provider quota",
+          "test_live_codex_task": "requires authenticated Codex CLI"
+        }
+      },
+      "Linux": {
+        "architecture": "arm64",
+        "command": "make test e2e",
+        "goRaceTests": "passed",
+        "vet": "passed",
+        "requirementsTrace": "passed",
+        "cliPassed": 30,
+        "cliSkipped": {
+          "test_claude_with_emulated_provider": "requires the supported Claude Code version",
+          "test_detected_drivers": "Supported Claude Code and Codex CLI versions unavailable",
+          "test_interactive_driver_terminals": "supported CLI executables unavailable",
+          "test_live_claude_task": "requires Claude provider quota",
+          "test_live_codex_task": "requires authenticated Codex CLI"
+        }
+      }
+    },
+    "multiHostLinux": "passed",
+    "previousBinaries": {
+      "revision": "bd2d7ab",
+      "tests": [
+        "test_old_daemon",
+        "test_previous_tools"
+      ],
+      "result": "passed"
+    },
+    "raceInstrumentedBinaries": {
+      "platform": "macOS arm64",
+      "passed": [
+        "test_framed_terminal",
+        "test_managed_supervisors",
+        "test_lost_restart_acknowledgement",
+        "test_run_bound_channels"
+      ]
+    },
+    "appleEvidence": "acceptance.json#managedSupervisorRestart"
   }
 }

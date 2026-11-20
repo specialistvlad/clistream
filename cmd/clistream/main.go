@@ -64,6 +64,12 @@ func run() (int, error) {
 	if action != "list" && action != "attach" && action != "forward" && action != "ls" && action != "get" && action != "put" {
 		return 1, errors.New("usage: clistream [flags] pair | list | attach ID | forward ID NAME LOOPBACK:PORT | ls ID [DIR] | get ID REMOTE LOCAL | put ID LOCAL REMOTE")
 	}
+	if action == "attach" && !automatic && flag.NArg() != 2 {
+		return 1, errors.New("usage: clistream attach ID")
+	}
+	if action == "attach" && term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+		return dashboard(*dir, link, flag.Arg(1))
+	}
 	directory, saved, e := identity.CLIProfile(context.Background(), *dir, "client", link)
 	if e != nil {
 		if automatic && link == "" && errors.Is(e, os.ErrNotExist) {
@@ -83,7 +89,7 @@ func run() (int, error) {
 		}
 		return 1, e
 	}
-	if automatic && (!term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd()))) {
+	if automatic {
 		if items == nil {
 			items = []wire.Session{}
 		}
@@ -93,14 +99,6 @@ func run() (int, error) {
 		return 0, json.NewEncoder(os.Stdout).Encode(items)
 	}
 	id := flag.Arg(1)
-	if automatic {
-		selected, err := chooseSession(c, items)
-		if err != nil {
-			return 1, err
-		}
-		id = selected.ID
-		items = []wire.Session{selected}
-	}
 	for _, item := range items {
 		if item.ID != id {
 			continue

@@ -24,3 +24,9 @@ The daemon and Go CLIs implement reusable v2 invitations and a shared default id
 Apple v2 acceptance remains open. Update the remaining mobile UI single-use assertions, then verify opening and pasting the same invitation on iPhone and iPad and enrolling the native Mac client. Record the server address shown for confirmation and verify session input and output after pairing. Physical-camera scanning and opening a link from Messages require a device run. [Verification record](verification.md)
 
 Track acceptance against the eleven functional requirements and the engineering checks in the [requirements audit](test-results/requirements-audit.md).
+
+## Interactive terminal and managed supervision · November 20, 2026
+
+The Linux and macOS daemon, supervisor and CLI share the registry, lifecycle protocol, Unix process-group handling and terminal implementation. The Go client uses Ultraviolet for the outer screen and x/vt for child output and input encoding. Native Mac, iPhone and iPad clients use the existing running-session protocol and receive an exit event for the old run. Management controls are delivered in the Go client. [Approved feature specification](terminal-client-design.md)
+
+Run `make test e2e` on Linux and macOS, the four-host Linux deployment suite, and the compatibility harness with the previous binaries. Exercise terminal clear, alternate screen, resize, input, stale actions, argument round trips, loss of a restart acknowledgement, reconnection and one-shot status. Run `apple/test-shared.py` with both simulators and native macOS. All four viewers must observe the first exit and exchange input again on the distinct replacement run. [Execution record](verification.md)

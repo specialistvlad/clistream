@@ -152,7 +152,7 @@ def verify(root, resources):
         assert response.stdout == (host + "confined\n").encode(), response.stdout
     log = docker("exec", prefix + "-broker", "cat", "/state/identity/server.log").stdout
     events = [json.loads(line) for line in log.splitlines()]
-    published = [e for e in events if e["event"] == "session_register" and e["outcome"] == "ok"]
+    published = [e for e in events if e["event"] == "supervisor_publish" and e.get("session_id") and e["outcome"] == "ok"]
     assert {e["session_id"] for e in published} == {item["ID"] for item in registered}
     assert len({e["device"] for e in published}) == len({e["connection_id"] for e in published}) == 2
     assert {e["session_id"] for e in events if e["event"] == "channel_close"

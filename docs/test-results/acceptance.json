@@ -230,5 +230,32 @@
       "signatureVerification": "passed",
       "projectLicenseSHA256": "9b3d28e36b6b75f0e68a1ab07b4f1e7f9c1473ae5bf0f656538708f41af74dd7"
     }
+  },
+  "managedSupervisorRestart": {
+    "localDate": "2026-11-20",
+    "xcode": "27.1 (27A9275)",
+    "test": "apple/test-shared.py",
+    "participants": [
+      "native macOS XCTest",
+      "iPhone 17 Pro simulator",
+      "iPad Pro 11-inch (M5) simulator",
+      "Go CLI"
+    ],
+    "trigger": "Go dashboard restart",
+    "runs": [
+      {
+        "distinctEnrolledViewers": 4,
+        "allWritersObserved": true,
+        "exitStatus": 128,
+        "localResultBundle": "apple/build/shared-bbdgm5bo/mac.xcresult"
+      },
+      {
+        "distinctEnrolledViewers": 4,
+        "allWritersObserved": true,
+        "exitStatus": 0,
+        "localResultBundle": "apple/build/shared-6l0goen0/mac.xcresult"
+      }
+    ],
+    "result": "passed"
   }
 }

@@ -8,13 +8,14 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
+
 	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
 
+	"github.com/quic-go/quic-go"
 	"github.com/specialistvlad/clistream/internal/client"
 	"github.com/specialistvlad/clistream/internal/driver"
 	"github.com/specialistvlad/clistream/internal/files"
@@ -40,6 +41,7 @@ func run() (int, error) {
 	listDrivers := flag.Bool("drivers", false, "list supported CLI versions and execution modes as JSON")
 	pair := flag.Bool("pair", false, "read pairing invitation from stdin")
 	addr := flag.String("server", "", "override paired host:port (same pinned key)")
+	once := flag.Bool("once", false, "exit with the first child's status")
 	local := flag.Bool("local-input", true, "forward local stdin (pipe EOF closes child stdin)")
 	ports := map[string]string{}
 	flag.Func("export", "name=tcp:127.0.0.1:port or name=udp:[::1]:port", func(v string) error {
@@ -86,9 +88,7 @@ func run() (int, error) {
 		return 1, errors.New(usage + "\nExample: clistream-supervise /bin/sh\n" + inviteHelp)
 	}
 	path := args[0]
-	if _, e := exec.LookPath(path); e != nil {
-		return 1, e
-	}
+
 	terminal := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 	profile, e := driver.Select(args, *name, *mode, terminal)
 	if e != nil {
@@ -112,9 +112,32 @@ func run() (int, error) {
 	}
 	info := wire.Session{Name: filepath.Base(path), Mode: profile.Mode, Version: profile.Version, Driver: profile.Name, Host: host, OS: runtime.GOOS, Ports: exports}
 	reg := registration{directory, saved, info}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer cancel()
-	c, e := reg.connect(ctx)
+	root, e := files.Open(".")
+	if e != nil {
+		return 1, e
+	}
+	defer root.Close()
+	var c *quic.Conn
+	if !*once {
+		probe, err := identity.Dial(ctx, reg.dir, reg.server)
+		if err != nil {
+			return 1, err
+		}
+		managed, err := wire.Managed(probe)
+		if err != nil {
+			probe.CloseWithError(1, "discovery failed")
+			return 1, err
+		}
+		if managed {
+			defer probe.CloseWithError(0, "finished")
+			return supervise(ctx, reg, probe, path, args[1:], ports, root, *local)
+		}
+		probe.CloseWithError(0, "legacy")
+		fmt.Fprintln(os.Stderr, "Server supports attach only. Using one-shot supervision.")
+	}
+	c, e = reg.connect(ctx)
 	// A pre-upgrade daemon can still require the separate supervisor key.
 	if errors.Is(e, errLegacyRole) && *dir == "" && directory == identity.Default("client") && link == "" {
 		legacy := identity.Default("supervisor")
@@ -127,12 +150,7 @@ func run() (int, error) {
 		return 1, e
 	}
 	defer c.CloseWithError(0, "finished")
-	root, e := files.Open(".")
-	if e != nil {
-		return 1, e
-	}
-	defer root.Close()
-	p, e := session.Start(path, args[1:], profile.Mode, ports, root)
+	p, e := session.Start(path, args[1:], profile.Mode, ports, root, false)
 	if e != nil {
 		return 1, e
 	}
@@ -142,9 +160,8 @@ func run() (int, error) {
 	done := make(chan struct{})
 	go func() { defer close(done); reg.serve(ctx, p, c) }()
 	defer func() { cancel(); <-done }()
-	ctxSig, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	stop := context.AfterFunc(ctx, func() { p.Cmd.Process.Signal(syscall.SIGTERM) })
 	defer stop()
-	go func() { <-ctxSig.Done(); p.Cmd.Process.Signal(syscall.SIGTERM) }()
 	if *local {
 		if profile.Mode == "pty" && term.IsTerminal(int(os.Stdin.Fd())) {
 			defer termio.Setup(func(w, h uint16) { p.Resize(w, h) })()

@@ -25,6 +25,19 @@ Every application record, including enrollment, filesystem and tunnel data, is U
 | register(Info) | Enrolled device | Assign a session ID for this connection |
 | open(ID, Channel, Path?) | Enrolled device | Broker opens matching stream back to the supervisor |
 
+## Negotiated supervisor controls
+
+A peer probes with `{"Op":"capabilities"}`. An enrolled peer receives an `ok` with `Capabilities` containing `managed-supervisors-v1`. A legacy operation rejection selects the existing register/list/open paths. Those records retain their original fields.
+
+| Operation | Request and response |
+|---|---|
+| `publish` | The supervisor sends `Supervisor` with its 24-hex-character lifetime `ID`, increasing `Revision` and session descriptor `Info`. A running child has its own 24-hex-character `Info.ID`. An empty run ID marks a stopped supervisor, with optional `Exit` or `Failed`. Reconnection republishes the current revision on the new connection. |
+| `supervisors` | The broker returns `Supervisors` sorted by supervisor ID. A legacy registration has revision zero, indicating Attach only. Ordinary `list` returns running session descriptors. |
+| `arguments` | Fetch the current argument vector in `Args` when the operator opens the editor. The executable is fixed locally. An omitted vector represents zero arguments. |
+| `start`, `stop`, `restart`, `apply` | Supply controller `ID`, expected `Revision` and current `Run` (empty while stopped). Only `apply` supplies replacement `Args`. The supervisor validates the snapshot and serializes transitions. An error or missing acknowledgement requires a fresh listing before another operator decision. |
+
+The broker removes a connection's registrations on disconnect. It publishes changes to its running-session and supervisor views together. Attachment, file and tunnel streams continue to use the run ID. The supervisor closes old channels before launching a replacement. The activity journal records `supervisor_publish`, `supervisor_list` and `supervisor_request`. The latter includes the action, requesting device and connection, target supervisor and current run where available, duration and outcome. A missing upstream reply records an `unconfirmed` outcome.
+
 ## Channel operations
 
 - **stdin** accepts data, resize(Cols, Rows) or eof. Each request receives an acknowledgment. Closing the attachment leaves shared stdin open. Explicit eof closes a pipe for all participants.
@@ -32,7 +45,7 @@ Every application record, including enrollment, filesystem and tunnel data, is U
 - **port/name** exchanges data records. The supervisor chooses the endpoint from local launch flags. TCP uses stream FIN for half-close. Each UDP record carries one complete datagram over reliable QUIC streams.
 - **fs/list** streams entry metadata followed by end. **fs/get** streams data followed by end. **fs/put** accepts data followed by explicit end, then replies ok after publishing the file. FIN alone aborts an incomplete upload. A destination must be new. All three use paths relative to the session's shared folder. The supervisor determines that folder locally. A client sends `.` to list its contents in either startup mode. [Session folder selection](requirements.md#session-folder-selection)
 
-An error on one logical stream can end that operation independently. Disconnecting a client detaches its streams. A supervisor connection owns its registration. Broker restart removes live registrations. The supervisor reconnects with backoff, registers a fresh session ID and keeps its child process alive. Refresh the client list and attach again.
+An error on one logical stream can end that operation independently. Disconnecting a client detaches its streams. A supervisor connection owns its registration. Broker restart removes live registrations. One-shot supervisors reconnect with backoff and receive a fresh session ID. Managed supervisors republish their stable supervisor ID and the ID of the surviving child. Refresh the client list and attach again.
 
 ## Broker activity events
 

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/specialistvlad/clistream/internal/tunnel"
@@ -27,12 +28,13 @@ type Process struct {
 	ptyDone  chan struct{}
 	ports    map[string]string
 	mu       sync.Mutex
+	managed  bool
 	closing  bool
 	readers  sync.WaitGroup
 }
 
-func Start(path string, args []string, mode string, ports map[string]string, root *files.Root) (*Process, error) {
-	p := &Process{Root: root, Cmd: exec.Command(path, args...), ports: ports, out: map[string]*history{}}
+func Start(path string, args []string, mode string, ports map[string]string, root *files.Root, managed bool) (*Process, error) {
+	p := &Process{managed: managed, Root: root, Cmd: exec.Command(path, args...), ports: ports, out: map[string]*history{}}
 	if mode == "pty" {
 		h := newHistory()
 		p.out["pty"] = h
@@ -48,6 +50,10 @@ func Start(path string, args []string, mode string, ports map[string]string, roo
 	}
 	p.out["stdout"] = newHistory()
 	p.out["stderr"] = newHistory()
+	if managed {
+		p.Cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		p.Cmd.WaitDelay = time.Second
+	}
 	p.Cmd.Stdout = io.MultiWriter(p.out["stdout"], os.Stdout)
 	p.Cmd.Stderr = io.MultiWriter(p.out["stderr"], os.Stderr)
 	in, e := p.Cmd.StdinPipe()
@@ -77,6 +83,9 @@ func (p *Process) Resize(cols, rows uint16) error {
 }
 func (p *Process) Wait() int {
 	p.Cmd.Wait()
+	if p.managed {
+		p.KillGroup()
+	}
 	code := p.Cmd.ProcessState.ExitCode()
 	if code < 0 {
 		code = 128
@@ -128,6 +137,11 @@ func (p *Process) handle(s *quic.Stream) error {
 	if e != nil {
 		return e
 	}
+	return p.Handle(s, m)
+}
+func (p *Process) KillGroup() { _ = syscall.Kill(-p.Cmd.Process.Pid, syscall.SIGKILL) }
+func (p *Process) Handle(s *quic.Stream, m wire.Message) error {
+	var e error
 	if m.Op != "open" {
 		return errors.New("expected open")
 	}

@@ -75,6 +75,21 @@ func TestEnrollmentAndCompressedStreams(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.CloseWithError(0, "test complete")
+	managed, err := wire.Managed(conn)
+	if !managed || err != nil {
+		t.Fatal("expected negotiated supervisor controls", err)
+	}
+	unknown, err := identity.Dial(ctx, filepath.Join(t.TempDir(), "unenrolled"), profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unknown.CloseWithError(0, "finished")
+	for _, op := range []string{"supervisors", "arguments", "restart", "publish"} {
+		response, err := wire.Request(unknown, wire.Message{Op: op})
+		if err == nil || response.Error != "client authorization required" {
+			t.Fatalf("%s enrollment check: %v", op, err)
+		}
+	}
 	stream, err := conn.OpenStreamSync(ctx)
 	if err != nil {
 		t.Fatal(err)

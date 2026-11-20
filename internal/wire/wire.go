@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/golang/snappy"
@@ -27,9 +28,27 @@ type FileEntry struct {
 	Directory      bool
 	Size, Modified int64
 }
+
+// Supervisor describes a controller and its currently attachable run.
+type Supervisor struct {
+	ID       string
+	Info     Session
+	Revision uint64
+	Exit     *int `json:",omitempty"`
+	Failed   bool `json:",omitempty"`
+}
+
+const ManagedSupervisors = "managed-supervisors-v1"
+
 type Message struct {
-	Path                      string     `json:",omitempty"`
-	Entry                     *FileEntry `json:",omitempty"`
+	Capabilities              []string     `json:",omitempty"`
+	Supervisor                *Supervisor  `json:",omitempty"`
+	Supervisors               []Supervisor `json:",omitempty"`
+	Revision                  uint64       `json:",omitempty"`
+	Run                       string       `json:",omitempty"`
+	Args                      []string     `json:",omitempty"`
+	Path                      string       `json:",omitempty"`
+	Entry                     *FileEntry   `json:",omitempty"`
 	Op                        string
 	Token, ID, Channel, Error string    `json:",omitempty"`
 	Info                      *Session  `json:",omitempty"`
@@ -111,4 +130,23 @@ func Open(c *quic.Conn, m Message) (*quic.Stream, Message, error) {
 func Abort(s *quic.Stream) { s.CancelRead(1); s.CancelWrite(1) }
 func Config() *quic.Config {
 	return &quic.Config{KeepAlivePeriod: 15 * time.Second, MaxIdleTimeout: time.Minute, MaxIncomingStreams: 64, MaxIncomingUniStreams: -1}
+}
+
+// Request exchanges a single record on a short-lived stream.
+func Request(c *quic.Conn, m Message) (Message, error) {
+	st, res, err := Open(c, m)
+	if err == nil {
+		st.Close()
+		st.CancelRead(0)
+	}
+	return res, err
+}
+
+// Managed probes using a record older strict decoders already understand.
+func Managed(c *quic.Conn) (bool, error) {
+	res, err := Request(c, Message{Op: "capabilities"})
+	if res.Error == "unknown session or operation" || res.Error == "client authorization required" {
+		return false, nil
+	}
+	return slices.Contains(res.Capabilities, ManagedSupervisors), err
 }

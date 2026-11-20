@@ -39,6 +39,14 @@ enum SharedParticipant {
             && connection.stderr.range(of: Data("err:hosted-\($0)-echo\n".utf8)) != nil
         }
       }
+      if let expected = env["CLISTREAM_EXPECT_EXIT"] {
+        send("verified-\(name)")
+        stage = "waiting for the run to end"
+        await reader.value
+        guard connection.status == "Process exited with status " + expected else {
+          throw URLError(.cannotParseResponse)
+        }
+      }
       try write(["stdout": String(decoding: connection.stdout, as: UTF8.self),
                  "stderr": String(decoding: connection.stderr, as: UTF8.self)])
     } catch {
