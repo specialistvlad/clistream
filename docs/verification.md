@@ -4,6 +4,10 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Returning home from an attachment · November 20, 2026
+
+The Go dashboard attached to a live child, returned home with Ctrl-G and attached again. In PTY and pipe modes, the supervisor feed and journal recorded normal channel closures, and the broker journal reported matching outcomes. The reattached client exchanged input and output with the running child. The regression runs in `test_home_closes_terminal_channels`.
+
 ## Default supervisor activity feed · November 20, 2026
 
 Real terminal and pipe tests verified that plain launches showed readable operations, kept child output off the host console, and left the child available for remote input after local typing and EOF. A foreground Ctrl-C check verified orderly shutdown and terminal restoration. The tests compared a file-download event in the feed and private journal, checked that payload and path markers were absent, verified distinct journals for concurrent supervisors, and continued supervision when the journal directory was unavailable. Interactive replacement and broker reconnects reused the same journal. The shared writer’s rotation and failure cases passed under the race detector.

@@ -130,6 +130,15 @@ func Open(c *quic.Conn, m Message) (*quic.Stream, Message, error) {
 	s.SetDeadline(time.Time{})
 	return s, res, nil
 }
+
+// DetachCode closes an attachment stream while leaving its child running.
+const DetachCode quic.StreamErrorCode = 2
+
+func IsDetach(err error) bool {
+	var reset *quic.StreamError
+	return errors.As(err, &reset) && reset.ErrorCode == DetachCode
+}
+
 func Abort(s *quic.Stream) { s.CancelRead(1); s.CancelWrite(1) }
 func Config() *quic.Config {
 	return &quic.Config{KeepAlivePeriod: 15 * time.Second, MaxIdleTimeout: time.Minute, MaxIncomingStreams: 64, MaxIncomingUniStreams: -1}

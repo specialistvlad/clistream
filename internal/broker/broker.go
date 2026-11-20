@@ -549,16 +549,30 @@ func observeResult(ev *activity.Event, m wire.Message) {
 }
 
 func relay(a, b *quic.Stream, ev *activity.Event) {
+	isDetach := func(err error) bool {
+		switch ev.Operation {
+		case "stdin", "stdout", "stderr", "pty":
+			return wire.IsDetach(err)
+		default:
+			return false
+		}
+	}
+	resetCode := func(err error) quic.StreamErrorCode {
+		if isDetach(err) {
+			return wire.DetachCode
+		}
+		return 1
+	}
 	stopOnReset := func(source, other *quic.Stream) func() bool {
 		return context.AfterFunc(source.Context(), func() {
 			if !errors.Is(context.Cause(source.Context()), quic.ErrStreamClosed) {
-				other.CancelRead(1)
+				other.CancelRead(resetCode(context.Cause(source.Context())))
 			}
 		})
 	}
 	defer stopOnReset(a, b)()
 	defer stopOnReset(b, a)()
-	copySide := func(dst, src *quic.Stream) bool {
+	copySide := func(dst, src *quic.Stream) error {
 		for {
 			m, e := wire.Read(src)
 			if e == nil {
@@ -571,20 +585,21 @@ func relay(a, b *quic.Stream, ev *activity.Event) {
 				if e == io.EOF {
 					dst.Close()
 				} else {
-					dst.CancelWrite(1)
-					src.CancelRead(1)
+					code := resetCode(e)
+					dst.CancelWrite(code)
+					src.CancelRead(code)
 				}
-				return e == io.EOF
+				return e
 			}
 		}
 	}
-	done := make(chan bool, 1)
+	done := make(chan error, 1)
 	go func() { done <- copySide(b, a) }()
-	outputEOF := copySide(a, b)
-	inputEOF := <-done
+	outputErr := copySide(a, b)
+	inputErr := <-done
 	if ev.Outcome == "" {
 		ev.Outcome = "interrupted"
-		if inputEOF && outputEOF {
+		if (inputErr == io.EOF || isDetach(inputErr)) && (outputErr == io.EOF || isDetach(outputErr)) {
 			ev.Outcome = "closed"
 		}
 	}

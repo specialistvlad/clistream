@@ -74,7 +74,7 @@ func (h *history) stream(ctx context.Context, send func(wire.Message) error) err
 		}
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return context.Cause(ctx)
 		case <-ch:
 		}
 	}

@@ -1048,6 +1048,59 @@ class Live(BrokerFixture):
         self.assertNotIn(b"\x1b[?1049h", start + finish)
         self.assertEqual(ui.process.wait(8), 0)
 
+    def test_home_closes_terminal_channels(self):
+        state = self.base / "supervisor"
+        for mode, channels in (("pty", ["stdin", "pty"]), ("pipe", ["stdin", "stdout", "stderr"])):
+            with self.subTest(mode=mode):
+                feed = self.base / (mode + "-feed")
+                previous = set((state / "logs").glob("*.log"))
+                with feed.open("wb") as stderr:
+                    supervisor = self.spawn([SUP, "-state", state, "-mode", mode, "/bin/cat"], stderr=stderr)
+                deadline = time.monotonic() + 8
+                while not json.loads(self.run_cli(self.a + ["list"]).stdout):
+                    self.assertLess(time.monotonic(), deadline)
+                    time.sleep(0.02)
+                path, = set((state / "logs").glob("*.log")) - previous
+                client = DashboardTerminal(self)
+                client.until(b"Enter Attach")
+                client.send(b"\r")
+                client.until(b"Ctrl-G Home")
+                client.send(b"\x07")
+                client.until(b"Enter Attach")
+                deadline = time.monotonic() + 5
+                while True:
+                    events = [json.loads(row) for row in path.read_bytes().splitlines()]
+                    finished = [e for e in events if e["event"] == "channel" and e["outcome"] != "opened"]
+                    if len(finished) >= len(channels):
+                        break
+                    self.assertLess(time.monotonic(), deadline)
+                    time.sleep(0.02)
+                self.assertCountEqual([(e["operation"], e["outcome"]) for e in finished],
+                                      [(channel, "closed") for channel in channels])
+                journal = self.base / "server/server.log"
+                while True:
+                    closed = [e for e in map(json.loads, journal.read_bytes().splitlines())
+                              if e["event"] == "channel_close" and e.get("session_id") == finished[0]["session_id"]]
+                    if len(closed) >= len(channels):
+                        break
+                    self.assertLess(time.monotonic(), deadline)
+                    time.sleep(0.02)
+                self.assertCountEqual([(e["operation"], e["outcome"]) for e in closed],
+                                      [(channel, "closed") for channel in channels])
+                self.assertEqual([r["ID"] for r in json.loads(self.run_cli(self.a + ["list"]).stdout)],
+                                 [finished[0]["session_id"]])
+                client.send(b"\r")
+                client.until(b"Ctrl-G Home")
+                client.send(b"still-running\r")
+                client.until(b"still-running")
+                client.send(b"\x07q")
+                client.process.wait(8)
+                supervisor.terminate()
+                supervisor.wait(8)
+                messages = feed.read_bytes()
+                self.assertIn(b"Terminal input closed", messages)
+                self.assertIn(b"Terminal output closed", messages)
+
     def test_supervisor_journal_unavailable(self):
         state = self.base / "supervisor"
         (state / "logs").write_text("not a directory")

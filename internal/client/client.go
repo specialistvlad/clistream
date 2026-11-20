@@ -77,10 +77,12 @@ func Attach(c *quic.Conn, id string) (*Attachment, error) {
 }
 func (a *Attachment) Close() {
 	if a.input != nil {
-		wire.Abort(a.input)
+		a.input.CancelRead(wire.DetachCode)
+		a.input.CancelWrite(wire.DetachCode)
 	}
 	for _, s := range a.outputs {
-		wire.Abort(s)
+		s.CancelRead(wire.DetachCode)
+		s.CancelWrite(wire.DetachCode)
 	}
 }
 func (a *Attachment) Send(m wire.Message) error {

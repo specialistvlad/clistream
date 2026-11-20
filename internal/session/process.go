@@ -178,6 +178,10 @@ func (p *Process) Handle(s *quic.Stream, m wire.Message) (e error) {
 			if terminal {
 				outcome = "closed"
 			}
+			if terminal && wire.IsDetach(e) {
+				// The viewer deliberately closed this attachment.
+				e = nil
+			}
 			if e != nil {
 				outcome = "failed"
 			}
