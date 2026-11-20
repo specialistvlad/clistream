@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -11,6 +12,8 @@ import (
 	"github.com/specialistvlad/clistream/internal/session"
 	"github.com/specialistvlad/clistream/internal/wire"
 )
+
+var errLegacyRole = errors.New("registration denied")
 
 type registration struct {
 	dir    string
@@ -28,6 +31,9 @@ func (r registration) connect(ctx context.Context) (*quic.Conn, error) {
 	st, res, e := wire.Open(c, wire.Message{Op: "register", Info: &r.info})
 	if e != nil {
 		c.CloseWithError(1, "registration failed")
+		if res.Error == "registration denied" {
+			return nil, errLegacyRole
+		}
 		return nil, e
 	}
 	st.Close()

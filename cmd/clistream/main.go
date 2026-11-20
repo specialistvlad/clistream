@@ -30,7 +30,7 @@ func main() {
 	os.Exit(code)
 }
 func run() (int, error) {
-	dir := flag.String("state", identity.Default("client"), "identity directory")
+	dir := flag.String("state", "", "independent identity directory (default: shared per OS account)")
 	end := flag.Bool("eof", false, "close shared child stdin at local EOF in pipe mode")
 	flag.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), "Usage: clistream [flags] [PAIRING-LINK | list | attach ID | forward ID NAME LOOPBACK:PORT | ls ID [DIR] | get ID REMOTE LOCAL | put ID LOCAL REMOTE | pair]")
@@ -43,12 +43,9 @@ func run() (int, error) {
 	if automatic && flag.NArg() > 1 {
 		return 1, errors.New("supply only the pairing link")
 	}
-	if automatic && action != "" {
-		if e := identity.Pair(context.Background(), *dir, action, "client"); e != nil {
-			return 1, e
-		}
-	}
+	var link string
 	if automatic {
+		link = action
 		action = "attach"
 	}
 	// Reserve stderr for the attached child's error stream. Operators can opt into transport diagnostics.
@@ -58,20 +55,24 @@ func run() (int, error) {
 		}
 	}
 	if action == "pair" {
-		var link string
 		if _, e := fmt.Fscanln(os.Stdin, &link); e != nil {
 			return 1, e
 		}
-		return 0, identity.Pair(context.Background(), *dir, link, "client")
+		_, _, err := identity.CLIProfile(context.Background(), *dir, "client", link)
+		return 0, err
 	}
 	if action != "list" && action != "attach" && action != "forward" && action != "ls" && action != "get" && action != "put" {
 		return 1, errors.New("usage: clistream [flags] pair | list | attach ID | forward ID NAME LOOPBACK:PORT | ls ID [DIR] | get ID REMOTE LOCAL | put ID LOCAL REMOTE")
 	}
-	c, e := client.Connect(*dir)
+	directory, saved, e := identity.CLIProfile(context.Background(), *dir, "client", link)
 	if e != nil {
-		if automatic && errors.Is(e, os.ErrNotExist) {
+		if automatic && link == "" && errors.Is(e, os.ErrNotExist) {
 			return 1, errors.New("no saved server. Run clistream with the pairing link printed by clistreamd")
 		}
+		return 1, e
+	}
+	c, e := client.ConnectTo(directory, saved)
+	if e != nil {
 		return 1, e
 	}
 	defer c.CloseWithError(0, "")

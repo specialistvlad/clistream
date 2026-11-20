@@ -47,6 +47,9 @@ func TestEnrollmentAndCompressedStreams(t *testing.T) {
 	}
 	device := filepath.Join(t.TempDir(), "device")
 	expired := invite()
+	if err := identity.Pair(ctx, device, expired, "supervisor"); err != nil {
+		t.Fatal(err)
+	}
 	server.mu.Lock()
 	server.now = func() time.Time { return time.Now().Add(3 * time.Minute) }
 	server.mu.Unlock()
@@ -127,13 +130,18 @@ func TestDisplayedInvitesShareRedemptionAcrossListeners(t *testing.T) {
 			t.Fatal("replaced link was accepted")
 		}
 	}
-	results := make(chan error, 2)
-	for _, link := range links {
-		go func() { results <- identity.Pair(ctx, dir, link, "client") }()
+	results := make(chan error, 3)
+	for i, link := range []string{links[0], links[1], links[0]} {
+		device := dir
+		if i > 0 {
+			device = filepath.Join(t.TempDir(), "supervisor")
+		}
+		go func() { results <- identity.Pair(ctx, device, link, "supervisor") }()
 	}
-	a, b := <-results, <-results
-	if (a == nil) == (b == nil) {
-		t.Fatal("expected exactly one accepted enrollment", a, b)
+	for range 3 {
+		if err := <-results; err != nil {
+			t.Fatal("concurrent enrollment", err)
+		}
 	}
 	profile, e := identity.Load(dir)
 	if e != nil {

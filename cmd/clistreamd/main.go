@@ -39,12 +39,20 @@ func run() error {
 	var names []string
 	flag.Func("interface", "interface name or loopback (repeatable)", func(name string) error { names = append(names, name); return nil })
 	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "Usage: clistreamd [flags] [supervisor | invite ROLE | devices | revoke ID]")
-		fmt.Fprintln(flag.CommandLine.Output(), "Run clistreamd supervisor to print a one-time link for sharing a program.")
+		fmt.Fprintln(flag.CommandLine.Output(), "Usage: clistreamd [flags] [invite [client|supervisor] | supervisor | devices | revoke ID]")
+		fmt.Fprintln(flag.CommandLine.Output(), "Run clistreamd invite to print a three-minute pairing link.")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
-	action, arg := "serve", "client"
+	// Keep QR output for the original role-specific spellings. Bare invite
+	// prints one script-friendly line unless QR output is explicitly requested.
+	inviteQR := flag.NArg() == 2
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "qr" {
+			inviteQR = *qr
+		}
+	})
+	action, arg := "serve", ""
 	if flag.NArg() > 0 {
 		action = flag.Arg(0)
 	}
@@ -56,7 +64,7 @@ func run() error {
 			return errors.New("usage: clistreamd supervisor")
 		}
 		action, arg = "invite", "supervisor"
-		*qr = false
+		inviteQR = false
 	}
 	if e := os.MkdirAll(*dir, 0700); e != nil {
 		return e
@@ -74,19 +82,19 @@ func run() error {
 		if action == "serve" && interactive() {
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 			defer cancel()
-			return display(ctx, *qr, func() (string, error) { return adminRequest(sock, "display", "client") })
+			return display(ctx, *qr, func() (string, error) { return adminRequest(sock, "display", "") })
 		}
 		if action == "serve" {
-			fmt.Println("clistreamd is already running. Open clistreamd in a terminal to pair, or run clistreamd invite client.")
+			fmt.Println("clistreamd is already running. Open clistreamd in a terminal to pair, or run clistreamd invite.")
 			return nil
 		}
 		result, e := adminRequest(sock, action, arg)
 		if e != nil {
 			return e
 		}
-		if action == "invite" && *qr {
-			if e := printQR(result); e != nil {
-				return e
+		if action == "invite" && inviteQR {
+			if err := printQR(result); err != nil {
+				return err
 			}
 		}
 		fmt.Println(result)
@@ -168,7 +176,7 @@ func run() error {
 	if interactive() {
 		done := make(chan error, 1)
 		go func() { done <- s.Serve(ctx, listeners...); cancel() }()
-		e := display(ctx, *qr, func() (string, error) { return s.Admin("display", "client") })
+		e := display(ctx, *qr, func() (string, error) { return s.Admin("display", "") })
 		cancel()
 		<-done
 		return e

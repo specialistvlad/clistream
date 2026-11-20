@@ -1,4 +1,4 @@
-// Package broker owns enrollment, device roles, and the live session registry.
+// Package broker owns enrollment, device access, and the live session registry.
 package broker
 
 import (
@@ -23,10 +23,6 @@ import (
 	"github.com/specialistvlad/clistream/internal/wire"
 )
 
-type invitation struct {
-	role  string
-	until time.Time
-}
 type entry struct {
 	info wire.Session
 	conn *quic.Conn
@@ -37,11 +33,10 @@ type Server struct {
 	dir, pin   string
 	addresses  []string
 	signingKey ed25519.PrivateKey
-	displayed  string
 	slots      chan struct{}
 	now        func() time.Time
-	roles      map[string]string
-	invites    map[string]invitation
+	devices    map[string]string
+	invites    map[string]time.Time
 	sessions   map[string]entry
 	peers      map[*quic.Conn]string
 }
@@ -54,15 +49,23 @@ func New(dir string, addresses []string, auth identity.Authenticator) (*Server, 
 	s := &Server{
 		auth: auth, dir: dir, addresses: addresses, pin: identity.Pin(cert.Leaf),
 		signingKey: cert.PrivateKey.(ed25519.PrivateKey), now: time.Now,
-		slots: make(chan struct{}, 128), roles: map[string]string{},
-		invites: map[string]invitation{}, sessions: map[string]entry{}, peers: map[*quic.Conn]string{},
+		slots: make(chan struct{}, 128), devices: map[string]string{},
+		invites: map[string]time.Time{}, sessions: map[string]entry{}, peers: map[*quic.Conn]string{},
 	}
 	b, e := os.ReadFile(filepath.Join(dir, "devices.json"))
 	if e == nil {
-		e = json.Unmarshal(b, &s.roles)
+		e = json.Unmarshal(b, &s.devices)
 	}
 	if e != nil && !errors.Is(e, os.ErrNotExist) {
 		return nil, nil, e
+	}
+	for pin, role := range s.devices {
+		switch role {
+		case "client", "supervisor", "device":
+			s.devices[pin] = "device"
+		default:
+			return nil, nil, errors.New("unknown saved device role")
+		}
 	}
 	cfg := identity.Base(cert)
 	auth.Configure(cfg)
@@ -74,12 +77,12 @@ func (s *Server) Admin(action, arg string) (string, error) {
 	defer s.mu.Unlock()
 	switch action {
 	case "invite", "display":
-		if arg != "client" && arg != "supervisor" {
+		if arg != "" && arg != "client" && arg != "supervisor" {
 			return "", errors.New("expected client or supervisor")
 		}
 		now := s.now()
 		for id, v := range s.invites {
-			if !now.Before(v.until) {
+			if !now.Before(v) {
 				delete(s.invites, id)
 			}
 		}
@@ -93,7 +96,7 @@ func (s *Server) Admin(action, arg string) (string, error) {
 		addresses := s.addresses
 		if action == "invite" {
 			// Scripts expect one line. Prefer a reachable network address for
-			// remote supervisors when loopback and network listeners coexist.
+			// remote devices when loopback and network listeners coexist.
 			address := addresses[0]
 			for _, candidate := range addresses {
 				host, _, _ := net.SplitHostPort(candidate)
@@ -106,33 +109,32 @@ func (s *Server) Admin(action, arg string) (string, error) {
 		}
 		var links []string
 		for _, addr := range addresses {
-			link, e := identity.SignInvitation(s.signingKey, addr, arg, id, until)
+			link, e := identity.SignInvitation(s.signingKey, addr, id, until)
 			if e != nil {
 				return "", e
 			}
 			links = append(links, link)
 		}
 		if action == "display" {
-			delete(s.invites, s.displayed)
-			s.displayed = token
+			clear(s.invites)
 		}
-		s.invites[token] = invitation{arg, until}
+		s.invites[token] = until
 		return strings.Join(links, "\n"), nil
 	case "devices":
 		var lines []string
-		for k, v := range s.roles {
+		for k, v := range s.devices {
 			lines = append(lines, k+" "+v)
 		}
 		sort.Strings(lines)
 		return strings.Join(lines, "\n"), nil
 	case "revoke":
-		old, ok := s.roles[arg]
+		old, ok := s.devices[arg]
 		if !ok {
 			return "", errors.New("unknown device")
 		}
-		delete(s.roles, arg)
+		delete(s.devices, arg)
 		if e := s.save(); e != nil {
-			s.roles[arg] = old
+			s.devices[arg] = old
 			return "", e
 		}
 		for c, p := range s.peers {
@@ -144,7 +146,7 @@ func (s *Server) Admin(action, arg string) (string, error) {
 	}
 	return "", errors.New("unknown action")
 }
-func (s *Server) save() error { return identity.Save(filepath.Join(s.dir, "devices.json"), s.roles) }
+func (s *Server) save() error { return identity.Save(filepath.Join(s.dir, "devices.json"), s.devices) }
 func (s *Server) Serve(ctx context.Context, listeners ...*quic.Listener) error {
 	results := make(chan error, len(listeners))
 	for _, l := range listeners {
@@ -183,10 +185,10 @@ func (s *Server) connection(c *quic.Conn) {
 		return
 	}
 	s.mu.Lock()
-	if s.roles[pin] == "" {
+	if s.devices[pin] == "" {
 		timer := time.AfterFunc(8*time.Second, func() {
 			s.mu.Lock()
-			unknown := s.roles[pin] == ""
+			unknown := s.devices[pin] == ""
 			s.mu.Unlock()
 			if unknown {
 				c.CloseWithError(3, "enrollment required")
@@ -228,30 +230,32 @@ func (s *Server) connection(c *quic.Conn) {
 }
 func (s *Server) handle(c *quic.Conn, st *quic.Stream, pin string, m wire.Message) error {
 	s.mu.Lock()
-	role := s.roles[pin]
+	_, enrolled := s.devices[pin]
 	switch m.Op {
 	case "pair":
 		defer s.mu.Unlock()
 		i, e := identity.ParseInvitation(m.Token)
-		if e != nil || i.Pin != s.pin || i.Role == "" {
+		if e != nil || i.Pin != s.pin || i.Version != 2 {
 			return errors.New("invalid invitation")
 		}
 		v, ok := s.invites[i.ID]
-		if !ok || !s.now().Before(v.until) || !i.Expires.Equal(v.until) || i.Role != v.role || role != "" && role != v.role {
-			return errors.New("invalid invitation or role; press p in the server terminal for a new link")
+		if !ok || !s.now().Before(v) || !i.Expires.Equal(v) {
+			return errors.New("invalid invitation; press p in the server terminal for a new link")
 		}
-		s.roles[pin] = v.role
-		if e := s.save(); e != nil {
-			if role == "" {
-				delete(s.roles, pin)
+		if !enrolled {
+			s.devices[pin] = "device"
+			if e := s.save(); e != nil {
+				delete(s.devices, pin)
+				return e
 			}
-			return e
 		}
-		delete(s.invites, i.ID)
 		return wire.Write(st, wire.Message{Op: "ok"})
 	case "register":
 		defer s.mu.Unlock()
-		if role != "supervisor" || m.Info == nil || (m.Info.Mode != "pipe" && m.Info.Mode != "pty") {
+		if !enrolled {
+			return errors.New("device enrollment required")
+		}
+		if m.Info == nil || (m.Info.Mode != "pipe" && m.Info.Mode != "pty") {
 			return errors.New("registration denied")
 		}
 		for _, v := range s.sessions {
@@ -265,7 +269,7 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, pin string, m wire.Messag
 		s.sessions[id] = entry{info, c}
 		return wire.Write(st, wire.Message{Op: "ok", ID: id})
 	}
-	if role != "client" {
+	if !enrolled {
 		s.mu.Unlock()
 		return errors.New("client authorization required")
 	}

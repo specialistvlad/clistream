@@ -19,6 +19,10 @@ func Connect(dir string) (*quic.Conn, error) {
 	if e != nil {
 		return nil, e
 	}
+	return ConnectTo(dir, p)
+}
+
+func ConnectTo(dir string, p identity.Profile) (*quic.Conn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return identity.Dial(ctx, dir, p)

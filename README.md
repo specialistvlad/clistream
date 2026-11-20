@@ -11,13 +11,7 @@ export PATH="$PWD/bin:$PATH"
 clistreamd
 ```
 
-The daemon prints a pairing command and QR code. Press **p** in its terminal to replace the displayed invitation. In another terminal with the same PATH, print a supervisor pairing link.
-
-```sh
-clistreamd supervisor
-```
-
-Copy the single link it prints. In the following command, replace `LINK` with that link.
+The daemon prints two commands and a QR code for each listening address. Both commands use the same three-minute link. Replace `LINK` below with the link for the machine where the program will run.
 
 ```sh
 mkdir -p ~/clistream-demo
@@ -25,9 +19,11 @@ cd ~/clistream-demo
 clistream-supervise LINK /bin/sh
 ```
 
-The supervisor saves its enrollment. Next time, run `clistream-supervise /bin/sh`. To supervise on a different machine, run `clistreamd supervisor` on the server, then pass the printed link as the first argument on that machine, followed by the program and its arguments. Existing scripts can still pipe the link to `clistream-supervise -pair`.
+In a third terminal on the same OS account, run `clistream`. The two Go tools share a device key and saved server, so you can also pair with `clistream LINK` first and then run `clistream-supervise /bin/sh`. On a different machine, use the same invitation before it expires. Press **p** in the daemon terminal to invalidate outstanding invitations and display a fresh link for each address.
 
-In a third terminal, paste the entire printed `clistream clistream://pair/v1/…` command. On later visits run just `clistream`. It attaches to the sole session, offers a numbered choice for several, or waits for a supervisor. When input or output is redirected it prints the session list as JSON. Explicit `list`, `attach ID`, and `pair` (invitation on stdin) remain available to scripts. Type into either terminal. The shell exits for everyone when you run `exit`. To detach a remote CLI without affecting the shared process, press Ctrl-] in an interactive PTY attachment. In pipe mode, `clistream -eof attach ID` closes the child's shared stdin when the client's input ends.
+For scripts, `clistreamd invite` prints a single link. The older spellings `clistreamd supervisor`, `clistreamd invite supervisor` and `clistreamd invite client` also issue universal invitations. Both CLIs still accept invitations on stdin through `clistream pair` and `clistream-supervise -pair`.
+
+Run `clistream` to reconnect. It attaches to the sole session, offers a numbered choice for several, or waits for a supervisor. When input or output is redirected it prints the session list as JSON. Explicit `list`, `attach ID`, and `pair` (invitation on stdin) remain available to scripts. Type into either terminal. The shell exits for everyone when you run `exit`. To detach a remote CLI without affecting the shared process, press Ctrl-] in an interactive PTY attachment. In pipe mode, `clistream -eof attach ID` closes the child's shared stdin when the client's input ends.
 
 With Python 3.11+, `make dist` builds checksummed CLI archives in `dist/` for Linux and macOS on amd64 and arm64. Extract the matching archive on each host.
 
@@ -39,7 +35,7 @@ Choose the network interfaces to serve when starting the daemon. For example, on
 clistreamd -interface loopback -interface en0
 ```
 
-Use a network link printed for an IP address reachable from the phone. The default loopback link works only on the server machine. Scan the QR code, open the link in CLIStream, or paste it into **Pair**, then tap **Pair device**. All endpoints in a displayed set enroll one device. The set expires after three minutes. Press **p** for another device. With a background daemon, run `clistreamd` as the same user in a terminal to open the pairing display. Start supervisors on the machines where the target executables are installed.
+Use a network link printed for an IP address reachable from the phone. The default loopback link works only on the server machine. Scan the QR code, open the link in CLIStream, or paste it into **Pair**, then tap **Pair device**. Each device can redeem the invitation during its three-minute lifetime. Fresh enrollment requires software that understands v2 invitations. With a background daemon, run `clistreamd` as the same user in a terminal to open the pairing display. Start supervisors on the machines where the target executables are installed.
 
 ```sh
 clistream-supervise claude
@@ -68,7 +64,9 @@ The file service roots paths at the directory where the supervisor started. Tran
 
 ## Administration and development
 
-`clistreamd devices` lists enrolled key fingerprints and roles. `clistreamd revoke FINGERPRINT` removes that device and closes active connections. Global flags precede subcommands. `-state DIR` chooses a separate private identity directory for any binary.
+`clistreamd devices` lists enrolled key fingerprints. `clistreamd revoke FINGERPRINT` removes that device and closes active connections. On upgrade, previously enrolled supervisors gain permission to control every session. A holder of a valid invitation can enroll again after revocation. Press **p** to replace outstanding invitations. Global flags precede subcommands. `-state DIR` chooses a separate private identity directory for any binary.
+
+On upgrade, the Go tools reuse the sole saved profile, or the client profile when both legacy profiles have the same address and server pin. If the servers differ, each tool keeps its existing connection until you explicitly pair with the shared server. Older daemons retain their original enrollment rules.
 
 - [Product requirements and acceptance criteria](docs/requirements.md)
 - [Apple client interaction design](docs/apple-client-design.md)

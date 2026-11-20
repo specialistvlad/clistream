@@ -34,11 +34,11 @@ func main() {
 	os.Exit(code)
 }
 func run() (int, error) {
-	dir := flag.String("state", identity.Default("supervisor"), "identity directory")
+	dir := flag.String("state", "", "independent identity directory (default: shared per OS account)")
 	mode := flag.String("mode", "auto", "auto, pipe or pty")
 	name := flag.String("driver", "generic", "generic, or opt in to claude, codex or name-based auto selection")
 	listDrivers := flag.Bool("drivers", false, "list supported CLI versions and execution modes as JSON")
-	pair := flag.Bool("pair", false, "read supervisor invitation from stdin")
+	pair := flag.Bool("pair", false, "read pairing invitation from stdin")
 	addr := flag.String("server", "", "override paired host:port (same pinned key)")
 	local := flag.Bool("local-input", true, "forward local stdin (pipe EOF closes child stdin)")
 	ports := map[string]string{}
@@ -52,8 +52,8 @@ func run() (int, error) {
 		ports["port/"+k] = s
 		return nil
 	})
-	const usage = "Usage: clistream-supervise [flags] [SUPERVISOR-LINK] PROGRAM [ARG ...]"
-	const inviteHelp = "Get a supervisor link on the server with clistreamd supervisor."
+	const usage = "Usage: clistream-supervise [flags] [PAIRING-LINK] PROGRAM [ARG ...]"
+	const inviteHelp = "Use the link displayed by clistreamd or printed by clistreamd invite."
 	flag.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), usage)
 		fmt.Fprintln(flag.CommandLine.Output(), inviteHelp)
@@ -65,13 +65,14 @@ func run() (int, error) {
 	}
 	if *pair {
 		if term.IsTerminal(int(os.Stdin.Fd())) {
-			fmt.Fprintln(os.Stderr, "Paste the supervisor link and press Return.")
+			fmt.Fprintln(os.Stderr, "Paste the pairing link and press Return.")
 		}
 		var link string
 		if _, e := fmt.Fscanln(os.Stdin, &link); e != nil {
 			return 1, e
 		}
-		return 0, identity.Pair(context.Background(), *dir, link, "supervisor")
+		_, _, err := identity.CLIProfile(context.Background(), *dir, "supervisor", link)
+		return 0, err
 	}
 	args := flag.Args()
 	var link string
@@ -93,18 +94,14 @@ func run() (int, error) {
 	if e != nil {
 		return 1, e
 	}
-	if link != "" {
-		if e := identity.Pair(context.Background(), *dir, link, "supervisor"); e != nil {
-			return 1, fmt.Errorf("pair supervisor: %w. %s", e, inviteHelp)
-		}
-	}
-	saved, e := identity.Load(*dir)
-	if errors.Is(e, os.ErrNotExist) {
-		return 1, errors.New("This supervisor needs pairing. " + inviteHelp + "\nThen run clistream-supervise SUPERVISOR-LINK PROGRAM.")
+	directory, saved, e := identity.CLIProfile(context.Background(), *dir, "supervisor", link)
+	if link == "" && errors.Is(e, os.ErrNotExist) {
+		return 1, errors.New("This supervisor needs pairing. " + inviteHelp + "\nThen run clistream-supervise PAIRING-LINK PROGRAM.")
 	}
 	if e != nil {
 		return 1, e
 	}
+	savedAddress := saved.Address
 	if *addr != "" {
 		saved.Address = *addr
 	}
@@ -114,10 +111,18 @@ func run() (int, error) {
 		exports[strings.TrimPrefix(k, "port/")], _, _ = strings.Cut(v, ":")
 	}
 	info := wire.Session{Name: filepath.Base(path), Mode: profile.Mode, Version: profile.Version, Driver: profile.Name, Host: host, OS: runtime.GOOS, Ports: exports}
-	reg := registration{*dir, saved, info}
+	reg := registration{directory, saved, info}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	c, e := reg.connect(ctx)
+	// A pre-upgrade daemon can still require the separate supervisor key.
+	if errors.Is(e, errLegacyRole) && *dir == "" && directory == identity.Default("client") && link == "" {
+		legacy := identity.Default("supervisor")
+		if original, err := identity.Load(legacy); err == nil && original.Pin == saved.Pin && original.Address == savedAddress {
+			reg.dir = legacy
+			c, e = reg.connect(ctx)
+		}
+	}
 	if e != nil {
 		return 1, e
 	}

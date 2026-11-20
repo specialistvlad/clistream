@@ -15,12 +15,12 @@ func TestSignedInvitationIntegrity(t *testing.T) {
 		t.Fatal(e)
 	}
 	expires := time.Unix(1000, 0)
-	link, e := SignInvitation(cert.PrivateKey.(ed25519.PrivateKey), "127.0.0.1:7443", "client", make([]byte, 32), expires)
+	link, e := SignInvitation(cert.PrivateKey.(ed25519.PrivateKey), "127.0.0.1:7443", make([]byte, 32), expires)
 	if e != nil {
 		t.Fatal(e)
 	}
 	i, e := ParseInvitation(link)
-	if e != nil || i.Pin != Pin(cert.Leaf) || !i.Expires.Equal(expires) || i.Role != "client" || i.Address != "127.0.0.1:7443" {
+	if e != nil || i.Pin != Pin(cert.Leaf) || !i.Expires.Equal(expires) || i.Version != 2 || i.Role != "" || i.Address != "127.0.0.1:7443" {
 		t.Fatal("incorrect invitation")
 	}
 	raw, _ := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(link, InvitePrefix))

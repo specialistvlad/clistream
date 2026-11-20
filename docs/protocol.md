@@ -6,11 +6,11 @@ Each supervisor and client initiates a QUIC connection to the broker. TLS 1.3 ne
 
 The broker requests a TLS client certificate. TLS CertificateVerify proves possession of the private key. The broker identifies a device by hex-encoded SHA-256 of the certificate's DER SubjectPublicKeyInfo.
 
-Enrollment on a new connection requires a 256-bit, single-use, three-minute local invitation. The versioned link is `clistream://pair/v1/` followed by unpadded base64url. The decoded payload contains the 32-byte Ed25519 public key, 8-byte big-endian Unix expiry in seconds, 32-byte random invitation ID, one ASCII role byte (`c` or `s`), and the remaining UTF-8 host:port. A 64-byte Ed25519 signature follows the payload. The signed input is ASCII `clistream/pair/v1`, one zero byte, then the payload. The client verifies the signature and derives the TLS pin from the key’s DER SubjectPublicKeyInfo.
+The local administration interface issues invitations valid for three minutes. A `clistream://pair/v2/` link contains an unpadded base64url payload followed by its signature, encoded together. The payload consists of the 32-byte Ed25519 public key, eight-byte big-endian Unix expiry in seconds, 32-byte random invitation ID and remaining UTF-8 host:port. The 64-byte Ed25519 signature covers ASCII `clistream/pair/v2`, one zero byte and the payload. The client verifies the signature and pins the TLS peer to the SHA-256 digest of the signer's DER SubjectPublicKeyInfo.
 
-On a pinned QUIC connection it sends the complete link as the `pair` token. The server verifies its own signer, server-clock expiry, role and outstanding ID, and consumes the ID once across all endpoints. Replacing the displayed set invalidates its previous ID. On an older daemon the updated client accepts the original fragment format and sends its opaque token.
+The client sends the complete signed link as the `pair` token over the pinned connection. On every request the broker verifies the signature, its own pin, outstanding ID and server-clock expiry before enrolling the peer key. Multiple devices may use a link concurrently. Re-enrolling an enrolled key succeeds. Displayed endpoints share an ID. Replacing the display invalidates outstanding IDs, and restarting clears all invitations.
 
-Regular connections require an enrolled public key with the appropriate role. Each profile has one server and one device identity. Revocation disconnects the device.
+Every enrolled key can publish and control sessions, including keys enrolled with a client or supervisor role before the upgrade. Revocation disconnects active connections and removes the enrollment. Updated clients can also redeem signed v1 role-specific links and original unsigned fragment links on older daemons. The latter send the opaque token over the pinned connection. Those servers retain their original role and single-use checks.
 
 The broker terminates both TLS connections and can read relayed data. Enrolled clients share all sessions on this daemon. Use separate daemons for separate trust domains. Invitation possession authorizes enrollment and the custom URL scheme requires trust in the app handling the link.
 
@@ -20,10 +20,10 @@ Every application record, including enrollment, filesystem and tunnel data, is U
 
 | First operation | Role | Purpose |
 |---|---|---|
-| pair(Token) | Invited | Bind the presented key to the invitation role |
-| list | Client | Session descriptors in Sessions |
-| register(Info) | Supervisor | Assign a session ID for this connection |
-| open(ID, Channel, Path?) | Client | Broker opens matching stream back to the supervisor |
+| pair(Token) | Invited | Enroll the presented key |
+| list | Enrolled device | Session descriptors in Sessions |
+| register(Info) | Enrolled device | Assign a session ID for this connection |
+| open(ID, Channel, Path?) | Enrolled device | Broker opens matching stream back to the supervisor |
 
 ## Channel operations
 

@@ -4,7 +4,13 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 Each requirement has an executable check and a recorded outcome for the environments exercised. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
-## One-command pairing on November 20, 2026
+## Shared pairing links on November 20, 2026
+
+The Go race tests exercised concurrent enrollment on multiple listeners, signature tampering, server-clock expiry and replacement. The CLI suite used the exact link from the daemon terminal to publish a process and exchange input and output from a separate identity. Tests also covered revocation, re-enrollment, restart, both pairing directions, concurrent first use, legacy migration, conflicting servers and explicit state directories.
+
+A separate upgrade check enrolled the previous client and supervisor, restarted the upgraded daemon on the same state and reconnected both original binaries. The updated Go tools also paired against the previous daemon under its role-specific, single-use rules. Apple acceptance for v2 is pending.
+
+## Previous v1 pairing checks on November 20, 2026
 
 | Environment | Checks |
 |---|---|

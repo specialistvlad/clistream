@@ -1,5 +1,6 @@
 """Exercise installed binaries on real UDP sockets with isolated, temporary identities."""
 
+import concurrent.futures
 import contextlib
 import http.server
 import json
@@ -12,6 +13,7 @@ import shutil
 import socket
 import statistics
 import subprocess
+import sys
 import tempfile
 import termios
 import threading
@@ -66,16 +68,16 @@ class BrokerFixture(unittest.TestCase):
         self.a = [CLI, "-state", self.base / "a"]
         self.b = [CLI, "-state", self.base / "b"]
         self.start_server()
+        link = self.run_cli(self.server + ["invite"]).stdout
         for role, args in [
             ("client", self.a),
             ("client", self.b),
             ("supervisor", self.supervisor),
         ]:
-            link = self.run_cli(self.server + ["invite", role]).stdout
             self.run_cli(
                 args + (["-pair"] if role == "supervisor" else ["pair"]), data=link
             )
-            self.assertNotEqual(
+            self.assertEqual(
                 self.run_cli(
                     args + (["-pair"] if role == "supervisor" else ["pair"]),
                     data=link,
@@ -113,9 +115,9 @@ class BrokerFixture(unittest.TestCase):
         self.addCleanup(clean)
         return p
 
-    def run_cli(self, args, data=None, check=True):
+    def run_cli(self, args, data=None, check=True, env=None):
         result = subprocess.run(
-            args, input=data, capture_output=True, timeout=12, check=False
+            args, input=data, capture_output=True, timeout=12, check=False, env=env
         )
         if check:
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -152,7 +154,11 @@ class Live(BrokerFixture):
         def displayed_link(console):
             screen = until(console, b"Ctrl-C exits.")
             self.assertIn(b"This computer only", screen)
-            return re.search(rb" (clistream://pair/v1/[A-Za-z0-9_-]+)", screen)[1]
+            link = rb"(clistream://pair/v2/[A-Za-z0-9_-]+)"
+            client = re.search(rb"clistream " + link, screen)[1]
+            supervisor = re.search(rb"clistream-supervise " + link + rb" PROGRAM", screen)[1]
+            self.assertEqual(client, supervisor)
+            return client
 
         # Starting the daemon in a fresh terminal must immediately allow pairing.
         console, foreground = terminal([DAEMON, "-state", self.base / "fresh", "-listen", "127.0.0.1:0", "-qr=false"])
@@ -175,8 +181,11 @@ class Live(BrokerFixture):
         shell = shutil.which("zsh") or "/bin/sh"
         fd, viewer = terminal([shell, "-c", 'exec "$@" ' + fresh.decode(), "test", *guest])
         until(fd, b"Waiting for a supervisor")
-        self.session(["-mode", "pipe"], ["/bin/sh", "-c", "echo first-ready; cat"])
+        shared = self.spawn([SUP, "-state", self.base / "display-supervisor", fresh, "/bin/sh", "-c", "echo first-ready; while read -r x; do echo reply-$x; done"])
+        status_line(shared.stderr, b"session ")
         until(fd, b"first-ready")
+        os.write(fd, b"shared-link-input\n")
+        until(fd, b"reply-shared-link-input")
         viewer.terminate()
         viewer.wait(5)
         self.assertEqual(len(json.loads(self.run_cli(guest).stdout)), 1)
@@ -192,16 +201,94 @@ class Live(BrokerFixture):
         admin.terminate()
         self.assertEqual(len(json.loads(self.run_cli(guest).stdout)), 2)
 
+    def account(self, name):
+        home = self.base / name
+        config = home / "config"
+        env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(config))
+        if sys.platform == "darwin":
+            config = home / "Library/Application Support"
+        return env, config / "clistream"
+
+    def test_shared_default_identity(self):
+        output = self.run_cli([DAEMON, "-state", self.base / "server", "invite"]).stdout.splitlines()
+        self.assertEqual(len(output), 1)
+        link = output[0]
+        for first in ("client", "supervisor", "concurrent"):
+            with self.subTest(first=first):
+                env, _ = self.account(first)
+                before = set(self.run_cli(self.server + ["devices"]).stdout.splitlines())
+                cli = [CLI, link]
+                sup = [SUP, link, "true"]
+                if first == "concurrent":
+                    with concurrent.futures.ThreadPoolExecutor(2) as pool:
+                        jobs = [pool.submit(self.run_cli, cmd, env=env) for cmd in (cli, sup)]
+                        for job in jobs:
+                            job.result()
+                else:
+                    self.run_cli(cli if first == "client" else sup, env=env)
+                self.run_cli([CLI], env=env)
+                self.run_cli([SUP, "true"], env=env)
+                after = set(self.run_cli(self.server + ["devices"]).stdout.splitlines())
+                self.assertEqual(len(after - before), 1)
+                other = self.run_cli([CLI, "-state", self.base / "isolated", "list"],
+                                     env=env, check=False)
+                self.assertNotEqual(other.returncode, 0)
+
+    def test_legacy_profiles(self):
+        link = self.run_cli(self.server + ["invite"]).stdout.strip()
+        for profiles in (("client",), ("supervisor",), ("client", "supervisor")):
+            env, root = self.account("-".join(profiles))
+            for role in profiles:
+                before = set(self.run_cli(self.server + ["devices"]).stdout.splitlines())
+                self.run_cli([CLI, "-state", root / role, link])
+                after = set(self.run_cli(self.server + ["devices"]).stdout.splitlines())
+                enrolled = (after - before).pop().split()[0].decode()
+            self.run_cli([CLI], env=env)
+            self.run_cli([SUP, "true"], env=env)
+            if len(profiles) == 2:
+                # Revoking the supervisor key proves which identity both tools use.
+                key = (root / "supervisor/key.pem").read_bytes()
+                self.assertNotEqual(key, (root / "client/key.pem").read_bytes())
+                devices = json.loads((self.base / "server/devices.json").read_text())
+                # Emulate an upgrade with real, already-enrolled keys.
+                self.daemon.terminate()
+                self.daemon.wait(5)
+                for index, pin in enumerate(devices):
+                    devices[pin] = ("supervisor", "client")[index % 2]
+                (self.base / "server/devices.json").write_text(json.dumps(devices))
+                self.start_server()
+                self.run_cli(self.server + ["revoke", enrolled])
+                self.run_cli([CLI], env=env)
+                self.run_cli([SUP, "true"], env=env)
+                self.assertEqual(key, (root / "supervisor/key.pem").read_bytes())
+
+    def test_conflicting_default_servers(self):
+        env, root = self.account("conflicting")
+        second = [DAEMON, "-state", self.base / "second"]
+        daemon = self.spawn(second + ["-listen", "127.0.0.1:0"])
+        status_line(daemon.stderr, b"serving QUIC")
+        a = self.run_cli(self.server + ["invite"]).stdout.strip()
+        b = self.run_cli(second + ["invite"]).stdout.strip()
+        self.run_cli([CLI, "-state", root / "client", a])
+        self.run_cli([SUP, "-state", root / "supervisor", b, "true"])
+        proc = self.spawn([SUP, "cat"], env=env)
+        sid = status_line(proc.stderr, b"session ").split()[1].decode()
+        self.assertFalse(json.loads(self.run_cli([CLI], env=env).stdout))
+        self.assertEqual(json.loads(self.run_cli([CLI, b], env=env).stdout)[0]["ID"], sid)
+        self.assertEqual(json.loads(self.run_cli([CLI], env=env).stdout)[0]["ID"], sid)
+        self.assertFalse(json.loads(self.run_cli([CLI, "-state", root / "client"]).stdout))
+        self.assertEqual(len(self.run_cli(second + ["devices"]).stdout.splitlines()), 1)
+
     def test_supervisor_positional_pair_and_launch(self):
         sup = [SUP, "-state", self.base / "new-supervisor"]
         missing = self.run_cli(sup + ["/bin/sh"], check=False)
-        self.assertIn(b"clistreamd supervisor", missing.stderr)
+        self.assertIn(b"clistreamd invite", missing.stderr)
         output = self.run_cli([DAEMON, "-state", self.base / "server", "supervisor"]).stdout
         self.assertEqual(len(output.splitlines()), 1)
         link = output.strip()
-        self.assertTrue(link.startswith(b"clistream://pair/v1/"))
-        wrong = self.run_cli(self.server + ["invite", "client"]).stdout.strip()
-        self.assertNotEqual(self.run_cli(sup + [wrong, "/bin/true"], check=False).returncode, 0)
+        self.assertTrue(link.startswith(b"clistream://pair/v2/"))
+        alias = self.run_cli(self.server + ["invite", "client"]).stdout.strip()
+        self.run_cli(sup + [alias, "true"])
         self.assertNotEqual(self.run_cli(sup + [link], check=False).returncode, 0)
         self.assertNotEqual(self.run_cli(sup + [link, "/no/such/command"], check=False).returncode, 0)
         program = 'test ! -t 0 && echo ready; read -r data; echo "$1:$data"; echo error >&2; exit 7'
@@ -214,7 +301,7 @@ class Live(BrokerFixture):
         self.assertEqual(line(viewer.stderr), b"error\n")
         self.assertEqual(viewer.wait(8), 7)
         self.assertEqual(proc.wait(8), 7)
-        self.assertNotEqual(self.run_cli(sup + [link, "/bin/true"], check=False).returncode, 0)
+        self.run_cli(sup + [link, "true"])
 
         master, slave = pty.openpty()
         self.addCleanup(os.close, master)
@@ -690,10 +777,8 @@ class Live(BrokerFixture):
         _, sid = self.session([], ["/bin/sh", "-c", "echo ready; exec cat"])
         before = set(self.run_cli(self.server + ["devices"]).stdout.splitlines())
         guest = [CLI, "-state", self.base / "guest"]
-        self.run_cli(
-            guest + ["pair"],
-            data=self.run_cli(self.server + ["invite", "client"]).stdout,
-        )
+        link = self.run_cli(self.server + ["invite"]).stdout
+        self.run_cli(guest + ["pair"], data=link)
         new = set(self.run_cli(self.server + ["devices"]).stdout.splitlines()) - before
         self.assertEqual(len(new), 1)
         revoked = self.spawn(guest + ["attach", sid])
@@ -704,6 +789,8 @@ class Live(BrokerFixture):
         self.assertNotEqual(revoked.wait(10), 0)
         self.assertNotEqual(self.run_cli(guest + ["list"], check=False).returncode, 0)
         self.assertIn(b"no longer authorized", self.run_cli(guest, check=False).stderr)
+        self.run_cli(guest + ["pair"], data=link)
+        self.run_cli(guest + ["list"])
         retained.stdin.write(b"still-enrolled\n")
         self.assertEqual(line(retained.stdout), b"still-enrolled\n")
 
@@ -735,19 +822,14 @@ class Live(BrokerFixture):
             self.run_cli([CLI, "-state", unknown, "list"], check=False).stderr,
         )
         self.assertIn(b"mismatch", self.run_cli([CLI, "-state", unknown], check=False).stderr)
-        self.assertNotEqual(
-            self.run_cli(
-                [CLI, "-state", self.base / "supervisor", "list"], check=False
-            ).returncode,
-            0,
-        )
+        self.run_cli([CLI, "-state", self.base / "supervisor", "list"])
         self.daemon.terminate()
         self.daemon.wait(5)
         self.start_server()
         self.run_cli(self.a + ["list"])
         devices = self.run_cli(self.server + ["devices"]).stdout.decode().splitlines()
         for device in devices:
-            if device.endswith(" client"):
+            if device.endswith(" device"):
                 self.run_cli(self.server + ["revoke", device.split()[0]])
         self.assertNotEqual(self.run_cli(self.a + ["list"], check=False).returncode, 0)
 

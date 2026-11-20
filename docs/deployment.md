@@ -39,7 +39,7 @@ Run `make test-deployment` with Docker available for a working example. The test
 
 ## Apple client and TestFlight
 
-Install an updated Apple build to use the signed `clistream://pair/v1/` links. Existing enrolled devices can reconnect with their saved keys. The updated app and CLI also accept invitations from older daemons. When upgrading a running daemon, restart the process to activate the new terminal display. If the saved network address changes, enroll with a link containing a reachable address.
+Fresh enrollment requires a client build that accepts the daemon’s signed `clistream://pair/v2/` links. Existing enrolled devices can reconnect with their saved keys. The updated app and CLI also accept invitations from older daemons. When upgrading a running daemon, restart the process to activate the new terminal display. If the saved network address changes, enroll with a link containing a reachable address.
 
 Install full Xcode, Go and XcodeGen. Run `make apple` and open apple/CLIStream.xcodeproj. Select CLIStream-iOS for iPhone and iPad, or CLIStream-macOS for Mac. The static Go library contains arm64 device, arm64/x86_64 simulator, and universal macOS slices. Simulator and local builds can use separate signing settings. The application uses SwiftTerm for PTY rendering.
 

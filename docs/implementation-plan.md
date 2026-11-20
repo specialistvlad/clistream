@@ -1,6 +1,6 @@
 # Implementation and acceptance plan
 
-1. Establish TLS identities, single-use role-bound invitations and mandatory bounded compression.
+1. Establish TLS identities, reusable three-minute invitations and mandatory bounded compression.
 2. Connect the daemon and its local administration socket to a session registry and multiplexed QUIC relay.
 3. Implement process drivers, terminal fan-out, local interaction and explicit port exports.
 4. Share the client library between the Unix CLI and a native Apple terminal.
@@ -13,10 +13,10 @@
 
 ## One-command pairing and reconnect
 
-1. Sign short-lived role-bound invitations and share redemption across selected listeners.
+1. Sign short-lived device invitations and share redemption across selected listeners.
 2. Display a copyable CLI command and QR code in an interactive terminal. Support replacement with **p** and the local administration socket.
 3. Reconnect from the saved device profile and wait for, attach to, or select a session. Use the same invitation decoder for Apple confirmation.
-4. Accept an optional supervisor invitation before the executable, save enrollment, and stream the child using automatic I/O selection and a generic driver by default. Enable application-specific features on explicit request. Exercise first use, saved enrollment, argument forwarding, and terminal and redirected launches.
+4. Accept an optional pairing invitation before the executable, save enrollment, and stream the child using automatic I/O selection and a generic driver by default. Enable application-specific features on explicit request. Exercise first use, saved enrollment, argument forwarding, and terminal and redirected launches.
 5. Exercise concurrent redemption, tampering, expiry, terminal interaction and iPhone/iPad handoff. Verify tap-to-open from Messages on a physical iPhone with an updated build before claiming that workflow.
 
 Track acceptance against the ten functional requirements and the engineering checks in the [requirements audit](test-results/requirements-audit.md).

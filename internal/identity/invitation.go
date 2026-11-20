@@ -15,19 +15,21 @@ import (
 	"time"
 )
 
-const InvitePrefix = "clistream://pair/v1/"
-const signatureDomain = "clistream/pair/v1\x00"
+const InvitePrefix = "clistream://pair/v2/"
+const legacyPrefix = "clistream://pair/v1/"
+const signatureDomain = "clistream/pair/v2\x00"
 const (
-	idSize         = 32
-	expiryOffset   = ed25519.PublicKeySize
-	idOffset       = expiryOffset + 8
-	roleOffset     = idOffset + idSize
-	endpointOffset = roleOffset + 1
+	idSize               = 32
+	expiryOffset         = ed25519.PublicKeySize
+	idOffset             = expiryOffset + 8
+	idEnd                = idOffset + idSize
+	legacyEndpointOffset = idEnd + 1
 )
 
 type Invitation struct {
 	Profile
 	ID      string
+	Version int
 	Role    string
 	Expires time.Time
 }
@@ -46,15 +48,14 @@ func validEndpoint(s string) bool {
 	return true
 }
 
-// The signed bytes are public key, Unix expiry, random ID, role byte and endpoint.
-func SignInvitation(key ed25519.PrivateKey, address, role string, id []byte, expires time.Time) (string, error) {
-	if !validEndpoint(address) || len(id) != idSize || (role != "client" && role != "supervisor") {
+// The signed bytes are public key, Unix expiry, random ID and endpoint.
+func SignInvitation(key ed25519.PrivateKey, address string, id []byte, expires time.Time) (string, error) {
+	if !validEndpoint(address) || len(id) != idSize {
 		return "", errors.New("invalid invitation parameters")
 	}
 	payload := append([]byte(nil), key.Public().(ed25519.PublicKey)...)
 	payload = binary.BigEndian.AppendUint64(payload, uint64(expires.Unix()))
 	payload = append(payload, id...)
-	payload = append(payload, role[0])
 	payload = append(payload, address...)
 	sig := ed25519.Sign(key, append([]byte(signatureDomain), payload...))
 	return InvitePrefix + base64.RawURLEncoding.EncodeToString(append(payload, sig...)), nil
@@ -62,7 +63,10 @@ func SignInvitation(key ed25519.PrivateKey, address, role string, id []byte, exp
 
 func ParseInvitation(link string) (Invitation, error) {
 	invalid := errors.New("invalid invitation")
-	if !strings.HasPrefix(link, InvitePrefix) {
+	prefix, domain, start, version := InvitePrefix, signatureDomain, idEnd, 2
+	if strings.HasPrefix(link, legacyPrefix) {
+		prefix, domain, start, version = legacyPrefix, "clistream/pair/v1\x00", legacyEndpointOffset, 1
+	} else if !strings.HasPrefix(link, InvitePrefix) {
 		// Old daemons issue an unsigned URL with a one-use token and TLS pin.
 		u, e := url.Parse(link)
 		if e != nil || u.Scheme != "clistream" || u.Host != "pair" || u.Path != "" || u.User != nil || u.RawQuery != "" {
@@ -76,29 +80,32 @@ func ParseInvitation(link string) (Invitation, error) {
 		}
 		return Invitation{Profile: Profile{q.Get("address"), q.Get("pin")}, ID: q.Get("token")}, nil
 	}
-	encoded := strings.TrimPrefix(link, InvitePrefix)
+	encoded := strings.TrimPrefix(link, prefix)
 	if len(encoded) > 2048 {
 		return Invitation{}, invalid
 	}
 	raw, e := base64.RawURLEncoding.Strict().DecodeString(encoded)
-
-	if e != nil || len(raw) <= endpointOffset+ed25519.SignatureSize {
+	if e != nil || len(raw) <= start+ed25519.SignatureSize {
 		return Invitation{}, invalid
 	}
 	payload, sig := raw[:len(raw)-ed25519.SignatureSize], raw[len(raw)-ed25519.SignatureSize:]
 	key := ed25519.PublicKey(payload[:expiryOffset])
-	if !ed25519.Verify(key, append([]byte(signatureDomain), payload...), sig) {
+	if !ed25519.Verify(key, append([]byte(domain), payload...), sig) {
 		return Invitation{}, invalid
 	}
-	address := string(payload[endpointOffset:])
+	address := string(payload[start:])
 	role := ""
-	switch payload[roleOffset] {
-	case 'c':
-		role = "client"
-	case 's':
-		role = "supervisor"
+	if version == 1 {
+		switch payload[idEnd] {
+		case 'c':
+			role = "client"
+		case 's':
+			role = "supervisor"
+		default:
+			return Invitation{}, invalid
+		}
 	}
-	if !validEndpoint(address) || role == "" {
+	if !validEndpoint(address) {
 		return Invitation{}, invalid
 	}
 	der, e := x509.MarshalPKIXPublicKey(key)
@@ -108,7 +115,7 @@ func ParseInvitation(link string) (Invitation, error) {
 	pin := sha256.Sum256(der)
 	return Invitation{
 		Profile: Profile{address, hex.EncodeToString(pin[:])},
-		ID:      hex.EncodeToString(payload[idOffset:roleOffset]), Role: role,
+		ID:      hex.EncodeToString(payload[idOffset:idEnd]), Role: role, Version: version,
 		Expires: time.Unix(int64(binary.BigEndian.Uint64(payload[expiryOffset:idOffset])), 0),
 	}, nil
 }

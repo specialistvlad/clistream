@@ -1,10 +1,12 @@
 # Trust and security model
 
-The server operator and enrolled client devices are trusted to interact with all sessions belonging to that daemon. The server decrypts and relays each stream. Keep its state under a dedicated OS user in a private directory outside every exported workspace. Tunnel destinations are numeric loopback addresses configured by the supervisor operator. Clients select an export by name.
+The server operator and all enrolled devices are trusted to interact with all sessions belonging to that daemon. The server decrypts and relays each stream. Keep its state under a dedicated OS user in a private directory outside every exported workspace. Tunnel destinations are numeric loopback addresses configured by the supervisor operator. Clients select an export by name.
 
 Each enrollment uses a locally generated Ed25519 key. Protect the device profile directory as a credential. The Go and Apple clients store private key files with mode 0600. The Apple client uses its sandboxed Application Support directory and excludes it from backup. The private key is software-backed. Losing a device requires revocation on each server where it was enrolled.
 
-The interactive server terminal issues client invitations. The Unix administration socket lives in the daemon’s private state directory and supports invitation issuance and device revocation. Anyone holding an unused invitation can enroll until it expires. Treat the QR code, shell history, terminal scrollback and shared messages as sensitive during that window. Background startup reports the listening addresses. Scripts can explicitly request a link with `clistreamd -qr=false invite client`. If the server private key is compromised, stop the server, rotate its identity and enroll devices again.
+The interactive server terminal issues signed invitations for any device. The Unix administration socket lives in the daemon’s private state directory and supports invitation issuance and device revocation. Anyone holding a valid invitation can enroll multiple keys for three minutes. Press **p** to invalidate outstanding invitations across all listening addresses. Revoking a device disconnects it and rejects its saved credentials, but a valid invitation permits a fresh enrollment. Treat the QR code, shell history, terminal scrollback and shared messages as sensitive during that window. Background startup reports the listening addresses. Scripts can explicitly request a link with `clistreamd invite`. If the server private key is compromised, stop the server, rotate its identity and enroll devices again.
+
+**Upgrade permissions.** Previously enrolled supervisors gain permission to list and control all sessions, access their shared files and use their exported ports. Review enrolled keys with `clistreamd devices` and revoke untrusted keys before upgrading.
 
 ## Workspace service
 

@@ -16,7 +16,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -148,12 +147,16 @@ func Pair(ctx context.Context, dir, link, role string) error {
 	if e != nil {
 		return e
 	}
+	return pair(ctx, dir, link, role, invite)
+}
+
+func pair(ctx context.Context, dir, link, role string, invite Invitation) error {
 	if invite.Role != "" && invite.Role != role {
 		return errors.New("invitation is for a different device role")
 	}
 	p := invite.Profile
 	token := invite.ID
-	if strings.HasPrefix(link, InvitePrefix) {
+	if invite.Version > 0 {
 		token = link
 	}
 	c, e := Dial(ctx, dir, p)

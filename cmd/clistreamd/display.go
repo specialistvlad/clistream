@@ -48,9 +48,9 @@ func printQR(link string) error {
 var safeCommandPath = regexp.MustCompile(`^[a-zA-Z0-9_./-]+$`)
 
 // Preserve a relative invocation such as ./bin/clistreamd for the same-machine command.
-func localClientCommand() string {
+func localCommand(name string) string {
 	directory, _ := filepath.Split(os.Args[0])
-	command := directory + "clistream"
+	command := directory + name
 	if !safeCommandPath.MatchString(command) {
 		return "'" + strings.ReplaceAll(command, "'", "'\"'\"'") + "'"
 	}
@@ -90,12 +90,12 @@ func display(ctx context.Context, qr bool, issue func() (string, error)) error {
 				}
 				host, _, _ := net.SplitHostPort(i.Address)
 				label := "Network"
-				command := "clistream"
+				client, supervisor := "clistream", "clistream-supervise"
 				if net.ParseIP(host).IsLoopback() || host == "localhost" {
 					label = "This computer only"
-					command = localClientCommand()
+					client, supervisor = localCommand(client), localCommand(supervisor)
 				}
-				fmt.Printf("%s (%s)\n  %s %s\n", label, i.Address, command, link)
+				fmt.Printf("%s (%s)\n  %s %s\n  %s %s PROGRAM\n", label, i.Address, client, link, supervisor, link)
 				if qr {
 					if e := printQR(link); e != nil {
 						return e
@@ -103,9 +103,8 @@ func display(ctx context.Context, qr bool, issue func() (string, error)) error {
 				}
 				expires = i.Expires
 			}
-			fmt.Println("Run the printed command, or open the link in CLIStream and tap Pair device.")
-			fmt.Println("To share a program, get a supervisor link in another terminal with clistreamd supervisor.")
-			fmt.Printf("Use one link to pair a device before %s. Press p for a fresh link. Ctrl-C exits.\n", expires.Local().Format("15:04:05 MST"))
+			fmt.Println("Replace PROGRAM with the command to share. Use the same link to pair more devices.")
+			fmt.Printf("Expires at %s. Press p to replace the displayed links on all interfaces. Ctrl-C exits.\n", expires.Local().Format("15:04:05 MST"))
 			refresh = false
 		}
 		if !expires.IsZero() && !time.Now().Before(expires) {
