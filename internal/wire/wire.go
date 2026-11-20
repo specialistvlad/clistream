@@ -20,8 +20,8 @@ const ALPN = "clistream/1+snappy"
 const MaxPlain = 128 * 1024
 
 type Session struct {
-	ID, Name, Mode, Driver, Version, Host, OS string
-	Ports                                     map[string]string
+	ID, Name, Mode, Host, OS string
+	Ports                    map[string]string
 }
 type FileEntry struct {
 	Name           string

@@ -24,7 +24,7 @@ jobs:
       - name: Test the native release archive
         run: |
           make dist
-          python3 tests/distribution.py "dist/clistream-$(go env GOOS)-$(go env GOARCH).tar.gz"
+          make test-dist
       - if: runner.os == 'Linux'
         run: make test-deployment
   apple:

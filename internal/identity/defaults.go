@@ -62,25 +62,19 @@ func readDefaults() (defaultProfiles, error) {
 
 // CLIProfile resolves the saved directory and, when supplied, enrolls the link.
 // A private lock serializes enrollment and publication across both executables.
-func CLIProfile(ctx context.Context, explicit, role, link string) (string, Profile, error) {
+func CLIProfile(ctx context.Context, role, link string) (string, Profile, error) {
 	if link == "" {
-		dir := explicit
-		if dir == "" {
-			profiles, err := readDefaults()
-			if err != nil {
-				return "", Profile{}, err
-			}
-			dir = Default(profiles.forRole(role))
+		profiles, err := readDefaults()
+		if err != nil {
+			return "", Profile{}, err
 		}
+		dir := Default(profiles.forRole(role))
 		profile, err := Load(dir)
 		return dir, profile, err
 	}
 	invite, err := ParseInvitation(link)
 	if err != nil {
 		return "", Profile{}, err
-	}
-	if explicit != "" {
-		return explicit, invite.Profile, pair(ctx, explicit, link, role, invite)
 	}
 	if err := os.MkdirAll(Default(""), 0700); err != nil {
 		return "", Profile{}, err

@@ -144,7 +144,7 @@ func (d *dashboardUI) submitCommand() {
 	}
 	res, err := wire.Request(d.conn, wire.Message{Op: "run-command", ID: d.target.ID, Run: d.target.Info.ID, Revision: d.target.Revision, Command: argv})
 	if res.Error == "invalid command" {
-		d.notice = "Check the executable and driver on the host."
+		d.notice = "Check the executable on the host."
 		return
 	}
 	d.page = "table"

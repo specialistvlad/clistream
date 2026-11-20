@@ -4,6 +4,16 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Go command and tooling housekeeping · November 20, 2026
+
+With Go 1.27.4 on macOS arm64 and Debian Linux arm64, `make test e2e` passed the race-enabled package tests, vet, requirements trace and 41 end-to-end cases. The command tests exercised double-dash options, help, retired option rejection, direct argument passing, automatic and explicit I/O modes, and account-default identity migration. The session listing omitted both retired metadata keys.
+
+`make test-compatibility` ran on both platforms against binaries from `bd2d7ab` and `50cbcaa`. A previous Go client listed and attached to a current session. A current broker rejected an older supervisor’s descriptor, and a current CLI rejected an older daemon’s nonempty listing. A previous client exchanged data with the current supervisor through each older daemon. Deploy matching Go binaries for full functionality.
+
+`make test-deployment` passed with four isolated Linux containers and with a native macOS CLI attaching to a Linux supervisor through a Linux daemon. Two builds of the four macOS and Linux amd64 and arm64 archives produced identical SHA-256 manifests. `make test-dist` verified each native arm64 archive and ran all 41 cases against its extracted binaries. The amd64 archives were cross-built and checksum-verified.
+
+Native macOS, iPhone and iPad work was explicitly deferred. Their current session decoder requires the removed keys for a nonempty listing. The shared test runner imports the retired Python harness, the optional provider fixture imports the retired emulator, and the fixtures call removed options. Native verification requires corresponding decoder and test-tooling updates. The earlier Apple entries below describe their original builds.
+
 ## Returning home from an attachment · November 20, 2026
 
 The Go dashboard attached to a live child, returned home with Ctrl-G and attached again. In PTY and pipe modes, the supervisor feed and journal recorded normal channel closures, and the broker journal reported matching outcomes. The reattached client exchanged input and output with the running child. The regression runs in `test_home_closes_terminal_channels`. A separate dashboard test observed a supervisor appear and disappear on successive refreshes, then checked that publication was logged and successful polls were absent from both stderr and the journal.
@@ -154,12 +164,12 @@ The network results above describe an emulated path. QR decoding and deep-link h
 make test e2e
 go test -v ./internal/wire ./internal/broker
 go run golang.org/x/vuln/cmd/govulncheck@latest ./...
-CLISTREAM_LIVE_DRIVERS=1 CLISTREAM_SOAK_SECONDS=120 make e2e
-make dist
+CLISTREAM_SOAK_SECONDS=120 make e2e
+make dist test-dist
 (cd dist && shasum -a 256 -c SHA256SUMS)
 ```
 
-Install the supported Claude Code version to enable the emulator test. Live Codex requires the supported CLI and a signed-in account. Set `CLISTREAM_LIVE_CLAUDE=1` to run the separate live Anthropic check when quota is available.
+Set `CLISTREAM_LEGACY_BIN` and `CLISTREAM_MANAGED_V1_BIN` to binary directories built from `bd2d7ab` and `50cbcaa` to run `make test-compatibility`. Run `make test-deployment` with Docker for the four-container test and, on macOS, the native CLI to Linux supervisor check.
 
 For iPhone and iPad UI checks, put AXe 2.1.1 on the test host’s PATH. The fixture taps a document row in the system Files picker and long-presses the rendered output through simulator touch input. CI verifies the release archive hash. The fixture sends USB keyboard usages for left Control and D to the designated simulator. The child must receive byte 0x04. [AXe simulator test tool](https://github.com/cameroncooke/AXe/releases/tag/v2.1.1)
 

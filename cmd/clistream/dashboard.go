@@ -32,7 +32,7 @@ type dashboardUI struct {
 	line               textinput.Model
 	width, height      int
 	ctx                context.Context
-	dir, link, direct  string
+	link, direct       string
 	code               int
 	err                error
 	refreshAt          time.Time
@@ -165,15 +165,15 @@ func (d *dashboardUI) cycle(direction int) bool {
 	return false
 }
 
-func dashboard(dir, link, direct string) (int, error) {
+func dashboard(link, direct string) (int, error) {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
 	defer cancel()
-	d := &dashboardUI{ctx: ctx, dir: dir, link: link, direct: direct, page: "connecting", host: "server", width: 80, height: 24}
+	d := &dashboardUI{ctx: ctx, link: link, direct: direct, page: "connecting", host: "server", width: 80, height: 24}
 	if link != "" {
 		if invite, err := identity.ParseInvitation(link); err == nil {
 			d.host = invite.Address
 		}
-	} else if _, p, err := identity.CLIProfile(ctx, dir, "client", ""); err == nil {
+	} else if _, p, err := identity.CLIProfile(ctx, "client", ""); err == nil {
 		d.host = p.Address
 	}
 	defer func() {
@@ -190,9 +190,9 @@ func dashboard(dir, link, direct string) (int, error) {
 }
 
 func (d *dashboardUI) connect() tea.Cmd {
-	ctx, dir, invitation := d.ctx, d.dir, d.link
+	ctx, invitation := d.ctx, d.link
 	return func() tea.Msg {
-		directory, p, err := identity.CLIProfile(ctx, dir, "client", invitation)
+		directory, p, err := identity.CLIProfile(ctx, "client", invitation)
 		var result connectionResult
 		if err == nil {
 			result.conn, err = identity.Dial(ctx, directory, p)

@@ -19,17 +19,17 @@ func endpoints(names []string, listen, advertised string) ([]endpoint, error) {
 	if len(names) == 0 {
 		if advertised == "" {
 			if host == "" || net.ParseIP(host).IsUnspecified() {
-				return nil, errors.New("set -advertise to a reachable host:port")
+				return nil, errors.New("set --advertise to a reachable host:port")
 			}
 			advertised = listen
 		}
 		return []endpoint{{listen, advertised}}, nil
 	}
 	if advertised != "" {
-		return nil, errors.New("choose either -interface or -advertise")
+		return nil, errors.New("choose either --interface or --advertise")
 	}
 	if host != "" && host != "127.0.0.1" {
-		return nil, errors.New("use -listen :PORT with -interface")
+		return nil, errors.New("use --listen :PORT with --interface")
 	}
 	var result []endpoint
 	for _, name := range names {

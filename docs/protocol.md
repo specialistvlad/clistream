@@ -25,11 +25,11 @@ Every application record, including enrollment, filesystem and tunnel data, is U
 | register(Info) | Enrolled device | Assign a session ID for this connection |
 | open(ID, Channel, Path?) | Enrolled device | Broker opens matching stream back to the supervisor |
 
-Supervisors launched with `-no-remote-restart` or `-once` use `register` for a single attach-only run. Lifecycle requests target managed supervisor registrations.
+Supervisors launched with `--no-remote-restart` or `--once` use `register` for a single attach-only run. Lifecycle requests target managed supervisor registrations.
 
 ## Negotiated supervisor controls
 
-A peer probes with `{"Op":"capabilities"}`. An enrolled peer receives an `ok` with `Capabilities` containing `managed-supervisors-v1`. A legacy operation rejection selects the existing register/list/open paths. Those records retain their original fields.
+A peer probes with `{"Op":"capabilities"}`. An enrolled peer receives an `ok` with `Capabilities` containing `managed-supervisors-v1`. A legacy operation rejection selects the existing register/list/open paths. Session descriptors contain `ID`, `Name`, `Mode`, `Host`, `OS` and `Ports`. Previous brokers and supervisors emit two retired fields, `Driver` and `Version`, which current strict decoders reject. Upgrade the three Go commands together.
 
 | Operation | Request and response |
 |---|---|

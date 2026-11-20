@@ -12,13 +12,13 @@ import (
 	"strings"
 	"syscall"
 
-	"golang.org/x/term"
-
 	"github.com/specialistvlad/clistream/internal/client"
+	"github.com/specialistvlad/clistream/internal/cliopts"
 	"github.com/specialistvlad/clistream/internal/forward"
 	"github.com/specialistvlad/clistream/internal/identity"
 	"github.com/specialistvlad/clistream/internal/termio"
 	"github.com/specialistvlad/clistream/internal/wire"
+	"golang.org/x/term"
 )
 
 func main() {
@@ -30,14 +30,13 @@ func main() {
 	os.Exit(code)
 }
 func run() (int, error) {
-	dir := flag.String("state", "", "independent identity directory (default: shared per OS account)")
 	end := flag.Bool("eof", false, "close shared child stdin at local EOF in pipe mode")
 	flag.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), "Usage: clistream [flags] [PAIRING-LINK | list | attach ID | forward ID NAME LOOPBACK:PORT | ls ID [DIR] | get ID REMOTE LOCAL | put ID LOCAL REMOTE | pair]")
 		fmt.Fprintln(flag.CommandLine.Output(), "First time: paste the command printed by clistreamd. Next time: run clistream to reconnect.")
-		flag.PrintDefaults()
+		cliopts.PrintDefaults()
 	}
-	flag.Parse()
+	cliopts.Parse()
 	action := flag.Arg(0)
 	automatic := action == "" || strings.HasPrefix(action, "clistream://")
 	if automatic && flag.NArg() > 1 {
@@ -58,7 +57,7 @@ func run() (int, error) {
 		if _, e := fmt.Fscanln(os.Stdin, &link); e != nil {
 			return 1, e
 		}
-		_, _, err := identity.CLIProfile(context.Background(), *dir, "client", link)
+		_, _, err := identity.CLIProfile(context.Background(), "client", link)
 		return 0, err
 	}
 	if action != "list" && action != "attach" && action != "forward" && action != "ls" && action != "get" && action != "put" {
@@ -68,9 +67,9 @@ func run() (int, error) {
 		return 1, errors.New("usage: clistream attach ID")
 	}
 	if action == "attach" && term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
-		return dashboard(*dir, link, flag.Arg(1))
+		return dashboard(link, flag.Arg(1))
 	}
-	directory, saved, e := identity.CLIProfile(context.Background(), *dir, "client", link)
+	directory, saved, e := identity.CLIProfile(context.Background(), "client", link)
 	if e != nil {
 		if automatic && link == "" && errors.Is(e, os.ErrNotExist) {
 			return 1, errors.New("no saved server. Run clistream with the pairing link printed by clistreamd")

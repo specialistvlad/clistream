@@ -17,12 +17,10 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/specialistvlad/clistream/internal/activity"
 	"github.com/specialistvlad/clistream/internal/client"
-	"github.com/specialistvlad/clistream/internal/driver"
 	"github.com/specialistvlad/clistream/internal/files"
 	"github.com/specialistvlad/clistream/internal/identity"
 	"github.com/specialistvlad/clistream/internal/session"
 	"github.com/specialistvlad/clistream/internal/termio"
-
 	"github.com/specialistvlad/clistream/internal/wire"
 )
 
@@ -71,30 +69,24 @@ func listenManaged(c *quic.Conn, requests chan<- incoming) {
 	}
 }
 
-type launchSettings struct {
-	driver, mode string
-	terminal     bool
-}
-
-func (settings launchSettings) validate(cmd [][]byte) ([]string, driver.Profile, error) {
+func validateCommand(cmd [][]byte) ([]string, error) {
 	var argv []string
 	for _, arg := range cmd {
 		if strings.IndexByte(string(arg), 0) >= 0 {
-			return nil, driver.Profile{}, errors.New("invalid command")
+			return nil, errors.New("invalid command")
 		}
 		argv = append(argv, string(arg))
 	}
 	if len(argv) == 0 || argv[0] == "" {
-		return nil, driver.Profile{}, errors.New("invalid command")
+		return nil, errors.New("invalid command")
 	}
 	if _, err := exec.LookPath(argv[0]); err != nil {
-		return nil, driver.Profile{}, err
+		return nil, err
 	}
-	profile, err := driver.Select(argv, settings.driver, settings.mode, settings.terminal)
-	return argv, profile, err
+	return argv, nil
 }
 
-func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wire.Supervisor, path string, args []string, ports map[string]string, root *files.Root, local bool, settings launchSettings) (int, error) {
+func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wire.Supervisor, path string, args []string, ports map[string]string, root *files.Root, local bool) (int, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	var workers sync.WaitGroup
 	defer func() { cancel(); workers.Wait() }()
@@ -299,7 +291,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 				}
 				wire.Write(st, response)
 			} else if m.Op == "run-command" {
-				argv, profile, err := settings.validate(m.Command)
+				argv, err := validateCommand(m.Command)
 				select {
 				case <-ended:
 					finish()
@@ -320,9 +312,6 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 					oldPath, oldArgs, oldInfo := path, args, state.Info
 					path, args = argv[0], argv[1:]
 					state.Info.Name = filepath.Base(path)
-					state.Info.Mode = profile.Mode
-					state.Info.Version = profile.Version
-					state.Info.Driver = profile.Name
 					start()
 					if state.Failed {
 						path, args, state.Info = oldPath, oldArgs, oldInfo
@@ -368,5 +357,19 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 			st.Close()
 			st.CancelRead(0)
 		}
+	}
+}
+
+func selectMode(mode string, terminal bool) (string, error) {
+	switch mode {
+	case "pipe", "pty":
+		return mode, nil
+	case "auto":
+		if terminal {
+			return "pty", nil
+		}
+		return "pipe", nil
+	default:
+		return "", errors.New("--mode requires auto, pipe or pty")
 	}
 }

@@ -2,13 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"net"
 	"os"
-
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -18,7 +16,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"github.com/specialistvlad/clistream/internal/activity"
 	"github.com/specialistvlad/clistream/internal/client"
-	"github.com/specialistvlad/clistream/internal/driver"
+	"github.com/specialistvlad/clistream/internal/cliopts"
 	"github.com/specialistvlad/clistream/internal/files"
 	"github.com/specialistvlad/clistream/internal/identity"
 	"github.com/specialistvlad/clistream/internal/termio"
@@ -35,14 +33,11 @@ func main() {
 	os.Exit(code)
 }
 func run() (int, error) {
-	dir := flag.String("state", "", "independent identity directory (default: shared per OS account)")
 	mode := flag.String("mode", "auto", "auto, pipe or pty")
-	name := flag.String("driver", "generic", "generic, or opt in to claude, codex or name-based auto selection")
-	listDrivers := flag.Bool("drivers", false, "list supported CLI versions and execution modes as JSON")
 	pair := flag.Bool("pair", false, "read pairing invitation from stdin")
 	addr := flag.String("server", "", "override paired host:port (same pinned key)")
 	once := flag.Bool("once", false, "exit with the first child's status")
-	flag.BoolVar(once, "no-remote-restart", false, "share one attach-only run and exit with its status (alias for -once)")
+	flag.BoolVar(once, "no-remote-restart", false, "share one attach-only run and exit with its status (alias for --once)")
 	interactive := flag.Bool("interactive", false, "show the child terminal or use child streams when redirected")
 	local := flag.Bool("local-input", true, "forward local stdin with --interactive (pipe EOF closes child stdin)")
 	ports := map[string]string{}
@@ -61,12 +56,9 @@ func run() (int, error) {
 	flag.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), usage)
 		fmt.Fprintln(flag.CommandLine.Output(), inviteHelp)
-		flag.PrintDefaults()
+		cliopts.PrintDefaults()
 	}
-	flag.Parse()
-	if *listDrivers {
-		return 0, json.NewEncoder(os.Stdout).Encode(driver.Catalog())
-	}
+	cliopts.Parse()
 	if *pair {
 		if term.IsTerminal(int(os.Stdin.Fd())) {
 			fmt.Fprintln(os.Stderr, "Paste the pairing link and press Return.")
@@ -75,7 +67,7 @@ func run() (int, error) {
 		if _, e := fmt.Fscanln(os.Stdin, &link); e != nil {
 			return 1, e
 		}
-		_, _, err := identity.CLIProfile(context.Background(), *dir, "supervisor", link)
+		_, _, err := identity.CLIProfile(context.Background(), "supervisor", link)
 		return 0, err
 	}
 	args := flag.Args()
@@ -92,11 +84,11 @@ func run() (int, error) {
 	path := args[0]
 
 	terminal := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
-	profile, e := driver.Select(args, *name, *mode, terminal)
+	ioMode, e := selectMode(*mode, terminal)
 	if e != nil {
 		return 1, e
 	}
-	directory, saved, e := identity.CLIProfile(context.Background(), *dir, "supervisor", link)
+	directory, saved, e := identity.CLIProfile(context.Background(), "supervisor", link)
 	if link == "" && errors.Is(e, os.ErrNotExist) {
 		return 1, errors.New("This supervisor needs pairing. " + inviteHelp + "\nThen run clistream-supervise PAIRING-LINK PROGRAM.")
 	}
@@ -112,7 +104,7 @@ func run() (int, error) {
 	for k, v := range ports {
 		exports[strings.TrimPrefix(k, "port/")], _, _ = strings.Cut(v, ":")
 	}
-	info := wire.Session{Name: filepath.Base(path), Mode: profile.Mode, Version: profile.Version, Driver: profile.Name, Host: host, OS: runtime.GOOS, Ports: exports}
+	info := wire.Session{Name: filepath.Base(path), Mode: ioMode, Host: host, OS: runtime.GOOS, Ports: exports}
 	reg := registration{dir: directory, server: saved, info: info}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer cancel()
@@ -166,7 +158,7 @@ func run() (int, error) {
 			}
 		}
 		c, err := reg.connect(ctx)
-		if errors.Is(err, errLegacyRole) && *dir == "" && directory == identity.Default("client") && link == "" {
+		if errors.Is(err, errLegacyRole) && directory == identity.Default("client") && link == "" {
 			legacy := identity.Default("supervisor")
 			if original, e := identity.Load(legacy); e == nil && original.Pin == saved.Pin && original.Address == savedAddress {
 				reg.dir = legacy
@@ -187,13 +179,13 @@ func run() (int, error) {
 	}
 	defer c.CloseWithError(0, "finished")
 	if managed {
-		return supervise(ctx, reg, c, state, path, args[1:], ports, root, localInput, launchSettings{*name, *mode, terminal})
+		return supervise(ctx, reg, c, state, path, args[1:], ports, root, localInput)
 	}
 	if console.program != nil {
 		console.program.Send(attachOnly{})
 	}
 	runID := console.lastSession
-	p, e := reg.console.start(runID, path, args[1:], profile.Mode, ports, root, false, info.Name)
+	p, e := reg.console.start(runID, path, args[1:], ioMode, ports, root, false, info.Name)
 	if e != nil {
 		if console.logOnly {
 			return 1, nil
@@ -206,11 +198,11 @@ func run() (int, error) {
 	stop := context.AfterFunc(ctx, func() { p.Cmd.Process.Signal(syscall.SIGTERM) })
 	defer stop()
 	if localInput && !terminal {
-		if profile.Mode == "pty" && term.IsTerminal(int(os.Stdin.Fd())) {
+		if ioMode == "pty" && term.IsTerminal(int(os.Stdin.Fd())) {
 			defer termio.Setup(func(w, h uint16) { p.Resize(w, h) })()
 		}
 		go func() {
-			if e := client.CopyInput(os.Stdin, p.Input); e != nil && profile.Mode == "pipe" {
+			if e := client.CopyInput(os.Stdin, p.Input); e != nil && ioMode == "pipe" {
 				p.EndInput()
 			}
 		}()

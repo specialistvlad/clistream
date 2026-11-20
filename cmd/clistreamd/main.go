@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go"
-
 	"github.com/specialistvlad/clistream/internal/activity"
 	"github.com/specialistvlad/clistream/internal/broker"
+	"github.com/specialistvlad/clistream/internal/cliopts"
 	"github.com/specialistvlad/clistream/internal/identity"
 	"github.com/specialistvlad/clistream/internal/wire"
 	"golang.org/x/sys/unix"
@@ -34,7 +34,6 @@ func main() {
 	}
 }
 func run() (err error) {
-	dir := flag.String("state", identity.Default("server"), "private state directory")
 	listen := flag.String("listen", "127.0.0.1:7443", "UDP listener")
 	addr := flag.String("advertise", "", "host:port clients can reach")
 	noFile := flag.Bool("no-log-file", false, "disable server.log and keep logging server activity to stderr")
@@ -44,9 +43,9 @@ func run() (err error) {
 	flag.Usage = func() {
 		fmt.Fprintln(flag.CommandLine.Output(), "Usage: clistreamd [flags] [invite [client|supervisor] | supervisor | devices | revoke ID]")
 		fmt.Fprintln(flag.CommandLine.Output(), "Run clistreamd invite to print a three-minute pairing link.")
-		flag.PrintDefaults()
+		cliopts.PrintDefaults()
 	}
-	flag.Parse()
+	cliopts.Parse()
 	// Keep QR output for the original role-specific spellings. Bare invite
 	// prints one script-friendly line unless QR output is explicitly requested.
 	inviteQR := flag.NArg() == 2
@@ -69,11 +68,12 @@ func run() (err error) {
 		action, arg = "invite", "supervisor"
 		inviteQR = false
 	}
-	if e := identity.EnsurePrivateDir(*dir); e != nil {
+	dir := identity.Default("server")
+	if e := identity.EnsurePrivateDir(dir); e != nil {
 		return e
 	}
-	sock := filepath.Join(*dir, "admin.sock")
-	lock, e := os.OpenFile(filepath.Join(*dir, "daemon.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	sock := filepath.Join(dir, "admin.sock")
+	lock, e := os.OpenFile(filepath.Join(dir, "daemon.lock"), os.O_CREATE|os.O_RDWR, 0600)
 	if e != nil {
 		return e
 	}
@@ -108,7 +108,7 @@ func run() (err error) {
 	}
 	// Keep serving and recording to disk if a stderr pipe closes.
 	signal.Ignore(syscall.SIGPIPE)
-	log := activity.Open(*dir, *noFile, os.Stderr)
+	log := activity.Open(dir, *noFile, os.Stderr)
 	defer log.Close()
 	log.Record(activity.Event{Name: "daemon_start"})
 	defer func() {
@@ -142,7 +142,7 @@ func run() (err error) {
 		}
 		addresses = append(addresses, adv)
 	}
-	s, t, e := broker.New(*dir, addresses, identity.DeviceKeys{}, log)
+	s, t, e := broker.New(dir, addresses, identity.DeviceKeys{}, log)
 	if e != nil {
 		return e
 	}

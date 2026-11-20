@@ -1,20 +1,24 @@
-.PHONY: build test e2e apple
+.PHONY: build test e2e apple dist test-dist test-deployment test-compatibility
 build:
 	go build -trimpath -o bin/ ./cmd/...
 test:
-	go test -race ./...
-	go vet ./...
-	python3 tests/requirements.py
+	go test -race ./cmd/... ./internal/... ./scripts/... ./tests/...
+	go vet ./cmd/... ./internal/... ./scripts/... ./tests/...
 e2e: build
-	python3 tests/e2e.py
+	go test -tags=e2e -count=1 -timeout=15m ./tests/e2e
 apple:
 	apple/build-core.sh
 	cd apple && xcodegen generate
 
-.PHONY: dist
 dist:
-	python3 scripts/dist.py
+	go run ./scripts/dist
 
-.PHONY: test-deployment
-test-deployment:
-	python3 tests/deployment.py
+ARCHIVE ?= dist/clistream-$(shell go env GOOS)-$(shell go env GOARCH).tar.gz
+test-dist:
+	go run ./scripts/dist verify "$(ARCHIVE)"
+
+test-deployment: build
+	go test -tags=deployment -count=1 ./tests/deployment
+
+test-compatibility: build
+	go test -tags=compatibility -count=1 ./tests/e2e
