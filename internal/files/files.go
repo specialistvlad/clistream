@@ -23,7 +23,7 @@ type Root struct {
 }
 
 func Open(dir string) (*Root, error) {
-	f, e := os.Open(dir)
+	f, e := os.OpenFile(dir, os.O_RDONLY|unix.O_DIRECTORY, 0)
 	if e != nil {
 		return nil, e
 	}

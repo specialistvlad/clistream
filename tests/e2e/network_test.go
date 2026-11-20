@@ -44,7 +44,7 @@ func TestPorts(t *testing.T) {
 			udp.WriteTo(b[:n], addr)
 		}
 	}()
-	_, id := f.session([]string{"--export", "private-tcp=tcp:" + tcp.Addr().String(), "--export=private-udp=udp:" + udp.LocalAddr().String()}, "cat")
+	_, id := f.session([]string{"--share-port", "private-tcp=tcp:" + tcp.Addr().String(), "--share-port=private-udp=udp:" + udp.LocalAddr().String()}, "cat")
 	f.reject("a", client, "forward", id, "undeclared", "127.0.0.1:0")
 	for _, proto := range []string{"tcp", "udp"} {
 		p := f.portForward(id, "private-"+proto)
@@ -90,7 +90,7 @@ func TestRunBoundChannels(t *testing.T) {
 	service, err := net.Listen("tcp", "127.0.0.1:0")
 	check(t, err)
 	defer service.Close()
-	p := f.managed("--export", "test=tcp:"+service.Addr().String(), "cat")
+	p := f.managed("--share-port", "test=tcp:"+service.Addr().String(), "cat")
 	old := p.sessionID()
 	forward := f.portForward(old, "test")
 	local, err := net.DialTimeout("tcp", forward.forwardAddress(), 5*time.Second)

@@ -90,7 +90,7 @@ func display(ctx context.Context, qr bool, issue func() (string, error)) error {
 				}
 				host, _, _ := net.SplitHostPort(i.Address)
 				label := "Network"
-				client, supervisor := "clistream", "clistream-supervise"
+				client, supervisor := "clistream", "clistreams"
 				if net.ParseIP(host).IsLoopback() || host == "localhost" {
 					label = "This computer only"
 					client, supervisor = localCommand(client), localCommand(supervisor)

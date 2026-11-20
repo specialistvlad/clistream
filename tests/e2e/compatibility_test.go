@@ -19,7 +19,7 @@ func TestPreviousPeers(t *testing.T) {
 			check(t, err)
 			f := setup(t)
 			oldCLI := filepath.Join(dir, client)
-			oldSup := filepath.Join(dir, supervisor)
+			oldSup := filepath.Join(dir, "clistream-supervise")
 			oldDaemon := filepath.Join(dir, daemon)
 			legacyClient := []string{"-state", filepath.Join(f.config("a"), "device")}
 			attach := func(id string) {
@@ -45,7 +45,14 @@ func TestPreviousPeers(t *testing.T) {
 			f.server.stop()
 			f.server = f.start("srv", oldDaemon, "-state", filepath.Join(f.config("srv"), "server"), "-qr=false", "-listen", f.address)
 			f.server.diagnostics.until(t, "serving QUIC")
-			p = f.managed("cat")
+			// Enroll through the old executable under this account, then launch the
+			// renamed supervisor from the same saved identity without pairing again.
+			link := f.run("srv", oldDaemon, "invite")
+			pair := f.start("upgrade", oldSup, "-pair")
+			pair.send(link)
+			pair.input.Close()
+			pair.expect(0)
+			p = f.start("upgrade", supervisor, "--interactive", "--local-input=false", "cat")
 			id = p.sessionID()
 			contains(t, f.run("a", oldCLI, append(legacyClient, "list")...), id)
 			// Previous brokers reserialize their wider session struct in list responses.

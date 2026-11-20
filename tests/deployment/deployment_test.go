@@ -128,7 +128,7 @@ func TestDeployment(t *testing.T) {
 		if host == "viewer" {
 			c.docker(c.command(host, false, "clistream", link)...)
 		} else {
-			c.docker(c.command(host, true, "clistream-supervise", link, "/bin/sh")...)
+			c.docker(c.command(host, true, "clistreams", link, "/bin/sh")...)
 		}
 	}
 	var sessions []wire.Session
@@ -147,7 +147,7 @@ func TestDeployment(t *testing.T) {
 			t.Fatal("outside file accepted")
 		}
 		input := fmt.Sprintf("cat origin; for path in /workspace/../outside %q; do test ! -r \"$path\" && ! (echo changed > \"$path\") || exit 8; done; echo confined\n", sentinel)
-		out, err := c.invoke(input, c.command("viewer", false, "clistream", "--eof", "attach", id)...)
+		out, err := c.invoke(input, c.command("viewer", false, "clistream", "--send-eof", "attach", id)...)
 		if err != nil || out != host+"confined\n" {
 			t.Fatalf("attach: %q, %v", out, err)
 		}
@@ -194,7 +194,7 @@ func TestLinuxSupervisorMacClient(t *testing.T) {
 	c.docker(c.command("linux", true, "clistreamd", "--listen", ":"+strings.Split(addr, ":")[1], "--advertise", addr)...)
 	c.wait("linux", func(string) bool { return true }, "clistreamd", "devices")
 	link := strings.TrimSpace(c.docker(c.command("linux", false, "clistreamd", "invite")...))
-	c.docker(c.command("linux", true, "clistream-supervise", link, "cat")...)
+	c.docker(c.command("linux", true, "clistreams", link, "cat")...)
 	bin, err := filepath.Abs("../../bin/clistream")
 	if err != nil {
 		t.Fatal(err)
@@ -226,7 +226,7 @@ func TestLinuxSupervisorMacClient(t *testing.T) {
 	if len(items) != 1 || items[0].OS != "linux" {
 		t.Fatal("Linux session missing")
 	}
-	if out := run("mac-to-linux\n", "--eof", "attach", items[0].ID); out != "mac-to-linux\n" {
+	if out := run("mac-to-linux\n", "--send-eof", "attach", items[0].ID); out != "mac-to-linux\n" {
 		t.Fatal("cross-platform echo differs")
 	}
 }

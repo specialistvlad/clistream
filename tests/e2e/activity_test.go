@@ -270,7 +270,7 @@ func TestHomeClosesTerminalChannels(t *testing.T) {
 	for _, mode := range []string{"pipe", "pty"} {
 		t.Run(mode, func(t *testing.T) {
 			f := setup(t)
-			p := f.start("sup", supervisor, "--mode", mode, "cat")
+			p := f.start("sup", supervisor, "--io-mode", mode, "cat")
 			p.diagnostics.until(t, "Child started")
 			id := f.sessions("a")[0].ID
 			ui := f.ui("a", client)

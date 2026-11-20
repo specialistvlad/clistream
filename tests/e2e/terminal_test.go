@@ -64,7 +64,7 @@ func checkProbe(t *testing.T, output string) {
 
 func TestFramedTerminal(t *testing.T) {
 	f := setup(t)
-	p := f.managed(append([]string{"--mode", "pty", "--"}, probe(t)...)...)
+	p := f.managed(append([]string{"--io-mode", "pty", "--"}, probe(t)...)...)
 	id := p.sessionID()
 	ui := f.ui("a", client)
 	ui.see("R Restart")
@@ -113,7 +113,7 @@ func TestSupervisorConsoleInput(t *testing.T) {
 
 func TestNoRemoteRestart(t *testing.T) {
 	f := setup(t)
-	p := f.start("sup", supervisor, "--interactive", "--no-remote-restart", "--mode", "pty", "--local-input=false", "sh", "-c", `while read -r word; do echo "received-$word"; done; exit 23`)
+	p := f.start("sup", supervisor, "--interactive", "--once", "--io-mode", "pty", "--local-input=false", "sh", "-c", `while read -r word; do echo "received-$word"; done; exit 23`)
 	id := p.sessionID()
 	first := f.ui("a", client)
 	first.see("Attach only")
@@ -335,32 +335,47 @@ func TestLostRestartAcknowledgement(t *testing.T) {
 
 func TestInteractivePairingAndReconnect(t *testing.T) {
 	f := setup(t)
-	display := func(ui *process) string {
-		s := ui.see("Ctrl-C exits.")
-		contains(t, s, "This computer only")
-		m := regexp.MustCompile(`clistream '(clistream://127\.0\.0\.1/\?token=[A-Za-z0-9_-]+)'`).FindStringSubmatch(s)
-		equal(t, len(m), 2)
-		contains(t, s, "clistream-supervise '"+m[1]+"' PROGRAM")
-		return m[1]
+	display := func(ui *process) (link, clientLine, supervisorLine string) {
+		screen := ui.see("Ctrl-C exits.")
+		contains(t, screen, "This computer only")
+		link = regexp.MustCompile(`clistream://127\.0\.0\.1/\?token=[A-Za-z0-9_-]+`).FindString(screen)
+		if link == "" {
+			t.Fatal("missing local pairing link")
+		}
+		command := func(name string) string {
+			path := filepath.Join(f.bin, name)
+			if !regexp.MustCompile(`^[a-zA-Z0-9_./-]+$`).MatchString(path) {
+				path = "'" + strings.ReplaceAll(path, "'", "'\"'\"'") + "'"
+			}
+			return path + " '" + link + "'"
+		}
+		clientLine, supervisorLine = command(client), command(supervisor)+" PROGRAM"
+		contains(t, screen, clientLine)
+		contains(t, screen, supervisorLine)
+		return
 	}
 	foreground := f.ui("fresh", daemon, "--listen", "127.0.0.1:0", "--qr=false")
-	initial := display(foreground)
-	f.run("first", client, initial)
+	_, clientLine, supervisorLine := display(foreground)
+	f.run("first", "/bin/sh", "-c", "exec "+clientLine)
+	shared := f.start("first-supervisor", "/bin/sh", "-c", "exec "+strings.TrimSuffix(supervisorLine, "PROGRAM")+"cat")
+	shared.diagnostics.until(t, "Child started")
+	equal(t, len(f.sessions("first")), 1)
+	shared.stop()
 	foreground.see(`"event":"pair"`)
 	foreground.stop()
 	duplicate := f.run("srv", daemon)
 	contains(t, duplicate, "already running")
 	excludes(t, duplicate, "clistream://")
 	admin := f.ui("srv", daemon, "--qr=false")
-	old := display(admin)
+	old, _, _ := display(admin)
 	admin.send("p")
-	fresh := display(admin)
+	fresh, clientLine, _ := display(admin)
 	f.reject("guest", client, old)
 	shell, err := exec.LookPath("zsh")
 	if err != nil {
 		shell = "/bin/sh"
 	}
-	viewer := f.ui("guest", shell, "-c", `exec "$@" '`+fresh+`'`, "test", filepath.Join(f.bin, client))
+	viewer := f.ui("guest", shell, "-c", "exec "+clientLine)
 	viewer.see("Waiting for supervisors")
 	p := f.start("sup", supervisor, "--interactive", "--once", fresh, "sh", "-c", "echo first-ready; while read x; do echo reply-$x; done")
 	p.sessionID()

@@ -33,7 +33,7 @@ func parse(fs *flag.FlagSet, args []string) error {
 		if arg == "-" || !strings.HasPrefix(arg, "-") {
 			break
 		}
-		if arg == "-h" || arg == "--help" {
+		if arg == "--help" {
 			return flag.ErrHelp
 		}
 		name, value, inline := strings.Cut(arg, "=")
@@ -62,19 +62,41 @@ func parse(fs *flag.FlagSet, args []string) error {
 	return fs.Parse(append([]string{"--"}, args...))
 }
 
-func PrintDefaults() {
-	fs := flag.CommandLine
-	fmt.Fprintln(fs.Output(), "  -h, --help\n      show command help")
-	fs.VisitAll(func(f *flag.Flag) {
-		metavar, usage := flag.UnquoteUsage(f)
-		fmt.Fprintf(fs.Output(), "  --%s", f.Name)
-		if metavar != "" {
-			fmt.Fprintf(fs.Output(), " %s", metavar)
+// Supplied reports whether an option was explicitly provided, even at its default value.
+func Supplied(name string) bool {
+	found := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
 		}
-		fmt.Fprintf(fs.Output(), "\n      %s", usage)
-		if f.DefValue != "" {
-			fmt.Fprintf(fs.Output(), " (default %s)", f.DefValue)
-		}
-		fmt.Fprintln(fs.Output())
 	})
+	return found
+}
+
+type Command struct {
+	Arguments string
+	Min, Max  int
+}
+
+// Validate checks operands before a command reads credentials or connects.
+func Validate(program string, args []string, commands map[string]Command) error {
+	command, ok := commands[args[0]]
+	if !ok {
+		return fmt.Errorf("unknown command %q; see %s --help", args[0], program)
+	}
+	count := len(args) - 1
+	if count < command.Min || count > command.Max {
+		return fmt.Errorf("usage: %s %s", program, strings.TrimSpace(args[0]+" "+command.Arguments))
+	}
+	return nil
+}
+
+type Section struct{ Title, Body string }
+
+func Help(purpose, usage string, sections ...Section) {
+	out := flag.CommandLine.Output()
+	fmt.Fprintf(out, "%s\n\nUsage: %s\n", purpose, usage)
+	for _, section := range sections {
+		fmt.Fprintf(out, "\n%s\n%s\n%s\n", section.Title, strings.Repeat("-", len(section.Title)), section.Body)
+	}
 }

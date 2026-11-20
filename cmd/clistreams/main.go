@@ -33,15 +33,16 @@ func main() {
 	os.Exit(code)
 }
 func run() (int, error) {
-	mode := flag.String("mode", "auto", "auto, pipe or pty")
-	pair := flag.Bool("pair", false, "read pairing invitation from stdin")
-	addr := flag.String("server", "", "override paired host:port (same pinned key)")
+	mode := flag.String("io-mode", "auto", "auto, pipe or pty")
+	pair := flag.Bool("pair-stdin", false, "read pairing invitation from stdin")
+	addr := flag.String("server-address", "", "override paired host:port (same pinned key)")
 	once := flag.Bool("once", false, "exit with the first child's status")
-	flag.BoolVar(once, "no-remote-restart", false, "share one attach-only run and exit with its status (alias for --once)")
 	interactive := flag.Bool("interactive", false, "show the child terminal or use child streams when redirected")
 	local := flag.Bool("local-input", true, "forward local stdin with --interactive (pipe EOF closes child stdin)")
+	workspace := flag.String("workspace", ".", "folder shared with clients")
+	noFiles := flag.Bool("no-files", false, "disable workspace file access")
 	ports := map[string]string{}
-	flag.Func("export", "name=tcp:127.0.0.1:port or name=udp:[::1]:port", func(v string) error {
+	flag.Func("share-port", "name=tcp:127.0.0.1:port or name=udp:[::1]:port", func(v string) error {
 		k, s, ok := strings.Cut(v, "=")
 		proto, a, _ := strings.Cut(s, ":")
 		h, _, e := net.SplitHostPort(a)
@@ -51,15 +52,16 @@ func run() (int, error) {
 		ports["port/"+k] = s
 		return nil
 	})
-	const usage = "Usage: clistream-supervise [flags] [PAIRING-LINK] PROGRAM [ARG ...]"
 	const inviteHelp = "Use the link displayed by clistreamd or printed by clistreamd invite."
-	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), usage)
-		fmt.Fprintln(flag.CommandLine.Output(), inviteHelp)
-		cliopts.PrintDefaults()
-	}
+	flag.Usage = help
 	cliopts.Parse()
+	if *noFiles && cliopts.Supplied("workspace") {
+		return 1, errors.New("--workspace and --no-files cannot be combined")
+	}
 	if *pair {
+		if flag.NArg() != 0 {
+			return 1, errors.New("usage: clistreams --pair-stdin")
+		}
 		if term.IsTerminal(int(os.Stdin.Fd())) {
 			fmt.Fprintln(os.Stderr, "Paste the pairing link and press Return.")
 		}
@@ -79,7 +81,7 @@ func run() (int, error) {
 		}
 	}
 	if len(args) == 0 {
-		return 1, errors.New(usage + "\nExample: clistream-supervise /bin/sh\n" + inviteHelp)
+		return 1, errors.New("Usage: " + syntax + "\nExample: clistreams /bin/sh\n" + inviteHelp)
 	}
 	path := args[0]
 
@@ -88,9 +90,17 @@ func run() (int, error) {
 	if e != nil {
 		return 1, e
 	}
+	var root *files.Root
+	if !*noFiles {
+		root, e = files.Open(*workspace)
+		if e != nil {
+			return 1, fmt.Errorf("--workspace: %w", e)
+		}
+		defer root.Close()
+	}
 	directory, saved, e := identity.CLIProfile(context.Background(), "supervisor", link)
 	if link == "" && errors.Is(e, os.ErrNotExist) {
-		return 1, errors.New("This supervisor needs pairing. " + inviteHelp + "\nThen run clistream-supervise PAIRING-LINK PROGRAM.")
+		return 1, errors.New("This supervisor needs pairing. " + inviteHelp + "\nThen run clistreams PAIRING-LINK PROGRAM.")
 	}
 	if e != nil {
 		return 1, e
@@ -108,11 +118,6 @@ func run() (int, error) {
 	reg := registration{dir: directory, server: saved, info: info}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer cancel()
-	root, e := files.Open(".")
-	if e != nil {
-		return 1, e
-	}
-	defer root.Close()
 	console, closeConsole := startConsole(ctx, cancel, terminal && *interactive, *local, info.Name, saved.Address)
 	reg.console = console
 	defer closeConsole()

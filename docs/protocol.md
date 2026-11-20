@@ -25,7 +25,7 @@ Every application record, including enrollment, filesystem and tunnel data, is U
 | register(Info) | Enrolled device | Assign a session ID for this connection |
 | open(ID, Channel, Path?) | Enrolled device | Broker opens matching stream back to the supervisor |
 
-Supervisors launched with `--no-remote-restart` or `--once` use `register` for a single attach-only run. Lifecycle requests target managed supervisor registrations.
+Supervisors launched with `--once` use `register` for a single attach-only run. Lifecycle requests target managed supervisor registrations.
 
 ## Negotiated supervisor controls
 
@@ -47,7 +47,7 @@ The broker removes a connection's registrations on disconnect. It publishes chan
 - **stdin** accepts data, resize(Cols, Rows) or eof. Each request receives an acknowledgment. Closing the attachment leaves shared stdin open. Explicit eof closes a pipe for all participants.
 - **stdout, stderr, pty** stream data followed by exit(Code). The receiver acknowledges exit. PTY output combines both process descriptors. Each new subscriber replays up to the last MiB or 4096 chunks of its channel. A subscriber overtaken by the history buffer must reattach. Concurrent input is ordered by arrival at the process. The last resize sets shared terminal dimensions.
 - **port/name** exchanges data records. The supervisor chooses the endpoint from local launch flags. TCP uses stream FIN for half-close. Each UDP record carries one complete datagram over reliable QUIC streams.
-- **fs/list** streams entry metadata followed by end. **fs/get** streams data followed by end. **fs/put** accepts data followed by explicit end, then replies ok after publishing the file. FIN alone aborts an incomplete upload. A destination must be new. All three use paths relative to the session's shared folder. The supervisor determines that folder locally. A client sends `.` to list its contents in either startup mode. [Session folder selection](requirements.md#session-folder-selection)
+- **fs/list** streams entry metadata followed by end. **fs/get** streams data followed by end. **fs/put** accepts data followed by explicit end, then replies ok after publishing the file. FIN alone aborts an incomplete upload. A destination must be new. All three use paths relative to the session's shared folder. A supervisor launched with `--no-files` rejects the channel open with `file sharing is disabled`. The supervisor determines that folder locally. A client sends `.` to list its contents in either startup mode. [Session folder selection](requirements.md#session-folder-selection)
 
 An error on one logical stream can end that operation independently. Disconnecting a client detaches its streams. A supervisor connection owns its registration. Broker restart removes live registrations. Both supervisor modes use capped exponential backoff. A one-shot supervisor receives a fresh session ID for its surviving child. A managed supervisor first publishes its stopped registration before launching its initial child. On reconnect it republishes the same supervisor ID and the surviving run ID, or the stopped revision if the child has exited. Refresh the client list and attach again.
 

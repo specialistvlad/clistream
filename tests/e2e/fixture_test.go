@@ -24,7 +24,7 @@ import (
 
 const (
 	daemon     = "clistreamd"
-	supervisor = "clistream-supervise"
+	supervisor = "clistreams"
 	client     = "clistream"
 )
 

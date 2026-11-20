@@ -30,17 +30,18 @@ func main() {
 	os.Exit(code)
 }
 func run() (int, error) {
-	end := flag.Bool("eof", false, "close shared child stdin at local EOF in pipe mode")
-	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "Usage: clistream [flags] [PAIRING-LINK | list | attach ID | forward ID NAME LOOPBACK:PORT | ls ID [DIR] | get ID REMOTE LOCAL | put ID LOCAL REMOTE | pair]")
-		fmt.Fprintln(flag.CommandLine.Output(), "First time: paste the command printed by clistreamd. Next time: run clistream to reconnect.")
-		cliopts.PrintDefaults()
-	}
+	end := flag.Bool("send-eof", false, "close shared child stdin at local EOF in pipe mode")
+	flag.Usage = help
 	cliopts.Parse()
 	action := flag.Arg(0)
 	automatic := action == "" || strings.HasPrefix(action, "clistream://")
 	if automatic && flag.NArg() > 1 {
 		return 1, errors.New("supply only the pairing link")
+	}
+	if !automatic {
+		if err := cliopts.Validate("clistream", flag.Args(), commands); err != nil {
+			return 1, err
+		}
 	}
 	var link string
 	if automatic {
@@ -59,12 +60,6 @@ func run() (int, error) {
 		}
 		_, _, err := identity.CLIProfile(context.Background(), "client", link)
 		return 0, err
-	}
-	if action != "list" && action != "attach" && action != "forward" && action != "ls" && action != "get" && action != "put" {
-		return 1, errors.New("usage: clistream [flags] pair | list | attach ID | forward ID NAME LOOPBACK:PORT | ls ID [DIR] | get ID REMOTE LOCAL | put ID LOCAL REMOTE")
-	}
-	if action == "attach" && !automatic && flag.NArg() != 2 {
-		return 1, errors.New("usage: clistream attach ID")
 	}
 	if action == "attach" && term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
 		return dashboard(link, flag.Arg(1))

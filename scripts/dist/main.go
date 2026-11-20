@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-var members = []string{"LICENSE", "README.md", "clistream", "clistream-supervise", "clistreamd"}
+var members = []string{"LICENSE", "README.md", "clistream", "clistreamd", "clistreams"}
 
 func main() {
 	if err := run(); err != nil {

@@ -4,6 +4,16 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Supervisor rename, grouped help and workspace controls · November 20, 2026
+
+On macOS and Linux arm64, `make test e2e` passed the race-enabled package tests, vet, requirements trace and 43 CLI cases. The CLI cases checked help with an unpaired account, rejected retired spellings and invalid operands, and executed both pairing commands printed by the daemon. Mixed-version checks on both systems enrolled through the historical supervisor executable and launched `clistreams` with that account’s existing identity.
+
+Two supervisors started from the same directory shared different files under the same remote name. Downloads and uploads reached the selected workspace, the child used the original launch directory, and the selected folder survived a managed restart and broker reconnect. Missing folders, regular files, FIFOs and conflicting options failed before launch. With files disabled, listing, upload and download failed explicitly while a client exchanged terminal input and fetched a page through a forwarded TCP port.
+
+The four-host Linux deployment and macOS client to Linux supervisor checks passed. All four checksummed release archives contained the license, README and three executables (`clistream`, `clistreamd`, `clistreams`). Both native arm64 archives passed the 43-case acceptance suite. The amd64 archives were cross-built and inspected.
+
+Native macOS, iPhone and iPad changes and tests remain deferred. The Apple fixture still invokes the retired supervisor name and flags. Its migration and native workspace verification remain pending.
+
 ## Hostname pairing URLs · November 20, 2026
 
 The macOS and Linux arm64 runs of `make test e2e` passed. The new identity checks covered DNS, IPv4, IPv6, scoped IPv6 and custom ports. They verified the earlier v2 link form and rejected a modified host or token. The terminal test redeemed the displayed quoted link, replaced it with the daemon’s **p** command, rejected the superseded invitation and exchanged input with the paired supervisor. The four-container Linux deployment, native macOS CLI to Linux supervisor deployment, and macOS mixed-version suite passed. Native Apple pairing was deferred.

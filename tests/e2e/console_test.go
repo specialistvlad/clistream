@@ -125,7 +125,7 @@ func TestSupervisorConsoleAttachOnly(t *testing.T) {
 
 func TestPty(t *testing.T) {
 	f := setup(t)
-	_, id := f.session([]string{"--mode", "pty"}, "sh", "-c", `stty -echo; echo ready; read v; printf '\033[32m%s\033[0m\n' "$v"`)
+	_, id := f.session([]string{"--io-mode", "pty"}, "sh", "-c", `stty -echo; echo ready; read v; printf '\033[32m%s\033[0m\n' "$v"`)
 	v := f.start("a", client, "attach", id)
 	v.see("ready\r\n")
 	v.send("hello\n")
@@ -145,7 +145,7 @@ func (f *fixture) terminalInput(id string) (*process, *os.File) {
 
 func TestPtyResize(t *testing.T) {
 	f := setup(t)
-	_, id := f.session([]string{"--mode=pty"}, "sh", "-c", "stty -echo; echo ready; read trigger; stty size")
+	_, id := f.session([]string{"--io-mode=pty"}, "sh", "-c", "stty -echo; echo ready; read trigger; stty size")
 	v, master := f.terminalInput(id)
 	v.see("ready\r\n")
 	_, err := master.WriteString("go\n")
@@ -156,7 +156,7 @@ func TestPtyResize(t *testing.T) {
 
 func TestDetachAndReplay(t *testing.T) {
 	f := setup(t)
-	_, id := f.session([]string{"--mode=pty"}, "sh", "-c", "stty -echo; echo ready; read v; echo result-$v")
+	_, id := f.session([]string{"--io-mode=pty"}, "sh", "-c", "stty -echo; echo ready; read v; echo result-$v")
 	v, master := f.terminalInput(id)
 	v.see("ready\r\n")
 	_, err := master.Write([]byte{0x1d})

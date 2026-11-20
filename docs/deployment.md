@@ -2,15 +2,27 @@
 
 Build with `make build`. Install the three binaries to a directory on PATH. The server needs an inbound UDP route. Supervisors and clients initiate outbound connections. The default is loopback. Select network interfaces by repeating `--interface NAME` (use `loopback` to include localhost). Alternatively use `--listen` with `--advertise` for a reachable address, including a numeric IP. Allow inbound UDP on that port. The local admin socket lives inside the daemon state directory. On Unix systems keep this path short enough for a Unix socket (under roughly 100 bytes).
 
+## Update existing Go launch commands
+
+Replace the executable name `clistream-supervise` with `clistreams` in service definitions and scripts. Use the same OS account to reuse its enrolled identity. The old executable name and option spellings have been retired.
+
+| Previous invocation | Current invocation |
+|---|---|
+| Supervisor `--export`, `--mode`, `--server` | `clistreams --share-port`, `--io-mode`, `--server-address` |
+| Supervisor `--pair`, `--no-remote-restart` | `clistreams --pair-stdin`, `--once` |
+| Client `--eof` | `clistream --send-eof` |
+| Daemon `supervisor`, `invite client`, `invite supervisor` | `clistreamd invite` |
+| Any command `-h` | `--help` |
+
 ## Connect to a running daemon
 
 Run `clistreamd` in a terminal under the service account to display its pairing commands and QR codes. Administration commands use the service account’s configuration directory. Existing custom directories are no longer selected. Before upgrading, stop the old service and back up its private state. To keep its identity and enrollments, move its complete state into an unused account-default server directory with the same owner and private permissions. For a custom client or supervisor identity, pair under the intended OS account or migrate its saved profile into an unused default device directory. Use the localhost link on the daemon host or the network link on a host that can reach that address. For scripts, `clistreamd invite` prints one unquoted `clistream://HOST/?token=TOKEN` link and prefers a network address when available.
 
-On the program host, run `clistream-supervise LINK PROGRAM [ARG ...]`. On the same OS account, `clistream` then connects with the saved key. On a second host, run `clistream LINK` within three minutes. Press **p** at the daemon terminal to replace outstanding links across all interfaces. For an upgrade, review previously enrolled supervisor keys before restarting the service, since those keys will gain control of every session. [Upgrade permissions](security.md)
+On the program host, run `clistreams LINK PROGRAM [ARG ...]`. On the same OS account, `clistream` then connects with the saved key. On a second host, run `clistream LINK` within three minutes. Press **p** at the daemon terminal to replace outstanding links across all interfaces. For an upgrade, review previously enrolled supervisor keys before restarting the service, since those keys will gain control of every session. [Upgrade permissions](security.md)
 
 ## Choose the supervisor lifetime
 
-On Linux and macOS, `clistream-supervise PROGRAM [ARG ...]` keeps the supervisor registered after the child exits or fails to launch. Select its row in `clistream` to start it again. Stop and Restart terminate the managed child’s process group with SIGKILL. Use the program’s own exit command when it needs to save work before quitting. Enrolled operators can change the executable and arguments. The supervisor resolves the command on its host with the original I/O mode setting. Restarting the supervisor itself restores its locally supplied command. Send SIGTERM to the supervisor to end supervision and its running child. For a single attach-only run, use `clistream-supervise --no-remote-restart PROGRAM [ARG ...]`. Its shorter alias is `--once`. Viewers can disconnect and reattach. When the child exits, the supervisor returns its status and the session disappears. Start the next run on the supervisor host. A supervisor connecting to an older daemon reports its one-shot fallback. [Terminal controls](terminal-client-design.md)
+On Linux and macOS, `clistreams PROGRAM [ARG ...]` keeps the supervisor registered after the child exits or fails to launch. Select its row in `clistream` to start it again. Stop and Restart terminate the managed child’s process group with SIGKILL. Use the program’s own exit command when it needs to save work before quitting. Enrolled operators can change the executable and arguments. The supervisor resolves the command on its host with the original I/O mode setting. Restarting the supervisor itself restores its locally supplied command. Send SIGTERM to the supervisor to end supervision and its running child. For a single attach-only run, use `clistreams --once PROGRAM [ARG ...]`. Viewers can disconnect and reattach. When the child exits, the supervisor returns its status and the session disappears. Start the next run on the supervisor host. A supervisor connecting to an older daemon reports its one-shot fallback. [Terminal controls](terminal-client-design.md)
 
 ### Connection recovery
 
@@ -18,7 +30,7 @@ A paired supervisor waits for broker registration before launching its first chi
 
 ## Supervisor activity logs
 
-Plain `clistream-supervise PROGRAM` runs with a readable stderr feed and empty stdout, including under a service manager. The feed shows registration, connection and retry status, child starts and exits, remote lifecycle requests, terminal channel boundaries, file operations and forwards. Pressing Ctrl-G in the client closes that viewer’s terminal channels. The supervisor reports each channel as closed and the program continues running. Keep using the client for child input and output. Local stdin may close without ending the child. Use `--interactive` before the program name to opt scripts into child streams or a terminal into the framed local view.
+Plain `clistreams PROGRAM` runs with a readable stderr feed and empty stdout, including under a service manager. The feed shows registration, connection and retry status, child starts and exits, remote lifecycle requests, terminal channel boundaries, file operations and forwards. Pressing Ctrl-G in the client closes that viewer’s terminal channels. The supervisor reports each channel as closed and the program continues running. Keep using the client for child input and output. Local stdin may close without ending the child. Use `--interactive` before the program name to opt scripts into child streams or a terminal into the framed local view.
 
 Each supervisor process writes UTC JSON lines to `logs/supervisor-<instance-id>.log` under its account identity directory. The feed shows the location at startup. The interactive view shows it while waiting to start. The same journal follows replacements and broker reconnects. Each file has mode 0600 and rotates at 10 MiB with five backups per instance. Journals from previous supervisor processes remain in the directory. A journal failure appears locally and supervision continues.
 
@@ -66,10 +78,10 @@ Start the current supervisor in the folder whose contents clients should see. Fo
 ```sh
 mkdir -p ~/clistream-demo
 cd ~/clistream-demo
-clistream-supervise --mode pty -- /bin/sh
+clistreams --io-mode pty -- /bin/sh
 ```
 
-The planned startup option lets the operator select a folder directly. Omitting it keeps the behavior shown above. The child uses the host account's normal permissions. [Session folder selection](requirements.md#session-folder-selection)
+Use `clistreams --workspace DIR PROGRAM` to share another folder. Relative paths start in the launch directory. The supervisor retains the open folder through restarts and reconnects. Use `--no-files` to disable all file operations. Combining those options or choosing an invalid folder fails before launch. The child uses the host account's normal permissions. [Session folder selection](requirements.md#session-folder-selection)
 
 The optional Docker test, `make test-deployment`, starts a broker, two independent supervisors with different working directories, and a viewer on a private network. Its temporary deployment uses in-memory identities and cleans up its own containers and network. Production supervisors need private persistent state or re-enrollment after replacement. [Deployment test](../tests/deployment/deployment_test.go)
 

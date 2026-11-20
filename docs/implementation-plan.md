@@ -33,7 +33,7 @@ Run `make test e2e` on Linux and macOS, the four-host Linux deployment suite, an
 
 The header and app-switching update is shared Go CLI code on Linux and macOS. Each switch uses the existing discovery and attachment operations, so the daemon, supervisor and native Apple apps require no changes. Run the renderer checks and the real-PTY `TestCycleRunningApps` in both platform suites. Verify next, previous, wraparound, input destination, Escape and return to the supervisor table.
 
-The single-run flag aliases `--once` in the shared Linux and macOS supervisor. The Go client labels its detach action **Disconnect** for attach-only rows. The broker and native Mac, iPhone and iPad clients use existing session operations. Verify two viewers, reconnect to the same run, child EOF and status, and rejection of lifecycle requests. The following command editor extends managed Start and Restart.
+The single-run option is `--once` in the shared Linux and macOS supervisor. The Go client labels its detach action **Disconnect** for attach-only rows. The broker and native Mac, iPhone and iPad clients use existing session operations. Verify two viewers, reconnect to the same run, child EOF and status, and rejection of lifecycle requests. The following command editor extends managed Start and Restart.
 
 ## Editable restart command
 
@@ -56,3 +56,7 @@ Use a shared long-option parser and account-default identities for all three Lin
 ## Pairing link format
 
 Generate the hostname-and-token URL in the shared Go identity package. The Linux and macOS daemon uses it for terminal commands, QR codes and scripted invitations. Both Go clients validate it, retain older invitation parsing and share the existing account enrollment flow. Verify DNS, IPv4, IPv6, custom ports, tampered tokens and host substitution, then exercise real enrollment from the displayed commands and across Linux and macOS. Native macOS, iPhone and iPad integration and verification remain deferred.
+
+## Go command names, help and workspace controls
+
+Ship `clistreamd`, `clistreams` and `clistream` on Linux and macOS. Group help by operator task and validate command operands before enrollment or connection. Open the chosen workspace once on the supervisor, default to the launch directory and reject file channels when disabled. Verify explicit and default roots, terminal and forwarded HTTP access with files disabled, release archive contents and saved identity reuse across the executable rename. Native macOS, iPhone and iPad tests and fixture migration remain deferred.

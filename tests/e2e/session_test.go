@@ -16,21 +16,46 @@ import (
 func TestCLIOptions(t *testing.T) {
 	f := setup(t)
 	for _, bin := range []string{daemon, supervisor, client} {
-		help := f.start("a", bin, "--help")
+		help := f.start("unpaired", bin, "--help")
 		help.expect(0)
 		usage := help.diagnostics.contents()
+		sections := map[string][]string{
+			daemon:     {"General", "Networking", "Pairing and devices", "Logging"},
+			client:     {"Getting started", "Sessions and terminal", "Filesystem", "Port forwarding", "Pairing from a script"},
+			supervisor: {"General", "Pairing and connection", "Terminal and input", "Session lifetime", "Filesystem", "Port forwarding"},
+		}
+		rest := usage
+		for _, title := range sections[bin] {
+			_, after, ok := strings.Cut(rest, "\n"+title+"\n"+strings.Repeat("-", len(title))+"\n")
+			if !ok {
+				t.Fatalf("%s missing section %q", bin, title)
+			}
+			rest = after
+		}
 		for _, option := range []string{"--state", "--driver", "--drivers", "-state", "-unknown"} {
 			excludes(t, usage, option)
 			contains(t, f.reject("a", bin, option), "unknown option")
 		}
-		short := f.start("a", bin, "-h")
-		short.expect(0)
-		equal(t, short.diagnostics.contents(), usage)
+		contains(t, f.reject("fresh", bin, "-h"), "unknown option")
 	}
 	for _, c := range [][2]string{{daemon, "-interface"}, {supervisor, "-interactive"}, {client, "-eof"}} {
 		contains(t, f.reject("a", c[0], c[1]), "require --")
 	}
-	contains(t, f.reject("sup", supervisor, "--mode", "wrong", "true"), "--mode")
+	for _, option := range []string{"--export", "--mode", "--pair", "--server", "--no-remote-restart"} {
+		contains(t, f.reject("unpaired", supervisor, option), "unknown option")
+	}
+	contains(t, f.reject("unpaired", client, "--eof"), "unknown option")
+	for _, args := range [][]string{{"supervisor"}, {"invite", "client"}, {"invite", "supervisor"}, {"devices", "extra"}, {"revoke"}} {
+		f.reject("unused", daemon, args...)
+	}
+	if _, err := os.Stat(f.config("unused")); !os.IsNotExist(err) {
+		t.Fatal("invalid command created server state")
+	}
+	for _, args := range [][]string{{"pair", "extra"}, {"list", "extra"}, {"attach"}, {"ls"}, {"ls", "id", ".", "extra"}, {"get", "id", "remote"}, {"put", "id", "local"}, {"forward", "id", "web"}} {
+		contains(t, f.reject("unpaired", client, args...), "usage: clistream")
+	}
+	contains(t, f.reject("unpaired", supervisor, "--pair-stdin", "extra"), "usage: clistreams")
+	contains(t, f.reject("sup", supervisor, "--io-mode", "wrong", "true"), "--io-mode")
 }
 
 func TestSharedSession(t *testing.T) {
@@ -67,7 +92,7 @@ func TestSharedSession(t *testing.T) {
 func TestProgramArguments(t *testing.T) {
 	f := setup(t)
 	contains(t, f.reject("fresh", supervisor, "true"), "clistreamd invite")
-	link := strings.TrimSpace(f.run("srv", daemon, "supervisor"))
+	link := strings.TrimSpace(f.run("srv", daemon, "invite"))
 	f.reject("fresh", supervisor, link)
 	f.reject("fresh", supervisor, "--once", link, "/missing-program")
 	p := f.start("fresh", supervisor, "--once", "--interactive", link, "--", "/bin/sh", "-c", `test ! -t 0 || exit 8; echo "$1:$2"; read x; echo "reply-$x"; echo error >&2; exit 7`, "sh", "-child", "--help")
@@ -87,7 +112,7 @@ func TestProgramArguments(t *testing.T) {
 		excludes(t, data, "\"Driver\"")
 		excludes(t, data, "\"Version\"")
 		equal(t, f.sessions("b")[0].Mode, "pipe")
-		f.run("a", client, "--eof", "attach", id)
+		f.run("a", client, "--send-eof", "attach", id)
 		child.expect(0)
 	}
 	equal(t, read(t, filepath.Join(f.work, "calls")), "--child\n--child\n")
@@ -113,7 +138,7 @@ func TestSharedDefaultIdentity(t *testing.T) {
 		equal(t, len(strings.Fields(f.run("srv", daemon, "devices")))-len(before), 2)
 	}
 	f.reject("unpaired", client, "list")
-	for _, c := range []struct{ program, option string }{{client, "pair"}, {supervisor, "--pair"}} {
+	for _, c := range []struct{ program, option string }{{client, "pair"}, {supervisor, "--pair-stdin"}} {
 		for range 2 {
 			p := f.start("stdin-"+c.program, c.program, c.option)
 			p.send(link + "\n")
@@ -238,7 +263,7 @@ func TestAuthorization(t *testing.T) {
 func TestLargeBinaryStdio(t *testing.T) {
 	f := setup(t)
 	local, id := f.session([]string{"--local-input=false"}, "cat")
-	v := f.start("a", client, "--eof", "attach", id)
+	v := f.start("a", client, "--send-eof", "attach", id)
 	data := make([]byte, 4<<20)
 	rand.Read(data)
 	v.send(string(data))
@@ -352,7 +377,7 @@ func TestReconnect(t *testing.T) {
 
 func TestKeystrokeLatency(t *testing.T) {
 	f := setup(t)
-	_, id := f.session([]string{"--mode", "pty"}, "sh", "-c", "stty raw -echo; echo ready; exec cat")
+	_, id := f.session([]string{"--io-mode", "pty"}, "sh", "-c", "stty raw -echo; echo ready; exec cat")
 	v := f.start("a", client, "attach", id)
 	v.see("ready\n")
 	var samples []time.Duration

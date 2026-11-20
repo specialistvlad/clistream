@@ -189,6 +189,9 @@ func (p *Process) Handle(s *quic.Stream, m wire.Message) (e error) {
 		}()
 	}
 	if strings.HasPrefix(m.Channel, "fs/") {
+		if p.Root == nil {
+			return errors.New("file sharing is disabled")
+		}
 		return p.Root.Handle(s, m)
 	}
 	ok := wire.Message{Op: "ok"}

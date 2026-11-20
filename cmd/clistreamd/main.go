@@ -40,34 +40,16 @@ func run() (err error) {
 	qr := flag.Bool("qr", true, "render invitation QR")
 	var names []string
 	flag.Func("interface", "interface name or loopback (repeatable)", func(name string) error { names = append(names, name); return nil })
-	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "Usage: clistreamd [flags] [invite [client|supervisor] | supervisor | devices | revoke ID]")
-		fmt.Fprintln(flag.CommandLine.Output(), "Run clistreamd invite to print a three-minute pairing link.")
-		cliopts.PrintDefaults()
-	}
+	flag.Usage = help
 	cliopts.Parse()
-	// Keep QR output for the original role-specific spellings. Bare invite
-	// prints one script-friendly line unless QR output is explicitly requested.
-	inviteQR := flag.NArg() == 2
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "qr" {
-			inviteQR = *qr
-		}
-	})
 	action, arg := "serve", ""
 	if flag.NArg() > 0 {
-		action = flag.Arg(0)
-	}
-	if flag.NArg() > 1 {
-		arg = flag.Arg(1)
-	}
-	if action == "supervisor" {
-		if flag.NArg() != 1 {
-			return errors.New("usage: clistreamd supervisor")
+		if err := cliopts.Validate("clistreamd", flag.Args(), commands); err != nil {
+			return err
 		}
-		action, arg = "invite", "supervisor"
-		inviteQR = false
+		action, arg = flag.Arg(0), flag.Arg(1)
 	}
+	inviteQR := cliopts.Supplied("qr") && *qr
 	dir := identity.Default("server")
 	if e := identity.EnsurePrivateDir(dir); e != nil {
 		return e

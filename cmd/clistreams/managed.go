@@ -370,6 +370,6 @@ func selectMode(mode string, terminal bool) (string, error) {
 		}
 		return "pipe", nil
 	default:
-		return "", errors.New("--mode requires auto, pipe or pty")
+		return "", errors.New("--io-mode requires auto, pipe or pty")
 	}
 }
