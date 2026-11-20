@@ -207,6 +207,11 @@ class Live(BrokerFixture):
 
     def test_files(self):
         _, sid = self.session([], ["/bin/cat"])
+        viewer = self.spawn(self.b + ["attach", sid])
+        def echo(marker):
+            viewer.stdin.write(marker)
+            self.assertEqual(line(viewer.stdout), marker)
+        echo(b"before-workspace-change\n")
         data = os.urandom(180015)
         source = self.base / "source"
         source.write_bytes(data)
@@ -219,6 +224,10 @@ class Live(BrokerFixture):
         self.assertEqual(target.read_bytes(), data)
         files = self.run_cli(self.b + ["ls", sid, "folder"]).stdout
         self.assertEqual(json.loads(files)["Name"], "file")
+        (self.work / "folder" / "local-change").touch()
+        refreshed = self.run_cli(self.b + ["ls", sid, "folder"]).stdout.splitlines()
+        self.assertEqual({json.loads(row)["Name"] for row in refreshed}, {"file", "local-change"})
+        echo(b"after-workspace-change\n")
         for name in ["../source", "/etc/passwd", "escape/source", "hardlink"]:
             self.assertNotEqual(
                 self.run_cli(
@@ -331,6 +340,18 @@ class Live(BrokerFixture):
         ):
             return executable
         return None
+
+    def test_driver_catalog(self):
+        result = subprocess.check_output([BIN / "clistream-supervise", "-drivers"])
+        drivers = json.loads(result)
+        for name, version, default in [
+            ("generic", None, "pipe"),
+            ("codex", "0.170.0", "pty"),
+            ("claude", "2.1.329", "pty"),
+        ]:
+            release = next(r for r in drivers[name] if r.get("version") == version)
+            self.assertEqual(release["defaultMode"], default)
+            self.assertEqual(set(release["modes"]), {"pipe", "pty"})
 
     def test_unsupported_version_and_generic_override(self):
         exe = self.work / "codex"

@@ -77,7 +77,7 @@ final class SessionTests: XCTestCase {
     #endif
     tap(app.buttons["Done"])
     XCTAssertTrue(
-      app.staticTexts.matching(
+      app.descendants(matching: .any).matching(
         NSPredicate(
           format: "label CONTAINS %@ OR value CONTAINS %@", "out:workspace-finished",
           "out:workspace-finished")

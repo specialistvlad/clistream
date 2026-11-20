@@ -47,7 +47,7 @@ jobs:
         if: always()
         run: |
           mkdir -p results
-          for bundle in apple/build/accept-*/Logs/Test/*.xcresult; do
+          for bundle in apple/build/results-*/*.xcresult; do
             [[ -f "$bundle/Info.plist" ]] || continue
             xcrun xcresulttool get test-results tests --path "$bundle" |
               jq '[.. | objects | select(.nodeType? == "Test Case") | {test: .nodeIdentifier, result, duration}]' \

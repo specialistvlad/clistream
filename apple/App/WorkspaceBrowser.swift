@@ -32,38 +32,46 @@ struct WorkspaceBrowser: View {
   }
 
   var body: some View {
-    Group {
-      #if os(macOS)
-        NavigationStack { contents(folder: location.folder) }
-          .frame(minWidth: 520, minHeight: 340)
-      #else
-        NavigationStack(path: $location.path) {
-          contents(folder: ".")
-            .navigationDestination(for: String.self) { folder in contents(folder: folder) }
+    observedNavigation
+      .fileImporter(isPresented: $importer, allowedContentTypes: [.data], onCompletion: imported)
+      .fileExporter(
+        isPresented: $exporter, item: download, contentTypes: [.data],
+        defaultFilename: download?.url.lastPathComponent,
+        onCompletion: exported, onCancellation: cleanDownload)
+  }
+
+  private func imported(_ result: Result<URL, Error>) {
+    if case .success(let url) = result { Task { await put(url) } }
+  }
+
+  private func exported(_ result: Result<URL, Error>) {
+    if case .failure(let error) = result { message = error.localizedDescription }
+    cleanDownload()
+  }
+
+  @ViewBuilder private var navigation: some View {
+    #if os(macOS)
+      NavigationStack { contents(folder: location.folder) }.frame(minWidth: 520, minHeight: 340)
+    #else
+      NavigationStack(path: $location.path) {
+        contents(folder: ".").navigationDestination(for: String.self) { folder in
+          contents(folder: folder)
         }
-      #endif
-    }
-    .interactiveDismissDisabled(active)
-    .onChange(of: location.folder) { _, folder in
-      AccessibilityNotification.Announcement(folder == "." ? session.Name + " Files" : folder)
-        .post()
-    }
-    .onChange(of: message) { _, text in
-      if !text.isEmpty { AccessibilityNotification.Announcement(text).post() }
-    }
-    .task(id: location.folder) { await refreshFolder() }
-    .fileImporter(isPresented: $importer, allowedContentTypes: [.data]) { result in
-      if case .success(let url) = result { Task { await put(url) } }
-    }
-    .fileExporter(
-      isPresented: $exporter, item: download, contentTypes: [.data],
-      defaultFilename: download?.url.lastPathComponent
-    ) { result in
-      if case .failure(let error) = result { message = error.localizedDescription }
-      cleanDownload()
-    } onCancellation: {
-      cleanDownload()
-    }
+      }
+    #endif
+  }
+
+  private var observedNavigation: some View {
+    navigation
+      .interactiveDismissDisabled(active)
+      .onChange(of: location.folder) { _, folder in
+        AccessibilityNotification.Announcement(folder == "." ? session.Name + " Files" : folder)
+          .post()
+      }
+      .onChange(of: message) { _, text in
+        if !text.isEmpty { AccessibilityNotification.Announcement(text).post() }
+      }
+      .task(id: location.folder) { await refreshFolder() }
   }
 
   private func refreshFolder() async {

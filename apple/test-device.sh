@@ -26,6 +26,8 @@ case "$platform" in
 esac
 suites="hosted files terminal"
 if [[ "$platform" == iOS ]]; then suites+=" touch"; fi
+results=$(mktemp -d "$PWD/build/results-$platform-XXXXXXXX")
+echo "XCTest results in $results"
 failed=0
 for suite in ${CLISTREAM_TEST_SUITES:-$suites}; do
   case "$suite" in
@@ -37,6 +39,6 @@ for suite in ${CLISTREAM_TEST_SUITES:-$suites}; do
   esac
   echo "Running $platform $suite"
   python3 test-fixture.py "$suite" xcodebuild -quiet test-without-building "${options[@]}" \
-    -only-testing:"$test" -parallel-testing-enabled NO -collect-test-diagnostics never || failed=1
+    -resultBundlePath "$results/$suite.xcresult" -only-testing:"$test" -parallel-testing-enabled NO -collect-test-diagnostics never || failed=1
 done
 exit "$failed"
