@@ -119,13 +119,13 @@ func (l *Log) Record(event Event) {
 		n, err := l.file.Write(data)
 		if err == nil {
 			l.size += int64(n)
-			return
+		} else {
+			// Remove an incomplete final record if the filesystem still permits it.
+			if n > 0 {
+				_ = l.file.Truncate(l.size)
+			}
+			l.fallback(err)
 		}
-		// Remove an incomplete final record if the filesystem still permits it.
-		if n > 0 {
-			_ = l.file.Truncate(l.size)
-		}
-		l.fallback(err)
 	}
 	l.stderr.Write(data)
 }

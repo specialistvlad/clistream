@@ -4,6 +4,10 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Server console activity · November 20, 2026
+
+The daemon test compared every default stderr event byte for byte with the file journal, including timestamps, from startup through shutdown. A foreground PTY showed a live pairing event. Closing a stderr pipe still allowed a client request and a clean shutdown with a final file record. Rotation, concurrent writers, file opt-out, file failure and payload privacy were also exercised. Both Go platform suites passed (39 CLI cases, with two optional skips on macOS and five on Linux), as did the Linux multi-host deployment and the shared Go, Mac, iPhone and iPad simulator session.
+
 ## Bubble Tea dashboard and command widget · November 20, 2026
 
 A real PTY test typed ` --help` into a prefilled `codex` command and decoded successive terminal updates to verify the visible text and cursor after each key. A second PTY test corrected a character in the middle, resized and submitted the command. The replacement reported one argument, `--help`. The Go race tests also checked grapheme deletion, horizontal scrolling, the fixed header and emulator output. The macOS and Linux CLI suites each ran 38 cases, with two optional skips on macOS and five on Linux. Mixed-version compatibility and the shared Mac, iPhone simulator, iPad simulator and Go session passed.

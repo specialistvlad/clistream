@@ -13,9 +13,9 @@
 
 ## Server activity logs
 
-The Linux and macOS daemon records broker events to a bounded private JSON-lines file by default. Global flag `-no-log-file` selects standard error. The broker assigns connection IDs, observes roles from session operations and waits for close records on shutdown. Supervisors, Go clients and Apple clients use their existing wire operations. All operator controls belong to the daemon. The Apple interaction design and client UI therefore require no logging controls.
+The Linux and macOS daemon records broker events to standard error and a bounded private JSON-lines file by default. Global flag `-no-log-file` selects standard error alone. The broker assigns connection IDs, observes roles from session operations and waits for close records on shutdown. Supervisors, Go clients and Apple clients use their existing wire operations. All operator controls belong to the daemon. The Apple interaction design and client UI therefore require no logging controls.
 
-Exercise file and stderr destinations, concurrent records, rotation, write failure and payload privacy with race-enabled Go and CLI tests on both systems. Use the four-container deployment for separate Linux supervisors and the shared-session harness for simultaneous native Mac, iPhone, iPad and CLI participants. [Operator guide](deployment.md#server-activity-logs) · [Execution record](verification.md)
+Compare default file and stderr records byte for byte and verify foreground pairing with live console events. Exercise both destinations, concurrent records, rotation, write failure and payload privacy with race-enabled Go and CLI tests on both systems. Use the four-container deployment for separate Linux supervisors and the shared-session harness for simultaneous native Mac, iPhone, iPad and CLI participants. [Operator guide](deployment.md#server-activity-logs) · [Execution record](verification.md)
 
 ## Pairing and launch status on November 20, 2026
 

@@ -52,6 +52,11 @@ func TestAppendAndRotate(t *testing.T) {
 	if len(events) != 41 || events[0].Name != "initial" {
 		t.Fatalf("append lost records: %d", len(events))
 	}
+	fileData, err := os.ReadFile(l.path)
+	if err != nil || !bytes.Equal(fileData, stderr.Bytes()) {
+		t.Fatal("console and file records differ", err)
+	}
+	stderr.Reset()
 	l.limit = 1
 	for _, name := range []string{"a", "b", "c", "d", "e", "f", "g"} {
 		l.Record(Event{Name: name})
@@ -66,7 +71,8 @@ func TestAppendAndRotate(t *testing.T) {
 			t.Fatalf("unexpected rotation at %s", path)
 		}
 	}
-	if stderr.Len() != 0 {
+	console := records(t, stderr.Bytes())
+	if len(console) != 7 || console[0].Name != "a" || console[6].Name != "g" {
 		t.Fatal(stderr.String())
 	}
 }
@@ -89,6 +95,7 @@ func TestLogFallback(t *testing.T) {
 				l.file.Close()
 			case "rotate":
 				l.Record(Event{Name: "before"})
+				stderr.Reset()
 				l.limit = 1
 				if err := os.WriteFile(path+".4", nil, 0600); err != nil {
 					t.Fatal(err)

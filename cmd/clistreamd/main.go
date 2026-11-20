@@ -37,7 +37,7 @@ func run() (err error) {
 	dir := flag.String("state", identity.Default("server"), "private state directory")
 	listen := flag.String("listen", "127.0.0.1:7443", "UDP listener")
 	addr := flag.String("advertise", "", "host:port clients can reach")
-	noFile := flag.Bool("no-log-file", false, "write server activity to stderr instead of server.log")
+	noFile := flag.Bool("no-log-file", false, "disable server.log and keep logging server activity to stderr")
 	qr := flag.Bool("qr", true, "render invitation QR")
 	var names []string
 	flag.Func("interface", "interface name or loopback (repeatable)", func(name string) error { names = append(names, name); return nil })
@@ -106,6 +106,8 @@ func run() (err error) {
 	if action != "serve" {
 		return errors.New("start clistreamd first")
 	}
+	// Keep serving and recording to disk if a stderr pipe closes.
+	signal.Ignore(syscall.SIGPIPE)
 	log := activity.Open(*dir, *noFile, os.Stderr)
 	defer log.Close()
 	log.Record(activity.Event{Name: "daemon_start"})

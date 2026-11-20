@@ -88,8 +88,14 @@ class BrokerFixture(unittest.TestCase):
             )
 
     def start_server(self):
-        self.daemon = self.spawn(self.server + ["-listen", self.address])
-        status_line(self.daemon.stderr, b"serving QUIC")
+        self.console = self.base / "daemon.stderr"
+        with self.console.open("wb") as output:
+            self.daemon = self.spawn(self.server + ["-listen", self.address], stderr=output)
+        deadline = time.monotonic() + 8
+        while b"serving QUIC" not in self.console.read_bytes():
+            self.assertIsNone(self.daemon.poll(), self.console.read_text())
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.02)
 
     def spawn(self, args, **kw):
         p = subprocess.Popen(
@@ -470,6 +476,20 @@ while True:
     def test_activity_log(self):
         log = self.base / "server/server.log"
         self.check_activity(log)
+        console = self.console.read_bytes().splitlines(keepends=True)
+        self.assertEqual(b"".join(row for row in console if row.startswith(b"{")), log.read_bytes())
+
+    def test_closed_console(self):
+        self.daemon.terminate()
+        self.daemon.wait(8)
+        self.daemon = self.spawn(self.server + ["-listen", self.address])
+        status_line(self.daemon.stderr, b"serving QUIC")
+        self.daemon.stderr.close()
+        self.run_cli(self.a + ["list"])
+        self.daemon.terminate()
+        self.assertEqual(self.daemon.wait(8), 0)
+        journal = (self.base / "server/server.log").read_bytes().splitlines()
+        self.assertEqual(json.loads(journal[-1])["event"], "daemon_stop")
 
     def test_log_file_unavailable(self):
         self.daemon.terminate()
@@ -596,6 +616,7 @@ while True:
         initial = displayed_link(console)
         enrolled = self.run_cli([CLI, "-state", self.base / "first-device", initial])
         self.assertEqual(json.loads(enrolled.stdout), [])
+        until(console, b'"event":"pair"')
         foreground.terminate()
         foreground.wait(5)
 

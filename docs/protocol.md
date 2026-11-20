@@ -53,7 +53,7 @@ An error on one logical stream can end that operation independently. Disconnecti
 
 ## Broker activity events
 
-Logging uses information already visible to the v1 broker. Each accepted QUIC connection gets a random `connection_id` and an initial role of `unknown`. A successful registration identifies a supervisor, and a list or open request identifies client activity. Pairing alone leaves the role unknown. A shared device key can therefore appear on concurrent connections with different roles. Connections rejected during the TLS handshake precede broker acceptance.
+The daemon emits the same event record to stderr and its journal by default. Logging uses information already visible to the v1 broker. Each accepted QUIC connection gets a random `connection_id` and an initial role of `unknown`. A successful registration identifies a supervisor, and a list or open request identifies client activity. Pairing alone leaves the role unknown. A shared device key can therefore appear on concurrent connections with different roles. Connections rejected during the TLS handshake precede broker acceptance.
 
 `daemon_start`, `listener_ready` and `daemon_stop` bound daemon activity. `admin_request` records the action and outcome, including invitation issuance (`invite`) and replacement (`display`). The broker records `pair`, `session_register`, `session_list`, `session_removed`, and `request_rejected` for malformed or unknown requests. Failed channel opens generate `channel_rejected`. Successful opens generate `channel_open` and `channel_close` with a QUIC stream ID scoped to the connection.
 
