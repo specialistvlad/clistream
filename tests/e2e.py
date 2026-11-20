@@ -475,6 +475,24 @@ class Live(BrokerFixture):
         with self.assertRaises(ProcessLookupError):
             os.kill(active_pid, 0)
 
+    def test_quiet_dashboard_refresh(self):
+        dashboard = DashboardTerminal(self)
+        dashboard.until(b"Waiting for supervisors")
+        child = self.managed(["/bin/cat"])
+        status_line(child.stderr, b"session ")
+        dashboard.until(b"R Restart")
+        child.terminate()
+        child.wait(8)
+        dashboard.until(b"Waiting for supervisors")
+        dashboard.send(b"q")
+        self.assertEqual(dashboard.process.wait(8), 0)
+        self.daemon.terminate()
+        self.daemon.wait(8)
+        for path in (self.console, self.base / "server/server.log"):
+            events = [json.loads(row) for row in path.read_bytes().splitlines() if row.startswith(b"{")]
+            self.assertFalse(any(e["event"] == "supervisor_list" and e["outcome"] == "ok" for e in events))
+            self.assertTrue(any(e["event"] == "supervisor_publish" and e["outcome"] == "ok" for e in events))
+
     def test_activity_log(self):
         log = self.base / "server/server.log"
         self.check_activity(log)

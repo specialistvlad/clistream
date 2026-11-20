@@ -6,7 +6,7 @@ The audit maps requirements to existing checks and identifies pending coverage. 
 
 ## Returning home from an attachment · November 20, 2026
 
-The Go dashboard attached to a live child, returned home with Ctrl-G and attached again. In PTY and pipe modes, the supervisor feed and journal recorded normal channel closures, and the broker journal reported matching outcomes. The reattached client exchanged input and output with the running child. The regression runs in `test_home_closes_terminal_channels`.
+The Go dashboard attached to a live child, returned home with Ctrl-G and attached again. In PTY and pipe modes, the supervisor feed and journal recorded normal channel closures, and the broker journal reported matching outcomes. The reattached client exchanged input and output with the running child. The regression runs in `test_home_closes_terminal_channels`. A separate dashboard test observed a supervisor appear and disappear on successive refreshes, then checked that publication was logged and successful polls were absent from both stderr and the journal.
 
 ## Default supervisor activity feed · November 20, 2026
 

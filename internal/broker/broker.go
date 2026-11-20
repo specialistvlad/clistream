@@ -330,6 +330,11 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 	ev.Stream = &id
 	ev.Name = "request_rejected"
 	defer func() {
+		// The dashboard polls its listing every second while it is open.
+		if ev.Name == "supervisor_list" && err == nil {
+			return
+		}
+
 		if err != nil && ev.Outcome == "" {
 			ev.Outcome = "failed"
 		} else if ev.Outcome == "" {
