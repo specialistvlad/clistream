@@ -21,8 +21,9 @@ case "$platform" in
 esac
 cmp ../LICENSE "$notice"
 case "$platform" in
-  macOS) hosted=CLIStream-MacTests; ui=CLIStream-MacUITests ;;
-  iOS) hosted=CLIStream-iOSTests; ui=CLIStream-UITests ;;
+  macOS) hosted=CLIStream-MacTests; ui=CLIStream-MacUITests
+         test_limits=(-test-timeouts-enabled YES -default-test-execution-time-allowance 180 -maximum-test-execution-time-allowance 240) ;;
+  iOS) hosted=CLIStream-iOSTests; ui=CLIStream-UITests; test_limits=() ;;
 esac
 suites="hosted files terminal"
 if [[ "$platform" == iOS ]]; then suites+=" touch scroll"; fi
@@ -40,6 +41,7 @@ for suite in ${CLISTREAM_TEST_SUITES:-$suites}; do
   esac
   echo "Running $platform $suite"
   python3 test-fixture.py "$suite" xcodebuild -quiet test-without-building "${options[@]}" \
-    -resultBundlePath "$results/$suite.xcresult" -only-testing:"$test" -parallel-testing-enabled NO -collect-test-diagnostics never || failed=1
+    -resultBundlePath "$results/$suite.xcresult" -only-testing:"$test" -parallel-testing-enabled NO -collect-test-diagnostics never \
+    ${test_limits[@]+"${test_limits[@]}"} || failed=1
 done
 exit "$failed"

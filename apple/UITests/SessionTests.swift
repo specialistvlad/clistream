@@ -256,6 +256,7 @@ final class SessionTests: XCTestCase {
     }
     app.open(link)
     #if os(macOS)
+      app.activate()
       XCTAssertTrue(app.buttons["Pair device"].waitForExistence(timeout: 12))
       app.typeKey(.return, modifierFlags: [])
     #else
@@ -311,14 +312,15 @@ final class SessionTests: XCTestCase {
   #endif
 
   private func tap(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
-    XCTAssertTrue(
-      element.waitForExistence(timeout: 12), XCUIApplication().debugDescription, file: file,
-      line: line)
+    #if os(macOS)
+      let app = XCUIApplication()
+      if app.state != .runningForeground { app.activate() }
+    #endif
+    XCTAssertTrue(element.waitForExistence(timeout: 12), file: file, line: line)
     #if os(macOS)
       // Sheets and toolbar buttons can disappear as soon as mouse-down fires.
       // Resolve the hit point once so mouse-up can complete on the same window.
-      let app = XCUIApplication()
-      let anchor = app.coordinate(withNormalizedOffset: .zero)
+      let anchor = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
       let target = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).screenPoint
       anchor.withOffset(
         CGVector(

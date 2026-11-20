@@ -56,6 +56,27 @@ private func visibleText(in view: TerminalView) -> String {
   }
 #else
   private final class TouchTerminal: TerminalView {
+    private lazy var controlLetters: [UIKeyCommand] = (97...122).map { code in
+      let command = UIKeyCommand(
+        input: String(UnicodeScalar(code)!), modifierFlags: .control,
+        action: #selector(sendControlLetter(_:)))
+      command.wantsPriorityOverSystemBehavior = true
+      return command
+    }
+
+    override var keyCommands: [UIKeyCommand]? {
+      let inherited = super.keyCommands ?? []
+      guard isFirstResponder else { return inherited }
+      // Applications that negotiate enhanced keyboard reporting own their
+      // modifier encoding. In a conventional PTY these are ASCII controls.
+      return getTerminal().keyboardEnhancementFlags.isEmpty ? inherited + controlLetters : inherited
+    }
+
+    @objc private func sendControlLetter(_ command: UIKeyCommand) {
+      guard let byte = command.input?.utf8.first, (97...122).contains(byte) else { return }
+      send(txt: String(UnicodeScalar(byte - 96)))
+    }
+
     override var accessibilityValue: String? {
       get { visibleText(in: self) }
       set { super.accessibilityValue = newValue }
