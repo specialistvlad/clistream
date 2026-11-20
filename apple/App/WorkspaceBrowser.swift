@@ -55,7 +55,10 @@ struct WorkspaceBrowser: View {
   }
 
   private func exported(_ result: Result<URL, Error>) {
-    if case .failure(let error) = result { message = error.localizedDescription }
+    switch result {
+    case .success(let url): message = "Downloaded " + url.lastPathComponent
+    case .failure(let error): message = error.localizedDescription
+    }
     cleanDownload()
   }
 

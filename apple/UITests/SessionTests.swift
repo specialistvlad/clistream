@@ -45,6 +45,12 @@ final class SessionTests: XCTestCase {
     #else
       tap(app.buttons["Save"])
     #endif
+    let completion = "Downloaded " + name + ".txt"
+    XCTAssertTrue(
+      app.staticTexts.matching(
+        NSPredicate(format: "label == %@ OR value == %@", completion, completion)
+      )
+      .firstMatch.waitForExistence(timeout: 12))
     openEntry("inbox", in: app)
     openEntry("nested", in: app)
     #if os(macOS)
@@ -114,6 +120,11 @@ final class SessionTests: XCTestCase {
       view.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 4, dy: 4)).click()
     #else
       cell.tap()
+      if UIDevice.current.userInterfaceIdiom == .pad {
+        XCUIElement.perform(withKeyModifiers: .control) {
+          view.typeKey("d", modifierFlags: [.control])
+        }
+      }
       for name in ["Up Arrow", "Down Arrow", "Right Arrow", "Left Arrow", "Escape"] {
         tap(app.buttons["Keys"])
         tap(app.buttons[name])
@@ -127,13 +138,36 @@ final class SessionTests: XCTestCase {
       rotated.tap()
       if UIDevice.current.userInterfaceIdiom == .pad {
         rotated.click()
-        view.typeKey("d", modifierFlags: [.control])
       }
     #endif
     tap(app.buttons["Detach"])
   }
 
   #if os(iOS)
+    @MainActor func testScrollSessionsAndTerminalHistory() async throws {
+      let app = try await pairedApp(session: "CLISTREAM_UI_PTY", scrollList: true)
+      let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
+      let tail = NSPredicate(format: "value CONTAINS %@", "history-end")
+      XCTAssertEqual(
+        XCTWaiter.wait(
+          for: [XCTNSPredicateExpectation(predicate: tail, object: terminal)],
+          timeout: 10), .completed)
+      terminal.swipeDown()
+      let history = NSPredicate(
+        format: "value CONTAINS %@ AND NOT (value CONTAINS %@)", "history-", "history-end")
+      XCTAssertEqual(
+        XCTWaiter.wait(
+          for: [XCTNSPredicateExpectation(predicate: history, object: terminal)],
+          timeout: 8), .completed)
+      tap(app.buttons["Keys"])
+      tap(app.buttons["Hide Keyboard"])
+      XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 6))
+      tap(app.buttons["Keys"])
+      tap(app.buttons["Show Keyboard"])
+      XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 6))
+      tap(app.buttons["Detach"])
+    }
+
     @MainActor func testTouchNavigationAndEditing() async throws {
       let app = try await pairedApp(session: "CLISTREAM_SESSION", largeText: true)
       let output = app.textViews["Standard output"]
@@ -198,7 +232,9 @@ final class SessionTests: XCTestCase {
     }
   #endif
 
-  @MainActor private func pairedApp(session: String, largeText: Bool = false) async throws
+  @MainActor private func pairedApp(
+    session: String, largeText: Bool = false, scrollList: Bool = false
+  ) async throws
     -> XCUIApplication
   {
     continueAfterFailure = false
@@ -233,7 +269,26 @@ final class SessionTests: XCTestCase {
       tap(app.alerts.buttons["OK"])
     }
     tap(app.buttons["Refresh"])
-    tap(app.descendants(matching: .any)["session-" + id].firstMatch)
+    let target = app.descendants(matching: .any)["session-" + id].firstMatch
+    #if os(iOS)
+      if scrollList {
+        let list = app.collectionViews.firstMatch
+        let rows = list.buttons.matching(
+          NSPredicate(format: "identifier BEGINSWITH %@", "session-"))
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10))
+        func visible() -> Set<String> {
+          Set(rows.allElementsBoundByIndex.filter(\.isHittable).map(\.identifier))
+        }
+        let before = visible()
+        list.swipeUp()
+        XCTAssertFalse(before.isEmpty)
+        XCTAssertNotEqual(before, visible())
+        XCTAssertFalse(app.buttons["Files"].exists)
+        for _ in 0..<4 where !target.isHittable { list.swipeDown() }
+        for _ in 0..<12 where !target.isHittable { list.swipeUp() }
+      }
+    #endif
+    tap(target)
     return app
   }
 

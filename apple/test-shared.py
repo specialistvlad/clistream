@@ -1,6 +1,7 @@
 """Exercise concurrent Apple and CLI control of the same child on one private broker."""
 
 import concurrent.futures
+import http.server
 import json
 import os
 import platform
@@ -8,6 +9,8 @@ import selectors
 import subprocess
 import sys
 import tempfile
+import threading
+import secrets
 import time
 import unittest
 from pathlib import Path
@@ -33,14 +36,16 @@ class SharedAppleSession(BrokerFixture):
             ),
         }
         subprocess.run(["make", "build"], cwd=APP.parent, check=True)
-        for device in ["ipad", "iphone"]:
-            udid = cls.destinations[device][1].split("id=")[1]
-            subprocess.run(["xcrun", "simctl", "bootstatus", udid, "-b"], check=True)
-        # The same iOS test bundle runs on both simulated devices.
+        # Compile before boot so the compiler and two simulators do not compete
+        # for memory on a hosted Mac. Both simulators use the same iOS bundle.
         for device in ["mac", "iphone"]:
+            print("Building shared-session tests for", device, flush=True)
             subprocess.run(
                 cls.command(device, "build-for-testing"), cwd=APP, check=True
             )
+        for device in ["ipad", "iphone"]:
+            udid = cls.destinations[device][1].split("id=")[1]
+            subprocess.run(["xcrun", "simctl", "bootstatus", udid, "-b"], check=True, timeout=600)
 
     @classmethod
     def command(cls, device, action):
@@ -71,12 +76,47 @@ class SharedAppleSession(BrokerFixture):
         observer = self.spawn(self.a + ["attach", sid])
         reports = Path(tempfile.mkdtemp(prefix="shared-", dir=APP / "build"))
 
+        # All three XCTest hosts must be running before the first participant's
+        # interactive deadline starts. Invitations keep their normal expiry.
+        ready = threading.Barrier(len(self.destinations))
+        routes = {name: "/" + secrets.token_hex(24) for name in self.destinations}
+        pending = set(routes.values())
+        lock = threading.Lock()
+        def issue():
+            return self.run_cli(self.server + ["invite", "client"]).stdout
+
+        class Enroll(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                with lock:
+                    path = self.path.removesuffix("/PIPE")
+                    if self.path != path + "/PIPE" or path not in pending:
+                        self.send_error(404)
+                        return
+                    pending.remove(path)
+                try:
+                    ready.wait(timeout=300)
+                    data = issue()
+                except threading.BrokenBarrierError:
+                    self.send_error(503, "Another test host did not start")
+                    return
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+
+        service = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Enroll)
+        self.addCleanup(service.server_close)
+        threading.Thread(target=service.serve_forever, daemon=True).start()
+        self.addCleanup(service.shutdown)
+        print("XCTest results in", reports, flush=True)
+
         def apple(device):
             system = self.destinations[device][0]
             tests = "CLIStream-MacTests" if system == "macOS" else "CLIStream-iOSTests"
-            link = (
-                self.run_cli(self.server + ["invite", "client"]).stdout.decode().strip()
-            )
             args = self.command(device, "test-without-building") + [
                 "-only-testing:" + tests + "/ClientTests/testSharedPipe",
                 "-parallel-testing-enabled",
@@ -87,11 +127,11 @@ class SharedAppleSession(BrokerFixture):
             env = {
                 **os.environ,
                 "TEST_RUNNER_CLISTREAM_SESSION": sid,
-                "TEST_RUNNER_CLISTREAM_PIPE_LINK": link,
+                "TEST_RUNNER_CLISTREAM_FIXTURE": f"http://127.0.0.1:{service.server_port}{routes[device]}/",
                 "TEST_RUNNER_CLISTREAM_PARTICIPANT": device,
             }
             subprocess.run(
-                args, env=env, cwd=APP, check=True, timeout=180, capture_output=True
+                args, env=env, cwd=APP, check=True, timeout=520, capture_output=True
             )
             report = subprocess.check_output(
                 [
@@ -118,13 +158,13 @@ class SharedAppleSession(BrokerFixture):
                 f"out:hosted-{device}-echo\n".encode() for device in self.destinations
             }
             seen = set()
-            until = time.monotonic() + 90
+            until = time.monotonic() + 360
             with selectors.DefaultSelector() as sel:
                 sel.register(observer.stdout, selectors.EVENT_READ)
                 while seen != expected:
                     self.assertTrue(
                         sel.select(max(0, until - time.monotonic())),
-                        "waiting for all three Apple clients",
+                        f"waiting for Apple clients, received {sorted(seen)!r}",
                     )
                     record = observer.stdout.readline()
                     self.assertIn(record, expected)

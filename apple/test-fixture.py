@@ -2,6 +2,7 @@
 
 import contextlib
 import http.server
+import json
 import os
 import re
 import shutil
@@ -152,6 +153,11 @@ def run(root, stack, suite, command):
         ],
         "pty",
     )
+    if suite == "scroll":
+        # Fill the real session list past the bottom edge of a full-size iPad.
+        for index in range(22):
+            session("pipe", ["/bin/cat"], f"scroll-row-{index}")
+
     # Capture bytes at the child, beyond the UI, terminal emulator and broker.
     capture = root / "terminal-input"
     ui_pty = session(
@@ -169,13 +175,19 @@ def record_size(*args):
     sizes.write(f"{cols} {rows}\\n")
 signal.signal(signal.SIGWINCH, record_size)
 record_size()
-os.write(1, b'\\x1b[2 q\\x1b[?25lCOPYME terminal selection test\\r\\n')
-os.write(1, b'\\x1b[?1000h\\x1b[?1006h')
+os.write(1, b'\\x1b[2 q\\x1b[?25l')
+if sys.argv[2] == "scroll":
+    for number in range(350):
+        os.write(1, f"history-{number:03d}\\r\\n".encode())
+    os.write(1, b'history-end')
+else:
+    os.write(1, b'COPYME terminal selection test\\r\\n')
+    os.write(1, b'\\x1b[?1000h\\x1b[?1006h')
 with open(sys.argv[1], 'wb', buffering=0) as captured:
     while data := os.read(0, 4096):
         captured.write(data)
 """,
-            str(capture),
+            str(capture), suite,
         ],
         "ui-pty",
     )
@@ -289,6 +301,15 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
     finally:
         finished.set()
         worker.join(5)
+    bundle = command[command.index("-resultBundlePath") + 1]
+    summary = json.loads(subprocess.check_output([
+        "xcrun", "xcresulttool", "get", "test-results", "summary", "--path", bundle
+    ]))
+    optional_driver = int(suite == "hosted" and os.environ.get("CLISTREAM_APP_DRIVERS") != "1")
+    minimum = 5 if suite == "hosted" else 1
+    passed, skipped, failed = (summary[key] for key in ("passedTests", "skippedTests", "failedTests"))
+    if failed or skipped != optional_driver or passed < minimum - optional_driver:
+        raise RuntimeError(f"Unexpected {suite} XCTest outcome: {passed} passed, {skipped} skipped, {failed} failed")
     if suite == "hosted":
         for label in ("pipe", "observer"):
             assert b"out:hosted-apple-echo" in (root / (label + ".out")).read_bytes()
@@ -302,6 +323,8 @@ with open(sys.argv[1], 'wb', buffering=0) as captured:
     elif suite == "touch":
         observed = (root / "observer.out").read_bytes().splitlines()
         assert b"out:copyword" in observed and b"out:copyword selection" in observed, observed
+    elif suite == "scroll":
+        assert capture.read_bytes() == b"", "scrolling or keyboard controls sent terminal input"
     elif suite == "terminal":
         received = capture.read_bytes()
         assert b"\x1b[<0;1;1M" in received, (

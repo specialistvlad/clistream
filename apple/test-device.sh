@@ -25,7 +25,7 @@ case "$platform" in
   iOS) hosted=CLIStream-iOSTests; ui=CLIStream-UITests ;;
 esac
 suites="hosted files terminal"
-if [[ "$platform" == iOS ]]; then suites+=" touch"; fi
+if [[ "$platform" == iOS ]]; then suites+=" touch scroll"; fi
 results=$(mktemp -d "$PWD/build/results-$platform-XXXXXXXX")
 echo "XCTest results in $results"
 failed=0
@@ -34,6 +34,7 @@ for suite in ${CLISTREAM_TEST_SUITES:-$suites}; do
     hosted) test="$hosted" ;;
     files) test="$ui/SessionTests/testPairAndUseSession" ;;
     terminal) test="$ui/SessionTests/testTerminalInput" ;;
+    scroll) test="$ui/SessionTests/testScrollSessionsAndTerminalHistory" ;;
     touch) test="$ui/SessionTests/testTouchNavigationAndEditing" ;;
     *) echo "Unknown suite $suite" >&2; exit 2 ;;
   esac
