@@ -1,6 +1,6 @@
 """Exercise concurrent Apple and CLI control of the same child on one private broker."""
 
-import concurrent.futures
+import http.server
 import json
 import os
 import platform
@@ -8,6 +8,7 @@ import selectors
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -21,43 +22,20 @@ class SharedAppleSession(BrokerFixture):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.destinations = {
-            "mac": ("macOS", "platform=macOS,arch=" + platform.machine()),
-            "iphone": (
-                "iOS",
-                "platform=iOS Simulator,id=" + os.environ["IPHONE_SIMULATOR_ID"],
-            ),
-            "ipad": (
-                "iOS",
-                "platform=iOS Simulator,id=" + os.environ["IPAD_SIMULATOR_ID"],
-            ),
-        }
-        subprocess.run(["make", "build"], cwd=APP.parent, check=True)
-        for device in ["ipad", "iphone"]:
-            udid = cls.destinations[device][1].split("id=")[1]
-            subprocess.run(["xcrun", "simctl", "bootstatus", udid, "-b"], check=True)
-        # The same iOS test bundle runs on both simulated devices.
-        for device in ["mac", "iphone"]:
-            subprocess.run(
-                cls.command(device, "build-for-testing"), cwd=APP, check=True
-            )
-
-    @classmethod
-    def command(cls, device, action):
-        system, destination = cls.destinations[device]
-        derived = "build/accept-mac" if system == "macOS" else "build/accept-ios"
-        return [
-            "xcodebuild",
-            "-quiet",
-            action,
-            "-scheme",
-            "CLIStream-" + system,
-            "-destination",
-            destination,
-            "-derivedDataPath",
-            derived,
-            "CLISTREAM_APP_ID=com.vlk.clistream.acceptance",
+        cls.devices = {"ipad": os.environ["IPAD_SIMULATOR_ID"],
+                       "iphone": os.environ["IPHONE_SIMULATOR_ID"]}
+        cls.mobile_id = "com.vlk.clistream.shared-acceptance"
+        cls.mac_options = [
+            "-scheme", "CLIStream-macOS", "-destination", "platform=macOS,arch=" + platform.machine(),
+            "-derivedDataPath", "build/accept-mac", "CLISTREAM_APP_ID=com.vlk.clistream.acceptance",
         ]
+        subprocess.run(["make", "build"], cwd=APP.parent, check=True)
+        subprocess.run(["xcodebuild", "-quiet", "build-for-testing", *cls.mac_options], cwd=APP, check=True)
+        # Build before the hosted Mac has to keep both simulators in memory.
+        subprocess.run(["xcodebuild", "-quiet", "build", "-scheme", "CLIStream-SharedTestHost",
+                        "-destination", "generic/platform=iOS Simulator", "-derivedDataPath",
+                        "build/accept-ios"], cwd=APP, check=True)
+        cls.package = APP / "build/accept-ios/Build/Products/Debug-iphonesimulator/CLIStreamSharedTestHost.app"
 
     def test_simultaneous_clients(self):
         child, sid = self.session(
@@ -71,78 +49,114 @@ class SharedAppleSession(BrokerFixture):
         observer = self.spawn(self.a + ["attach", sid])
         reports = Path(tempfile.mkdtemp(prefix="shared-", dir=APP / "build"))
 
-        def apple(device):
-            system = self.destinations[device][0]
-            tests = "CLIStream-MacTests" if system == "macOS" else "CLIStream-iOSTests"
-            link = (
-                self.run_cli(self.server + ["invite", "client"]).stdout.decode().strip()
-            )
-            args = self.command(device, "test-without-building") + [
-                "-only-testing:" + tests + "/ClientTests/testSharedPipe",
-                "-parallel-testing-enabled",
-                "NO",
-                "-resultBundlePath",
-                str(reports / (device + ".xcresult")),
-            ]
-            env = {
-                **os.environ,
-                "TEST_RUNNER_CLISTREAM_SESSION": sid,
-                "TEST_RUNNER_CLISTREAM_PIPE_LINK": link,
-                "TEST_RUNNER_CLISTREAM_PARTICIPANT": device,
-            }
-            subprocess.run(
-                args, env=env, cwd=APP, check=True, timeout=180, capture_output=True
-            )
-            report = subprocess.check_output(
-                [
-                    "xcrun",
-                    "xcresulttool",
-                    "get",
-                    "test-results",
-                    "summary",
-                    "--path",
-                    str(reports / (device + ".xcresult")),
-                ]
-            )
-            counts = json.loads(report)
-            self.assertEqual(
-                (counts["passedTests"], counts["skippedTests"], counts["failedTests"]),
-                (1, 0, 0),
-                device,
-            )
+        # XCTest may take longer to launch than an invitation stays valid.
+        routes = {device: "/" + os.urandom(24).hex() for device in [*self.devices, "mac"]}
+        pending = {route + "/PIPE": device for device, route in routes.items()}
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as runners:
-            jobs = [runners.submit(apple, name) for name in self.destinations]
-            # Every Apple attachment waits for the CLI's last line before leaving.
-            expected = {
-                f"out:hosted-{device}-echo\n".encode() for device in self.destinations
+        def mint():
+            return self.run_cli(self.server + ["invite", "client"]).stdout
+
+        class Invitations(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                if self.path not in pending:
+                    self.send_error(404)
+                    return
+                print(pending.pop(self.path), "requested its pairing link", flush=True)
+                data = mint()
+                self.send_response(200)
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+        service = http.server.HTTPServer(("127.0.0.1", 0), Invitations)
+        self.addCleanup(service.server_close)
+        threading.Thread(target=service.serve_forever, daemon=True).start()
+        self.addCleanup(service.shutdown)
+        def environment(name, prefix):
+            return {
+                **os.environ,
+                prefix + "CLISTREAM_SESSION": sid,
+                prefix + "CLISTREAM_PARTICIPANT": name,
+                prefix + "CLISTREAM_FIXTURE": f"http://127.0.0.1:{service.server_port}{routes[name]}",
             }
-            seen = set()
-            until = time.monotonic() + 90
-            with selectors.DefaultSelector() as sel:
-                sel.register(observer.stdout, selectors.EVENT_READ)
-                while seen != expected:
-                    self.assertTrue(
-                        sel.select(max(0, until - time.monotonic())),
-                        "waiting for all three Apple clients",
-                    )
-                    record = observer.stdout.readline()
-                    self.assertIn(record, expected)
-                    seen.add(record)
-            observer.stdin.write(b"hosted-cli-echo\n")
-            for job in jobs:
-                job.result()
+
+        mac = None
+        records = {}
+        ready_lines = set()
+        with selectors.DefaultSelector() as sel:
+            sel.register(observer.stdout, selectors.EVENT_READ)
+            for name in routes:
+                if name in self.devices:
+                    udid = self.devices[name]
+                    # Launch each client as soon as its own runtime has migrated.
+                    print("Booting", name, flush=True)
+                    subprocess.run(["xcrun", "simctl", "bootstatus", udid, "-b"], check=True)
+                    subprocess.run(["xcrun", "simctl", "install", udid, self.package], check=True)
+                    container = subprocess.check_output(
+                        ["xcrun", "simctl", "get_app_container", udid, self.mobile_id, "data"], text=True
+                    ).strip()
+                    records[name] = Path(container) / "tmp" / f"shared-{sid}.json"
+                    subprocess.run(["xcrun", "simctl", "launch", "--terminate-running-process", udid,
+                                    self.mobile_id], env=environment(name, "SIMCTL_CHILD_"),
+                                   check=True, timeout=480)
+                    self.addCleanup(subprocess.run, ["xcrun", "simctl", "terminate", udid, self.mobile_id],
+                                    capture_output=True)
+                else:
+                    with (self.base / "mac.log").open("wb") as log:
+                        mac = self.spawn([
+                            "xcodebuild", "-quiet", "test-without-building", *self.mac_options,
+                            "-only-testing:CLIStream-MacTests/ClientTests/testSharedPipe",
+                            "-parallel-testing-enabled", "NO", "-resultBundlePath", str(reports / "mac.xcresult"),
+                        ], env=environment("mac", "TEST_RUNNER_"), cwd=APP, stdout=log, stderr=log)
+                deadline = time.monotonic() + 600
+                while not sel.select(1):
+                    if mac is not None:
+                        self.assertIsNone(mac.poll(), f"Mac test exited before {name} attached")
+                    if name in records and records[name].exists():
+                        self.fail(f"{name}: {json.loads(records[name].read_text()).get('failedStage')}")
+                    self.assertLess(time.monotonic(), deadline, f"{name} did not attach")
+                line = observer.stdout.readline()
+                self.assertEqual(line, f"out:ready-{name}\n".encode())
+                ready_lines.add(line)
+                print(name, "attached to child", flush=True)
+
+        # Only release the writers after all four clients are attached.
+        observer.stdin.write(b"hosted-cli-echo\n")
+        writers = [*routes, "cli"]
+        for name, record in records.items():
+            deadline = time.monotonic() + 120
+            while not record.exists():
+                self.assertLess(time.monotonic(), deadline, f"{name} did not record all writers")
+                time.sleep(0.2)
+            received = json.loads(record.read_text())
+            self.assertNotIn("failedStage", received, name)
+            for channel, prefix in [("stdout", "out"), ("stderr", "err")]:
+                echoes = [s for s in received[channel].splitlines() if s.startswith(prefix + ":hosted-")]
+                self.assertCountEqual(echoes, [f"{prefix}:hosted-{writer}-echo" for writer in writers])
+            (reports / f"{name}.json").write_text(json.dumps({
+                "device": name, "writers": writers, **received,
+            }, indent=2) + "\n")
+        self.assertEqual(mac.wait(timeout=240), 0, "Mac XCTest failed")
+        summary = json.loads(subprocess.check_output([
+            "xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(reports / "mac.xcresult")
+        ]))
+        self.assertEqual((summary["passedTests"], summary["skippedTests"], summary["failedTests"]), (1, 0, 0))
         child.stdin.close()
         self.assertEqual(child.wait(8), 0)
         stdout, stderr = observer.communicate(timeout=8)
         self.assertEqual(observer.returncode, 0)
-        self.assertEqual(stdout, b"out:hosted-cli-echo\n")
-        expected.add(stdout)
-        self.assertEqual(set(child.stdout.read().splitlines(keepends=True)), expected)
+        echoes = [f"out:hosted-{name}-echo\n".encode() for name in writers]
+        self.assertCountEqual(stdout.splitlines(keepends=True), echoes)
+        expected = ready_lines.union(echoes)
+        self.assertCountEqual(child.stdout.read().splitlines(keepends=True), expected)
         errors = {entry.replace(b"out:", b"err:", 1) for entry in expected}
-        self.assertEqual(set(stderr.splitlines(keepends=True)), errors)
-        self.assertEqual(set(child.stderr.read().splitlines(keepends=True)), errors)
-        print("Verified four simultaneous clients. XCTest results in", reports, flush=True)
+        self.assertCountEqual(stderr.splitlines(keepends=True), errors)
+        self.assertCountEqual(child.stderr.read().splitlines(keepends=True), errors)
+        print("Verified four simultaneous clients. Results in", reports, flush=True)
 
 
 if __name__ == "__main__":

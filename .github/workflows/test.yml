@@ -1,5 +1,11 @@
 name: Test
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -15,3 +21,70 @@ jobs:
         with:
           go-version-file: go.mod
       - run: make test e2e
+      - name: Test the native release archive
+        run: |
+          make dist
+          python3 tests/distribution.py "dist/clistream-$(go env GOOS)-$(go env GOARCH).tar.gz"
+      - if: runner.os == 'Linux'
+        run: make test-deployment
+  apple:
+    strategy:
+      fail-fast: false
+      matrix:
+        device: [macOS, iPhone, iPad, shared]
+    runs-on: macos-26
+    # A cold iOS runtime must finish migrating before the per-case watchdogs start.
+    timeout-minutes: ${{ matrix.device == 'shared' && 65 || 50 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: command -v xcodegen || brew install xcodegen
+      - name: Install the simulator input test tool
+        if: matrix.device == 'iPad' || matrix.device == 'iPhone'
+        run: |
+          mkdir -p "$RUNNER_TEMP/simulator-hid"
+          cd "$RUNNER_TEMP/simulator-hid"
+          curl -fsSLo axe.tgz https://github.com/cameroncooke/AXe/releases/download/v2.1.1/AXe-macOS-v2.1.1-universal.tar.gz
+          echo '8788838b1b32059d143cf06541b72fcaead85c16274457cdbff086510a5b17fa  axe.tgz' | shasum -a 256 -c -
+          tar -xzf axe.tgz
+          echo "$PWD" >> "$GITHUB_PATH"
+      - run: make apple
+      - name: Run app-hosted and UI tests
+        env:
+          DEVICE: ${{ matrix.device }}
+        run: |
+          simulator() {
+            xcrun simctl list devices available --json | jq -er --arg device "$1" '
+              [.devices["com.apple.CoreSimulator.SimRuntime.iOS-26-4"][] |
+               select(.name == $device)][0].udid // error("missing iOS 26.4 simulator")'
+          }
+          phone="iPhone 17 Pro"
+          pad="iPad Pro 13-inch (M5)"
+          case "$DEVICE" in
+            macOS) apple/test-device.sh macOS ;;
+            shared)
+              IPHONE_SIMULATOR_ID="$(simulator "$phone")" IPAD_SIMULATOR_ID="$(simulator 'iPad mini (A17 Pro)')" python3 apple/test-shared.py ;;
+            iPhone) SIMULATOR_ID="$(simulator "$phone")" apple/test-device.sh ;;
+            iPad) SIMULATOR_ID="$(simulator "$pad")" apple/test-device.sh ;;
+          esac
+      - name: Record individual XCTest outcomes
+        if: always()
+        run: |
+          mkdir -p results
+          for mobile in apple/build/shared-*/*.json; do
+            [[ -f "$mobile" ]] && cp "$mobile" results/
+          done
+          for bundle in apple/build/results-*/*.xcresult apple/build/shared-*/*.xcresult; do
+            [[ -f "$bundle/Info.plist" ]] || continue
+            report="results/$(basename "$bundle" .xcresult).json"
+            python3 apple/report-tests.py "$bundle" results > "$report"
+            cat "$report"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apple-${{ matrix.device }}-tests
+          path: results/
+          if-no-files-found: ignore

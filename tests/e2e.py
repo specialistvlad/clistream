@@ -90,8 +90,8 @@ class BrokerFixture(unittest.TestCase):
         p = subprocess.Popen(
             args,
             stdin=kw.pop("stdin", subprocess.PIPE),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=kw.pop("stdout", subprocess.PIPE),
+            stderr=kw.pop("stderr", subprocess.PIPE),
             bufsize=0,
             **kw,
         )
@@ -207,6 +207,11 @@ class Live(BrokerFixture):
 
     def test_files(self):
         _, sid = self.session([], ["/bin/cat"])
+        viewer = self.spawn(self.b + ["attach", sid])
+        def echo(marker):
+            viewer.stdin.write(marker)
+            self.assertEqual(line(viewer.stdout), marker)
+        echo(b"before-workspace-change\n")
         data = os.urandom(180015)
         source = self.base / "source"
         source.write_bytes(data)
@@ -219,6 +224,10 @@ class Live(BrokerFixture):
         self.assertEqual(target.read_bytes(), data)
         files = self.run_cli(self.b + ["ls", sid, "folder"]).stdout
         self.assertEqual(json.loads(files)["Name"], "file")
+        (self.work / "folder" / "local-change").touch()
+        refreshed = self.run_cli(self.b + ["ls", sid, "folder"]).stdout.splitlines()
+        self.assertEqual({json.loads(row)["Name"] for row in refreshed}, {"file", "local-change"})
+        echo(b"after-workspace-change\n")
         for name in ["../source", "/etc/passwd", "escape/source", "hardlink"]:
             self.assertNotEqual(
                 self.run_cli(
@@ -269,6 +278,10 @@ class Live(BrokerFixture):
             for f in (echo_tcp, echo_udp):
                 threading.Thread(target=f, daemon=True).start()
             _, sid = self.session(exports, ["/bin/cat"])
+            refused = self.run_cli(
+                self.a + ["forward", sid, "unlisted", "127.0.0.1:0"], check=False
+            )
+            self.assertNotEqual(refused.returncode, 0)
             for proto, kind in [
                 ("tcp", socket.SOCK_STREAM),
                 ("udp", socket.SOCK_DGRAM),
@@ -327,6 +340,85 @@ class Live(BrokerFixture):
         ):
             return executable
         return None
+
+    def test_driver_catalog(self):
+        unpaired = self.base / "unused-profile"
+        result = self.run_cli([SUP, "-state", unpaired, "-drivers"])
+        self.assertFalse(unpaired.exists())
+        drivers = json.loads(result.stdout)
+        for name, version, default in [
+            ("generic", None, "pipe"),
+            ("codex", "0.170.0", "pty"),
+            ("claude", "2.1.329", "pty"),
+        ]:
+            release = next(r for r in drivers[name] if r.get("version") == version)
+            self.assertEqual(release["defaultMode"], default)
+            self.assertEqual(set(release["modes"]), {"pipe", "pty"})
+
+    def test_unsupported_version_and_generic_override(self):
+        exe = self.work / "codex"
+        exe.write_text(
+            "#!/bin/sh\nif test \"$1\" = --version; then echo 'codex-cli 0.0.0'; else exec cat; fi\n"
+        )
+        exe.chmod(0o700)
+        refused = self.run_cli(self.supervisor + ["--", exe], check=False)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn(b"-driver generic", refused.stderr)
+        _, sid = self.session(["-driver", "generic", "-local-input=false"], [exe])
+        item = next(
+            x
+            for x in json.loads(self.run_cli(self.a + ["list"]).stdout)
+            if x["ID"] == sid
+        )
+        self.assertEqual((item["Driver"], item["Mode"]), ("generic", "pipe"))
+        remote = self.spawn(self.a + ["-eof", "attach", sid])
+        stdout, _ = remote.communicate(b"override works\n", timeout=8)
+        self.assertEqual((remote.returncode, stdout), (0, b"override works\n"))
+
+    def test_interactive_driver_terminals(self):
+        tested = []
+        for name in ("claude", "codex"):
+            executable = self.supported_executable(name)
+            if not executable:
+                continue
+            with self.subTest(name=name):
+                config = self.base / (name + "-profile")
+                config.mkdir()
+                env = {
+                    **os.environ,
+                    "TERM": "xterm-256color",
+                    "CLAUDE_CONFIG_DIR": str(config),
+                    "CODEX_HOME": str(config),
+                    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+                }
+                _, sid = self.session(["-local-input=false"], [executable], env=env)
+                row = next(
+                    s
+                    for s in json.loads(self.run_cli(self.a + ["list"]).stdout)
+                    if s["ID"] == sid
+                )
+                self.assertEqual((row["Driver"], row["Mode"]), (name, "pty"))
+                remote = self.spawn(self.a + ["attach", sid])
+                output = bytearray()
+                until = time.monotonic() + 20
+                with selectors.DefaultSelector() as sel:
+                    sel.register(remote.stdout, selectors.EVENT_READ)
+                    while name.encode() not in output.lower() or b"\x1b[" not in output:
+                        self.assertTrue(
+                            sel.select(max(0, until - time.monotonic())),
+                            "missing interactive startup screen",
+                        )
+                        packet = os.read(remote.stdout.fileno(), 8192)
+                        self.assertTrue(
+                            packet, "interactive CLI closed before rendering"
+                        )
+                        output.extend(packet)
+                        if b"\x1b[6n" in packet:
+                            remote.stdin.write(b"\x1b[1;1R")
+                remote.stdin.write(b"\x03")
+                tested.append(name)
+        if not tested:
+            self.skipTest("supported CLI executables unavailable")
 
     def test_detected_drivers(self):
         found = 0

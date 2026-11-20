@@ -1,74 +1,588 @@
 import XCTest
 
+#if os(iOS)
+  import UIKit
+#endif
+
 final class SessionTests: XCTestCase {
-  func testPairAndUseSession() throws {
-    continueAfterFailure = false
+  @MainActor func testPairAndUseSession() async throws {
     let env = ProcessInfo.processInfo.environment
-    let link = try XCTUnwrap(env["CLISTREAM_LINK"].flatMap(URL.init(string:)))
-    let id = try XCTUnwrap(env["CLISTREAM_SESSION"])
     let name = try XCTUnwrap(env["CLISTREAM_FILENAME"])
-    let app = XCUIApplication()
-    app.launch()
-    app.open(link)
-    tap(app.buttons["Pair device"])
-    tap(app.buttons["session-" + id])
+    let app = try await pairedApp(session: "CLISTREAM_SESSION")
     for port in ["tcp", "udp"] {
       tap(app.buttons["Forward " + port])
-      XCTAssertTrue(
-        app.staticTexts.matching(
-          NSPredicate(
-            format: "label BEGINSWITH %@ OR value BEGINSWITH %@", "127.0.0.1:", "127.0.0.1:")
-        ).firstMatch.waitForExistence(timeout: 8))
+      let address = app.staticTexts["forward-address-" + port]
+      assertText("127.0.0.1:", in: address)
       tap(app.buttons["Stop " + port])
     }
     let input = app.textFields["session-input"]
-    tap(input)
-    input.typeText("apple-client-echo\n")
-    for ch in ["out:", "err:"] {
-      XCTAssertTrue(
-        app.staticTexts.matching(
-          NSPredicate(
-            format: "label CONTAINS %@ OR value CONTAINS %@", ch + "apple-client-echo",
-            ch + "apple-client-echo")
-        ).firstMatch.waitForExistence(timeout: 10))
+    #if os(macOS)
+      input.typeText("echo\n")
+    #else
+      tap(input)
+      XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 12))
+      input.typeText("echo")
+      assertText("echo", in: input)
+      tap(app.buttons["Send"])
+    #endif
+    func output(_ title: String) -> XCUIElement {
+      #if os(macOS)
+        return app.descendants(matching: .any)["pipe-" + title].firstMatch
+      #else
+        return app.textViews[title]
+      #endif
     }
-    tap(app.buttons["Files"])
-    tap(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", name)).firstMatch)
-    // Save the remote file through the system document picker, then re-import it
-    // from Recents into another remote directory. The fixture checks the bytes.
+    assertText("out:echo", in: output("Standard output"))
+    assertText("err:echo", in: output("Standard error"))
+    #if os(macOS)
+      app.typeKey("e", modifierFlags: [.command])
+      XCTAssertTrue(app.buttons["Upload"].waitForExistence(timeout: 10))
+      app.typeKey(.escape, modifierFlags: [])
+      input.typeText("keyboard-return\n")
+      app.typeKey("e", modifierFlags: [.command])
+    #else
+      tap(app.buttons["Files"])
+    #endif
+    openEntry(name + ".txt", in: app)
+    // Save through the system document picker, then re-import the same local
+    // file into another remote directory. The fixture checks the bytes.
     #if os(macOS)
       let saved = try XCTUnwrap(env["CLISTREAM_SAVE_DIR"])
       choosePath(saved, in: app)
       tap(app.buttons["OKButton"])
     #else
+      let storage = UIDevice.current.userInterfaceIdiom == .pad ? "On My iPad" : "On My iPhone"
+      let storageRow = app.cells[storage].firstMatch
+      let usedSidebar = storageRow.waitForExistence(timeout: 3) && storageRow.isHittable
+      if usedSidebar { storageRow.tap() }
       tap(app.buttons["Save"])
     #endif
-    tap(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "inbox")).firstMatch)
+    let completion = "Downloaded " + name + ".txt"
+    XCTAssertTrue(
+      app.staticTexts.matching(
+        NSPredicate(format: "label == %@ OR value == %@", completion, completion)
+      )
+      .firstMatch.waitForExistence(timeout: 12))
+    openEntry("inbox", in: app)
+    openEntry("nested", in: app)
+    #if os(macOS)
+      app.typeKey(.escape, modifierFlags: [])
+      app.typeKey("e", modifierFlags: [.command])
+    #else
+      tap(app.buttons["Done"])
+      tap(app.buttons["Files"])
+    #endif
+    XCTAssertTrue(app.buttons["Upload"].waitForExistence(timeout: 8))
+    tap(app.buttons["Upload"])
+    #if os(macOS)
+      XCTAssertTrue(app.buttons["OKButton"].firstMatch.waitForExistence(timeout: 10))
+      app.typeKey(.escape, modifierFlags: [])
+    #else
+      tap(app.buttons["Cancel"])
+    #endif
     tap(app.buttons["Upload"])
     #if os(macOS)
       choosePath(saved + "/" + name + ".txt", in: app)
       tap(app.buttons["OKButton"])
     #else
-      let recents = app.buttons["Recents"]
-      if recents.waitForExistence(timeout: 3) { recents.tap() }
-      let pickerFile = app.descendants(matching: .any).matching(
-        NSPredicate(format: "label BEGINSWITH %@", name)
-      ).firstMatch
-      tap(pickerFile)
-      let open = app.buttons["Open"]
-      if open.exists { open.tap() }
+      let browser = app.collectionViews.matching(identifier: "File View")
+      let fileMatches = app.cells.matching(NSPredicate(format: "label BEGINSWITH %@", name))
+      func visible(_ query: XCUIElementQuery) -> XCUIElement? {
+        query.allElementsBoundByIndex.first { element in
+          let frame = element.frame
+          return !frame.isEmpty && app.frame.contains(CGPoint(x: frame.midX, y: frame.midY))
+            && element.isHittable
+        }
+      }
+      let cancel = app.buttons["Cancel"].firstMatch
+      XCTAssertTrue(cancel.waitForExistence(timeout: 12))
+      if usedSidebar {
+        tap(storageRow)
+      } else if visible(fileMatches) == nil {
+        let browse = app.buttons["Browse"].firstMatch
+        if browse.exists && browse.isHittable { browse.tap() }
+        if !storageRow.exists && browse.exists && browse.isHittable { browse.tap() }
+        if storageRow.exists && storageRow.isHittable { storageRow.tap() }
+      }
+      // Files retains offscreen pages and cells in its accessibility hierarchy.
+      // Resolve the visible result after navigation, scrolling the active grid
+      // when the same simulator has accumulated earlier exports.
+      let browserReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+        visible(browser) != nil
+      }, object: nil)
+      XCTAssertEqual(XCTWaiter.wait(for: [browserReady], timeout: 12), .completed)
+      let grid = try XCTUnwrap(visible(browser), "Files did not show a document grid")
+      if !(grid.value as? String ?? "").localizedCaseInsensitiveContains("list") {
+        let modes = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "DOC.itemCollectionMenuButton.")).firstMatch
+        let options = modes.exists && modes.isHittable ? modes : app.buttons["OverflowBarButtonItem"].firstMatch
+        tap(options)
+        tap(app.descendants(matching: .any)["List"].firstMatch)
+        let list = XCTNSPredicateExpectation(
+          predicate: NSPredicate(format: "value CONTAINS[c] %@", "List"), object: grid)
+        XCTAssertEqual(XCTWaiter.wait(for: [list], timeout: 12), .completed)
+      }
+      var file = visible(fileMatches)
+      for _ in 0..<12 where file == nil {
+        grid.swipeUp()
+        file = visible(fileMatches)
+      }
+      let document = try XCTUnwrap(file, "Exported document was absent from the visible Files grid")
+      // Files can keep rows behind its sticky header in the accessibility tree.
+      let anchor = app.coordinate(withNormalizedOffset: .zero)
+      let content = grid.frame.intersection(app.frame)
+      var top = content.minY
+      var bottom = content.maxY
+      let header = app.navigationBars["FullDocumentManagerViewControllerNavigationBar"]
+      for bar in [header, app.searchFields["Search"].firstMatch] where bar.exists {
+        let rect = bar.frame
+        if rect.intersects(content) && rect.maxY < content.midY {
+          top = max(top, rect.maxY + 4)
+        }
+      }
+      for bar in [app.buttons["Browse"].firstMatch, app.keyboards.firstMatch] where bar.exists {
+        let rect = bar.frame
+        if rect.intersects(content) && rect.minY > content.minY + content.height * 0.3 {
+          bottom = min(bottom, rect.minY - 4)
+        }
+      }
+      let viewport = CGRect(x: content.minX, y: top, width: content.width, height: max(0, bottom - top))
+      let row = document.frame.intersection(viewport)
+      if row.width < 8 || row.height < 8 {
+        attachFixtureImage(grid, named: "Fixture document grid")
+        XCTFail("No visible portion of the document inside \(viewport)")
+      }
+      let filename = document.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+      let title = filename.exists ? filename.frame.intersection(row) : CGRect.null
+      let point = CGPoint(x: title.width > 4 ? title.midX : row.midX, y: row.midY)
+      let target = anchor.withOffset(CGVector(dx: point.x - anchor.screenPoint.x,
+                                              dy: point.y - anchor.screenPoint.y))
+      let delivery = try await fixtureResponse("DOCUMENT", at: point)
+      XCTAssertEqual(delivery, "delivered")
+      let open = app.buttons["Open"].firstMatch
+      if !cancel.waitForNonExistence(timeout: 3) {
+        if open.exists && open.isHittable && open.isEnabled {
+          open.tap()
+        } else if visible(fileMatches) != nil {
+          target.press(forDuration: 1.1)
+          if open.waitForExistence(timeout: 3) && open.isHittable && open.isEnabled {
+            open.tap()
+          } else {
+            target.tap()
+          }
+        }
+        if !cancel.waitForNonExistence(timeout: 15) {
+          if grid.exists { attachFixtureImage(grid, named: "Fixture document grid") }
+          XCTFail("Files did not return the document (selected: \(document.exists && document.isSelected), open: \(open.exists), alert: \(app.alerts.firstMatch.exists))")
+        }
+      }
     #endif
     XCTAssertTrue(
       app.staticTexts.matching(
         NSPredicate(
           format: "label == %@ OR value == %@", "Uploaded " + name + ".txt",
           "Uploaded " + name + ".txt")
-      ).firstMatch.waitForExistence(timeout: 15), app.debugDescription)
-    tap(app.buttons["Up"])
+      ).firstMatch.waitForExistence(timeout: 15),
+      "Upload completion was missing in the restored nested folder")
+    #if os(macOS)
+      tap(app.buttons["Up"])
+    #else
+      let browse = app.navigationBars["nested"]
+      XCTAssertTrue(browse.waitForExistence(timeout: 8))
+      browse.buttons.element(boundBy: 0).tap()
+    #endif
     tap(app.buttons["Done"])
+    assertText("out:workspace-finished", in: output("Standard output"))
+    tap(app.buttons["EOF"])
+    XCTAssertTrue(app.staticTexts["Process exited with status 0"].waitForExistence(timeout: 12))
     tap(app.buttons["Detach"])
-    tap(app.buttons["Refresh"])
-    XCTAssertTrue(app.buttons["session-" + id].waitForExistence(timeout: 10))
+  }
+
+  @MainActor func testTerminalInput() async throws {
+    #if os(iOS)
+      let initialOrientation = XCUIDevice.shared.orientation
+      XCUIDevice.shared.orientation = .portrait
+      defer { if initialOrientation != .unknown { XCUIDevice.shared.orientation = initialOrientation } }
+    #endif
+    let app = try await pairedApp(session: "CLISTREAM_UI_PTY")
+    let view = app.descendants(matching: .any)["session-terminal"].firstMatch
+    XCTAssertTrue(view.waitForExistence(timeout: 10), app.debugDescription)
+    let rendered = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value CONTAINS %@", "COPYME terminal"), object: view)
+    XCTAssertEqual(XCTWaiter.wait(for: [rendered], timeout: 10), .completed)
+    let origin = view.coordinate(withNormalizedOffset: .zero)
+    let cell = origin.withOffset(CGVector(dx: 4, dy: 4))
+    #if os(macOS)
+      cell.click()
+      let window = app.windows.firstMatch
+      let corner = window.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 1))
+        .withOffset(CGVector(dx: -2, dy: -2))
+      corner.click(forDuration: 0.1, thenDragTo: corner.withOffset(CGVector(dx: -96, dy: -48)))
+      view.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 4, dy: 4)).click()
+    #else
+      cell.tap()
+      assertText("pointer-1", in: view)
+      if UIDevice.current.userInterfaceIdiom == .pad {
+        let result = try await fixtureResponse("HID")
+        XCTAssertEqual(result, "delivered")
+      }
+      for name in ["Up Arrow", "Down Arrow", "Right Arrow", "Left Arrow", "Escape"] {
+        tap(app.buttons["Keys"])
+        tap(app.buttons[name])
+      }
+      tap(app.buttons["Keys"])
+      tap(app.buttons["Control Key"])
+      tap(app.buttons["Control-C"])
+      // A windowed iPad can keep its horizontal size class through rotation.
+      // Start with the software keyboard up and measure both grid dimensions.
+      tap(app.buttons["Keys"])
+      tap(app.buttons["Show Keyboard"])
+      XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+      let portrait = view.frame.size
+      let firstGrid = try await fixtureResponse("GRID")
+      XCUIDevice.shared.orientation = .landscapeLeft
+      tap(app.buttons["Keys"])
+      tap(app.buttons["Hide Keyboard"])
+      XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
+      let resized = XCTNSPredicateExpectation(
+        predicate: NSPredicate { _, _ in
+          let size = view.frame.size
+          return abs(size.width - portrait.width) > 1 || abs(size.height - portrait.height) > 1
+        }, object: view)
+      XCTAssertEqual(XCTWaiter.wait(for: [resized], timeout: 15), .completed)
+      let resizedGrid = try await fixtureResponse("RESIZED")
+      XCTAssertNotEqual(firstGrid, resizedGrid, "The child PTY kept its original grid")
+      let rotated = view.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 4, dy: 4))
+      rotated.tap()
+      assertText("pointer-2", in: view)
+      if UIDevice.current.userInterfaceIdiom == .pad {
+        rotated.click()
+        assertText("pointer-3", in: view)
+      }
+    #endif
+    tap(app.buttons["Detach"])
+  }
+
+  #if os(iOS)
+    #if compiler(>=6.4)
+      @available(iOS 27.0, *)
+      @MainActor func testVoiceOverWorkspaceOrder() async throws {
+        let voice = XCUIDevice.shared.voiceOverService
+        let initiallyEnabled = voice.isEnabled
+        addTeardownBlock { @MainActor in
+          if initiallyEnabled && !voice.isEnabled { try voice.enable() }
+          if !initiallyEnabled && voice.isEnabled { try voice.disable() }
+        }
+        if initiallyEnabled { try voice.disable() }
+        let app = try await pairedApp(session: "CLISTREAM_SESSION")
+        tap(app.buttons["Files"])
+        openEntry("inbox", in: app)
+        XCTAssertTrue(app.navigationBars["inbox"].waitForExistence(timeout: 8))
+        try voice.enable()
+        XCTAssertTrue(voice.isEnabled)
+        // VoiceOver may enable with no focused element. Start by exploring
+        // the folder heading, then use the screen reader's next action.
+        app.navigationBars["inbox"].staticTexts["inbox"].firstMatch.tap()
+        var readings = [String]()
+        let focus = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+          guard let speech = try? voice.currentSpeech() else { return false }
+          return !speech.utterance.isEmpty
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [focus], timeout: 12), .completed)
+        readings.append(try voice.currentSpeech().utterance)
+        var deliveryRetries = 0
+        for _ in 0..<20 {
+          do {
+            readings.append(try voice.moveForward().utterance)
+          } catch let error as NSError where error.domain == "AXVoiceOverAutomationErrorDomain"
+            && error.code == 3 && deliveryRetries < 3
+          {
+            deliveryRetries += 1
+            try await Task.sleep(for: .milliseconds(500))
+            continue
+          }
+          if ["nested", "Upload", "Done"].allSatisfy({ label in
+            readings.contains { $0.localizedCaseInsensitiveContains(label) }
+          }) {
+            break
+          }
+        }
+        for label in ["nested", "Upload", "Done"] {
+          XCTAssertTrue(
+            readings.contains { $0.localizedCaseInsensitiveContains(label) },
+            "Missing \(label) in VoiceOver focus order: \(readings)")
+        }
+      }
+    #endif
+
+    @MainActor func testScrollSessionsAndTerminalHistory() async throws {
+      let app = try await pairedApp(session: "CLISTREAM_UI_PTY", scrollList: true)
+      let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
+      assertText("scroll-ready", in: terminal)
+      tap(app.buttons["Keys"])
+      tap(app.buttons["Hide Keyboard"])
+      XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 12))
+      let started = try await fixtureResponse("HISTORY")
+      XCTAssertEqual(started, "released")
+      let tail = NSPredicate(format: "value CONTAINS %@", "history-end")
+      XCTAssertEqual(
+        XCTWaiter.wait(
+          for: [XCTNSPredicateExpectation(predicate: tail, object: terminal)],
+          timeout: 20), .completed, "The live terminal did not display the final history marker")
+      let start = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+      let end = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85))
+      start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
+      let history = NSPredicate(
+        format: "value CONTAINS %@ AND NOT (value CONTAINS %@)", "history-", "history-end")
+      XCTAssertEqual(
+        XCTWaiter.wait(
+          for: [XCTNSPredicateExpectation(predicate: history, object: terminal)],
+          timeout: 15), .completed, "A downward drag did not expose earlier terminal lines")
+      tap(app.buttons["Keys"])
+      tap(app.buttons["Show Keyboard"])
+      XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 6))
+      tap(app.buttons["Detach"])
+    }
+
+    @MainActor func testTouchNavigationAndEditing() async throws {
+      let app = try await pairedApp(session: "CLISTREAM_SESSION", largeText: true)
+      let output = app.textViews["Standard output"]
+      assertText("copyword selection", in: output)
+      XCTAssertGreaterThan(output.frame.height, 35, "Pipe output must leave room for text selection")
+      let word = output.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 37, dy: 20))
+      let delivery = try await fixtureResponse("WORD", at: word.screenPoint)
+      XCTAssertEqual(delivery, "delivered")
+      let copyAction = app.descendants(matching: .any)["Copy"].firstMatch
+      if !copyAction.waitForExistence(timeout: 3) { word.doubleTap() }
+      if !copyAction.waitForExistence(timeout: 5) {
+        attachFixtureImage(output, named: "Fixture selection")
+      }
+      tap(copyAction)
+      let input = app.textFields["session-input"]
+      input.press(forDuration: 1)
+      tap(app.descendants(matching: .any)["Paste"].firstMatch)
+      tap(app.buttons["Send"])
+
+      // Use UIKit's text layout for these coordinates, including Dynamic Type
+      // and wrapping in a narrow split view. The OS owns the selection handles.
+      word.press(forDuration: 1)
+      let geometry = UITextView(frame: CGRect(origin: .zero, size: output.frame.size))
+      geometry.font = UIFontMetrics(forTextStyle: .body).scaledFont(
+        for: .monospacedSystemFont(ofSize: 17, weight: .regular),
+        compatibleWith: UITraitCollection(preferredContentSizeCategory: .accessibilityLarge))
+      geometry.text = "copyword selection"
+      geometry.layoutIfNeeded()
+      func point(after offset: Int, handle: Bool) throws -> XCUICoordinate {
+        let pos = try XCTUnwrap(
+          geometry.position(from: geometry.beginningOfDocument, offset: offset))
+        let caret = geometry.caretRect(for: pos)
+        return output.coordinate(withNormalizedOffset: .zero).withOffset(
+          CGVector(dx: caret.midX, dy: handle ? caret.maxY + 3 : caret.midY))
+      }
+      let handle = try point(after: 8, handle: true)
+      handle.press(
+        forDuration: 0.15, thenDragTo: try point(after: 18, handle: false),
+        withVelocity: .slow, thenHoldForDuration: 0.2)
+      let copy = app.descendants(matching: .any)["Copy"].firstMatch
+      if !copy.waitForExistence(timeout: 2) { word.tap() }
+      tap(copy)
+      input.press(forDuration: 1)
+      tap(app.descendants(matching: .any)["Paste"].firstMatch)
+      tap(app.buttons["Send"])
+      tap(app.buttons["Files"])
+      openEntry("inbox", in: app)
+      openEntry("nested", in: app)
+      let fileRow = NSPredicate(format: "identifier BEGINSWITH %@", "entry-row-")
+      let list = app.collectionViews.containing(fileRow).firstMatch
+      XCTAssertTrue(list.waitForExistence(timeout: 8))
+      let edge = list.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.5))
+      edge.press(
+        forDuration: 0.05, thenDragTo: edge.withOffset(CGVector(dx: 22, dy: 0)),
+        withVelocity: .slow, thenHoldForDuration: 0.5)
+      XCTAssertTrue(app.navigationBars["nested"].exists)
+      edge.press(
+        forDuration: 0.05,
+        thenDragTo: list.coordinate(
+          withNormalizedOffset:
+            CGVector(dx: 0.85, dy: 0.5)), withVelocity: .fast, thenHoldForDuration: 0)
+      XCTAssertTrue(app.navigationBars["inbox"].waitForExistence(timeout: 5))
+      try app.performAccessibilityAudit(for: [
+        .sufficientElementDescription, .contrast, .dynamicType,
+      ])
+      // Test vertical scrolling separately so its deceleration cannot consume
+      // the first horizontal swipe of the back-navigation check.
+      openEntry("nested", in: app)
+      let firstFile = list.buttons["entry-row-000"]
+      XCTAssertTrue(firstFile.waitForExistence(timeout: 8))
+      let firstY = firstFile.frame.midY
+      list.swipeUp()
+      let scrolled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+        !firstFile.exists || firstFile.frame.midY < firstY - 20
+      }, object: firstFile)
+      XCTAssertEqual(XCTWaiter.wait(for: [scrolled], timeout: 10), .completed)
+      XCTAssertTrue(app.navigationBars["nested"].exists)
+      // The contrast audit samples pixels. Wait until scrolling and the
+      // system scroll indicator finish animating before taking its snapshot.
+      var previousImage: Data?
+      let atRest = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+        let image = list.screenshot().pngRepresentation
+        defer { previousImage = image }
+        return previousImage == image
+      }, object: list)
+      XCTAssertEqual(XCTWaiter.wait(for: [atRest], timeout: 12), .completed)
+      // A list can extend beneath the navigation bar. Measure a filename in
+      // its unobstructed center, fully between the sheet's top and bottom bars.
+      let visibleArea = list.frame.insetBy(dx: 0, dy: list.frame.height * 0.2)
+      let row = try XCTUnwrap(list.buttons.matching(fileRow).allElementsBoundByIndex.first {
+        visibleArea.contains($0.frame) && $0.isHittable
+      })
+      try checkVisibleFilenameContrast(row)
+      tap(app.buttons["Done"])
+      tap(app.buttons["Detach"])
+    }
+  #endif
+
+  #if os(iOS)
+    private func attachFixtureImage(_ element: XCUIElement, named name: String) {
+      let attachment = XCTAttachment(screenshot: element.screenshot())
+      attachment.name = name
+      attachment.lifetime = .keepAlways
+      add(attachment)
+    }
+
+    // Measure the actual filename glyphs on the scrolled, rendered row. The
+    // platform audit can report even white text on a dark row near a nav bar.
+    private func checkVisibleFilenameContrast(_ row: XCUIElement) throws {
+      let source = try XCTUnwrap(row.screenshot().image.cgImage)
+      // Exclude the file icon, trailing file size and row separators.
+      let area = CGRect(x: CGFloat(source.width) * 0.15, y: CGFloat(source.height) * 0.22,
+                        width: CGFloat(source.width) * 0.33, height: CGFloat(source.height) * 0.56)
+      let crop = try XCTUnwrap(source.cropping(to: area))
+      let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+      let bitmap = try XCTUnwrap(CGContext(data: nil, width: crop.width, height: crop.height,
+        bitsPerComponent: 8, bytesPerRow: crop.width * 4, space: space,
+        bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue))
+      bitmap.draw(crop, in: CGRect(x: 0, y: 0, width: crop.width, height: crop.height))
+      let pixels = try XCTUnwrap(bitmap.data).assumingMemoryBound(to: UInt8.self)
+      let linear = (0...255).map { value -> Double in
+        let s = Double(value) / 255
+        return s <= 0.04045 ? s / 12.92 : pow((s + 0.055) / 1.055, 2.4)
+      }
+      var lightness = [Double]()
+      for index in stride(from: 0, to: crop.width * crop.height * 4, by: 4) {
+        lightness.append(0.2126 * linear[Int(pixels[index])]
+          + 0.7152 * linear[Int(pixels[index + 1])] + 0.0722 * linear[Int(pixels[index + 2])])
+      }
+      lightness.sort()
+      let contrast = (lightness[lightness.count * 98 / 100] + 0.05)
+        / (lightness[lightness.count * 2 / 100] + 0.05)
+      XCTAssertGreaterThanOrEqual(contrast, 4.5, "Rendered contrast for " + row.label)
+    }
+  #endif
+
+  @MainActor private func pairedApp(
+    session: String, largeText: Bool = false, scrollList: Bool = false
+  ) async throws
+    -> XCUIApplication
+  {
+    continueAfterFailure = false
+    let env = ProcessInfo.processInfo.environment
+    let id = try XCTUnwrap(env[session])
+    let app = XCUIApplication()
+    if largeText {
+      app.launchArguments += [
+        "-AppleInterfaceStyle", "Dark", "-UIPreferredContentSizeCategoryName",
+        "UICTContentSizeCategoryAccessibilityL",
+      ]
+    }
+    #if os(iOS)
+      XCUIDevice.shared.orientation = .portrait
+    #endif
+    app.launch()
+    let invitation = try await fixtureResponse("QR")
+    let link = try XCTUnwrap(URL(string: invitation))
+    if largeText {
+      app.open(link)
+      tap(app.buttons["Cancel"])
+    }
+    #if os(macOS)
+      if session == "CLISTREAM_SESSION" {
+        app.activate()
+        app.typeKey("k", modifierFlags: [.command])
+        let field = app.secureTextFields["Pairing link"].firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 12), "Pairing link field did not appear")
+        field.typeText(invitation)
+      } else {
+        app.open(link)
+      }
+      app.activate()
+      XCTAssertTrue(app.buttons["Pair device"].waitForExistence(timeout: 12))
+      if session == "CLISTREAM_SESSION" {
+        app.typeKey(.return, modifierFlags: [])
+      } else {
+        tap(app.buttons["Pair device"])
+      }
+    #else
+      app.open(link)
+      tap(app.buttons["Pair device"])
+    #endif
+    if largeText {
+      XCTAssertTrue(
+        app.descendants(matching: .any)["session-" + id].firstMatch.waitForExistence(timeout: 10))
+      app.open(link)
+      tap(app.buttons["Pair device"])
+      tap(app.alerts.buttons["OK"])
+    }
+    let target = app.descendants(matching: .any)["session-" + id].firstMatch
+    #if os(macOS)
+      XCTAssertTrue(
+        target.waitForExistence(timeout: 30), "New server sessions failed to load after pairing")
+      app.typeKey("r", modifierFlags: [.command])
+    #else
+      tap(app.buttons["Refresh"])
+    #endif
+    #if os(iOS)
+      if scrollList {
+        let list = app.collectionViews.firstMatch
+        let rows = list.buttons.matching(
+          NSPredicate(format: "identifier BEGINSWITH %@", "session-"))
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10))
+        func visible() -> Set<String> {
+          Set(rows.allElementsBoundByIndex.filter(\.isHittable).map(\.identifier))
+        }
+        let before = visible()
+        list.swipeUp()
+        XCTAssertFalse(before.isEmpty)
+        XCTAssertNotEqual(before, visible())
+        XCTAssertFalse(app.buttons["Files"].exists)
+        for _ in 0..<4 where !target.isHittable { list.swipeDown() }
+        for _ in 0..<12 where !target.isHittable { list.swipeUp() }
+      }
+    #endif
+    #if os(macOS)
+      if session == "CLISTREAM_SESSION" {
+        // This fixture advertises one pipe so the first keyboard selection
+        // identifies the same child that the independent CLI observes.
+        XCTAssertTrue(target.waitForExistence(timeout: 12))
+        app.typeKey("1", modifierFlags: [.command])
+        app.typeKey(.downArrow, modifierFlags: [])
+        XCTAssertTrue(app.textFields["session-input"].waitForExistence(timeout: 10))
+      } else {
+        tap(target)
+      }
+    #else
+      tap(target)
+    #endif
+    return app
+  }
+
+  private func openEntry(_ name: String, in app: XCUIApplication) {
+    #if os(macOS)
+      let entry = app.staticTexts[name].firstMatch
+      XCTAssertTrue(entry.waitForExistence(timeout: 10), app.debugDescription)
+      entry.doubleClick()
+    #else
+      tap(app.descendants(matching: .any)["entry-" + name].firstMatch)
+    #endif
   }
 
   #if os(macOS)
@@ -79,12 +593,34 @@ final class SessionTests: XCTestCase {
     }
   #endif
 
+  private func assertText(
+    _ text: String, in element: XCUIElement, file: StaticString = #filePath,
+    line: UInt = #line
+  ) {
+    XCTAssertTrue(element.waitForExistence(timeout: 10), file: file, line: line)
+    let predicate = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)
+    let appeared = XCTNSPredicateExpectation(predicate: predicate, object: element)
+    XCTAssertEqual(
+      XCTWaiter.wait(for: [appeared], timeout: 12), .completed,
+      "Missing " + text, file: file, line: line)
+  }
+
   private func tap(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
-    XCTAssertTrue(
-      element.waitForExistence(timeout: 12), XCUIApplication().debugDescription, file: file,
-      line: line)
     #if os(macOS)
-      element.click()
+      let app = XCUIApplication()
+      if app.state != .runningForeground { app.activate() }
+    #endif
+    XCTAssertTrue(element.waitForExistence(timeout: 12), file: file, line: line)
+    #if os(macOS)
+      // Sheets and toolbar buttons can disappear as soon as mouse-down fires.
+      // Resolve the hit point once so mouse-up can complete on the same window.
+      let anchor = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+      let target = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).screenPoint
+      anchor.withOffset(
+        CGVector(
+          dx: target.x - anchor.screenPoint.x,
+          dy: target.y - anchor.screenPoint.y)
+      ).click()
     #else
       element.tap()
     #endif

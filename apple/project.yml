@@ -8,7 +8,7 @@ options:
 packages:
   SwiftTerm:
     url: https://github.com/migueldeicaza/SwiftTerm.git
-    exactVersion: 1.13.0
+    exactVersion: 1.14.0
 settings:
   base:
     CLISTREAM_APP_ID: com.vlk.clistream
@@ -42,6 +42,16 @@ targets:
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1,2"
+  CLIStream-SharedTestHost:
+    templates: [Client]
+    platform: iOS
+    sources: [SharedTestSupport]
+    settings:
+      base:
+        PRODUCT_NAME: CLIStreamSharedTestHost
+        PRODUCT_BUNDLE_IDENTIFIER: com.vlk.clistream.shared-acceptance
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CLISTREAM_SHARED_TEST_HOST"
   CLIStream-macOS:
     templates: [Client]
     platform: macOS
@@ -53,7 +63,7 @@ targets:
   CLIStream-UITests:
     type: bundle.ui-testing
     platform: iOS
-    sources: [UITests]
+    sources: [UITests, TestSupport]
     dependencies:
       - target: CLIStream-iOS
     settings:
@@ -66,7 +76,7 @@ targets:
   CLIStream-MacUITests:
     type: bundle.ui-testing
     platform: macOS
-    sources: [UITests]
+    sources: [UITests, TestSupport]
     dependencies:
       - target: CLIStream-macOS
     settings:
@@ -79,7 +89,7 @@ targets:
   CLIStream-iOSTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [ClientTests]
+    sources: [ClientTests, TestSupport]
     dependencies:
       - target: CLIStream-iOS
     settings:
@@ -93,7 +103,7 @@ targets:
   CLIStream-MacTests:
     type: bundle.unit-test
     platform: macOS
-    sources: [ClientTests]
+    sources: [ClientTests, TestSupport]
     dependencies:
       - target: CLIStream-macOS
     settings:
@@ -105,6 +115,10 @@ targets:
         BUNDLE_LOADER: "$(TEST_HOST)"
         SWIFT_OBJC_BRIDGING_HEADER: ""
 schemes:
+  CLIStream-SharedTestHost:
+    build:
+      targets:
+        CLIStream-SharedTestHost: all
   CLIStream-macOS:
     build:
       targets:

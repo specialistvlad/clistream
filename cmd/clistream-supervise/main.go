@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -35,6 +36,7 @@ func run() (int, error) {
 	dir := flag.String("state", identity.Default("supervisor"), "identity directory")
 	mode := flag.String("mode", "auto", "auto, pipe or pty")
 	name := flag.String("driver", "auto", "auto, generic, codex or claude")
+	listDrivers := flag.Bool("drivers", false, "list supported CLI versions and execution modes as JSON")
 	pair := flag.Bool("pair", false, "read supervisor invitation from stdin")
 	addr := flag.String("server", "", "override paired host:port (same pinned key)")
 	local := flag.Bool("local-input", true, "forward local stdin (pipe EOF closes child stdin)")
@@ -50,6 +52,9 @@ func run() (int, error) {
 		return nil
 	})
 	flag.Parse()
+	if *listDrivers {
+		return 0, json.NewEncoder(os.Stdout).Encode(driver.Catalog())
+	}
 	if *pair {
 		var link string
 		if _, e := fmt.Fscanln(os.Stdin, &link); e != nil {

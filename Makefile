@@ -4,6 +4,7 @@ build:
 test:
 	go test -race ./...
 	go vet ./...
+	python3 tests/requirements.py
 e2e: build
 	python3 tests/e2e.py
 apple:
@@ -13,3 +14,7 @@ apple:
 .PHONY: dist
 dist:
 	python3 scripts/dist.py
+
+.PHONY: test-deployment
+test-deployment:
+	python3 tests/deployment.py

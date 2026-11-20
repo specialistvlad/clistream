@@ -8,7 +8,7 @@ import XCTest
 /// Runs in the built app on macOS or in the iOS simulator. All calls use its linked Go client.
 final class ClientTests: XCTestCase {
   func profile(_ fixture: String) async throws -> String {
-    let link = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_" + fixture + "_LINK"])
+    let link = try await fixtureResponse(fixture)
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
     let fields = ["Op": "pair", "Dir": dir.path, "Link": link]
@@ -60,7 +60,7 @@ final class ClientTests: XCTestCase {
   func testCLISpecificDrivers() async throws {
     let env = ProcessInfo.processInfo.environment
     try XCTSkipIf(
-      env["CLISTREAM_DRIVERS_LINK"] == nil,
+      env["CLISTREAM_CLAUDE_SESSION"] == nil,
       "Run with CLISTREAM_APP_DRIVERS=1 to start both installed model CLIs.")
     let dir = try await profile("DRIVERS")
     let list = try await request("list", ["Dir": dir])
@@ -171,12 +171,19 @@ final class ClientTests: XCTestCase {
     defer { _ = Core.call(["Op": "close", "Handle": key]) }
     let participant = ProcessInfo.processInfo.environment["CLISTREAM_PARTICIPANT"] ?? "apple"
     let names = participant == "apple" ? ["apple"] : ["iphone", "ipad", "mac", "cli"]
-    let payload = Data("hosted-\(participant)-echo\n".utf8)
-    _ = try await request("input", ["Handle": key, "Data": payload.base64EncodedString()])
+    func send(_ line: String) async throws {
+      _ = try await request("input", ["Handle": key, "Data": Data((line + "\n").utf8).base64EncodedString()])
+    }
+    var sent = names.count == 1
+    try await send(sent ? "hosted-\(participant)-echo" : "ready-\(participant)")
     var channels = [String: Data]()
-    try await consume(key, seconds: names.count == 1 ? 12 : 100) { event in
+    try await consume(key, seconds: names.count == 1 ? 12 : 1320) { event in
       if let ch = event.Channel, let data = event.Data {
         channels[ch, default: Data()].append(data)
+      }
+      if !sent, channels["stdout"]?.range(of: Data("out:hosted-cli-echo\n".utf8)) != nil {
+        try await send("hosted-\(participant)-echo")
+        sent = true
       }
       return names.allSatisfy { name in
         let stdout = Data("out:hosted-\(name)-echo\n".utf8)
@@ -188,9 +195,25 @@ final class ClientTests: XCTestCase {
   }
 
   @MainActor
+  func testLastInputBeforeDetach() async throws {
+    let model = Connection()
+    let link = try await fixtureResponse("FLUSH")
+    await model.pair(link)
+    let id = try session()
+    let item = try XCTUnwrap(model.sessions.first { $0.id == id })
+    let reader = Task { await model.attach(item) }
+    defer { model.leave(); reader.cancel() }
+    try await waitUntil { model.selected?.id == id }
+    model.send(["Op": "input", "Data": Data("before-detach\n".utf8).base64EncodedString()])
+    model.leave()
+    let result = try await fixtureResponse("FLUSHED")
+    XCTAssertEqual(result, "received")
+  }
+
+  @MainActor
   func testPTYRenderingKeyboardResizeAndExit() async throws {
     let model = Connection()
-    let link = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PTY_LINK"])
+    let link = try await fixtureResponse("PTY")
     await model.pair(link)
     let id = try session("PTY_SESSION")
     let item = try XCTUnwrap(model.sessions.first { $0.id == id })
@@ -204,6 +227,8 @@ final class ClientTests: XCTestCase {
     let delegate = TerminalDelegate(model)
     view.terminalDelegate = delegate
     model.install(view)
+    delegate.sizeChanged(source: view, newCols: 117, newRows: 0)
+    delegate.sizeChanged(source: view, newCols: 0, newRows: 39)
     delegate.sizeChanged(source: view, newCols: 117, newRows: 39)
     delegate.send(source: view, data: Array("measure\n".utf8)[...])
     try await waitUntil { model.status == "Process exited with status 23" }
@@ -223,7 +248,7 @@ final class ClientTests: XCTestCase {
   }
 
   /// Closing a handle unblocks a pending "next", including on a failed assertion.
-  private func consume(_ key: String, seconds: Int = 12, until complete: (Reply) -> Bool)
+  private func consume(_ key: String, seconds: Int = 12, until complete: (Reply) async throws -> Bool)
     async throws
   {
     let timer = Task {
@@ -233,7 +258,7 @@ final class ClientTests: XCTestCase {
     defer { timer.cancel() }
     while true {
       let event = try await request("next", ["Handle": key])
-      if complete(event) { return }
+      if try await complete(event) { return }
       if event.Exit != nil { throw POSIXError(.EPIPE) }
     }
   }

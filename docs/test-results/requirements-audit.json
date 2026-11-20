@@ -1,0 +1,655 @@
+{
+  "localDate": "2026-11-19",
+  "go": "go version go1.27.4 darwin/arm64",
+  "xcode": "Xcode 27.1 Build version 27A9275",
+  "cli": {
+    "passed": 20,
+    "skipped": {
+      "test_live_claude_task": "requires Claude provider quota"
+    },
+    "cases": {
+      "test_active_revocation": "passed",
+      "test_authorization": "passed",
+      "test_claude_with_emulated_provider": "passed",
+      "test_concurrent_uploads": "passed",
+      "test_detach_and_replay": "passed",
+      "test_detected_drivers": "passed",
+      "test_driver_catalog": "passed",
+      "test_files": "passed",
+      "test_interactive_driver_terminals": "passed",
+      "test_keystroke_latency": "passed",
+      "test_large_binary_stdio": "passed",
+      "test_live_claude_task": "skipped",
+      "test_live_codex_task": "passed",
+      "test_network_path": "passed",
+      "test_ports": "passed",
+      "test_pty": "passed",
+      "test_pty_resize": "passed",
+      "test_reconnect": "passed",
+      "test_retry_lost_handshake": "passed",
+      "test_shared_session": "passed",
+      "test_unsupported_version_and_generic_override": "passed"
+    }
+  },
+  "network": {
+    "durationSeconds": 120,
+    "verifiedRoundTrips": 2232,
+    "injectedDroppedDatagrams": 450,
+    "loopbackMedianKeyEchoMs": 2.31
+  },
+  "distribution": {
+    "darwin-amd64": {
+      "passed": 19,
+      "skipped": {
+        "test_live_claude_task": "requires Claude provider quota",
+        "test_live_codex_task": "requires authenticated Codex CLI"
+      }
+    },
+    "darwin-arm64": {
+      "passed": 19,
+      "skipped": {
+        "test_live_claude_task": "requires Claude provider quota",
+        "test_live_codex_task": "requires authenticated Codex CLI"
+      }
+    },
+    "linux-amd64": {
+      "passed": 16,
+      "skipped": {
+        "test_claude_with_emulated_provider": "requires the supported Claude Code version",
+        "test_detected_drivers": "Supported Claude Code and Codex CLI versions unavailable",
+        "test_interactive_driver_terminals": "supported CLI executables unavailable",
+        "test_live_claude_task": "requires Claude provider quota",
+        "test_live_codex_task": "requires authenticated Codex CLI"
+      }
+    },
+    "linux-arm64": {
+      "passed": 16,
+      "skipped": {
+        "test_claude_with_emulated_provider": "requires the supported Claude Code version",
+        "test_detected_drivers": "Supported Claude Code and Codex CLI versions unavailable",
+        "test_interactive_driver_terminals": "supported CLI executables unavailable",
+        "test_live_claude_task": "requires Claude provider quota",
+        "test_live_codex_task": "requires authenticated Codex CLI"
+      }
+    }
+  },
+  "deployment": {
+    "command": "make test-deployment",
+    "hosts": [
+      "broker",
+      "alpha",
+      "beta",
+      "viewer"
+    ],
+    "passed": true
+  },
+  "apple": {
+    "iPhone-26": {
+      "touch": {
+        "model": "iPhone 17 Pro",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T05:00:05.116000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testTouchNavigationAndEditing()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "files": {
+        "model": "iPhone 17 Pro",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T05:13:32.815000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testPairAndUseSession()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "terminal": {
+        "model": "iPhone 17 Pro",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T05:06:49.939000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testTerminalInput()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "hosted": {
+        "model": "iPhone 17 Pro",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T04:53:44.606000+00:00",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "ClientTests/testCLISpecificDrivers()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testPortForwarding()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testPTYRenderingKeyboardResizeAndExit()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testSharedPipe()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testWorkspaceTransfers()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "scroll": {
+        "model": "iPhone 17 Pro",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T05:10:08.388000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testScrollSessionsAndTerminalHistory()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      }
+    },
+    "iPad-26": {
+      "touch": {
+        "model": "iPad mini (A17 Pro)",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T04:57:57.850000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testTouchNavigationAndEditing()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "hosted": {
+        "model": "iPad mini (A17 Pro)",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T04:51:18.919000+00:00",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "ClientTests/testCLISpecificDrivers()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testPortForwarding()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testPTYRenderingKeyboardResizeAndExit()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testSharedPipe()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testWorkspaceTransfers()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "files": {
+        "model": "iPad mini (A17 Pro)",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T05:14:45.289000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testPairAndUseSession()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "terminal": {
+        "model": "iPad mini (A17 Pro)",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T05:25:00.602000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testTerminalInput()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "scroll": {
+        "model": "iPad mini (A17 Pro)",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T05:08:11.321000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testScrollSessionsAndTerminalHistory()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      }
+    },
+    "iPhone-27": {
+      "touch": {
+        "model": "iPhone 17 Pro",
+        "platform": "iOS Simulator",
+        "os": "27.0",
+        "startedAt": "2026-11-20T05:54:51.448000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testTouchNavigationAndEditing()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "voiceover": {
+        "model": "iPhone 17 Pro",
+        "platform": "iOS Simulator",
+        "os": "27.0",
+        "startedAt": "2026-11-20T05:53:15.757000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testVoiceOverWorkspaceOrder()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "files": {
+        "model": "iPhone 17 Pro",
+        "platform": "iOS Simulator",
+        "os": "27.0",
+        "startedAt": "2026-11-20T05:59:01.604000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testPairAndUseSession()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "hosted": {
+        "model": "iPhone 17 Pro",
+        "platform": "iOS Simulator",
+        "os": "27.0",
+        "startedAt": "2026-11-20T06:01:01.279000+00:00",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "ClientTests/testCLISpecificDrivers()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testPortForwarding()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testPTYRenderingKeyboardResizeAndExit()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testSharedPipe()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testWorkspaceTransfers()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      }
+    },
+    "macOS-local": {
+      "hosted": {
+        "model": "MacBook Pro",
+        "platform": "macOS",
+        "os": "27.2",
+        "startedAt": "2026-11-20T05:28:57.315000+00:00",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "ClientTests/testCLISpecificDrivers()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testPortForwarding()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testPTYRenderingKeyboardResizeAndExit()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testSharedPipe()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testWorkspaceTransfers()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "terminal": {
+        "model": "MacBook Pro",
+        "platform": "macOS",
+        "os": "27.2",
+        "startedAt": "2026-11-20T05:59:09.415000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testTerminalInput()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "files": {
+        "model": "MacBook Pro",
+        "platform": "macOS",
+        "os": "27.2",
+        "startedAt": "2026-11-20T05:56:59.396000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testPairAndUseSession()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      }
+    },
+    "iPad-27": {
+      "hosted": {
+        "model": "iPad mini (A17 Pro)",
+        "platform": "iOS Simulator",
+        "os": "27.0",
+        "startedAt": "2026-11-20T04:47:15.159000+00:00",
+        "passed": 5,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "ClientTests/testCLISpecificDrivers()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testPortForwarding()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testPTYRenderingKeyboardResizeAndExit()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testSharedPipe()",
+            "result": "Passed"
+          },
+          {
+            "test": "ClientTests/testWorkspaceTransfers()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "files": {
+        "model": "iPad mini (A17 Pro)",
+        "platform": "iOS Simulator",
+        "os": "27.0",
+        "startedAt": "2026-11-20T05:58:05.127000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testPairAndUseSession()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "touch": {
+        "model": "iPad mini (A17 Pro)",
+        "platform": "iOS Simulator",
+        "os": "27.0",
+        "startedAt": "2026-11-20T05:56:09.066000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testTouchNavigationAndEditing()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "terminal": {
+        "model": "iPad mini (A17 Pro)",
+        "platform": "iOS Simulator",
+        "os": "27.0",
+        "startedAt": "2026-11-20T05:28:55.094000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testTerminalInput()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "scroll": {
+        "model": "iPad mini (A17 Pro)",
+        "platform": "iOS Simulator",
+        "os": "27.0",
+        "startedAt": "2026-11-20T05:23:24.804000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testScrollSessionsAndTerminalHistory()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      },
+      "voiceover": {
+        "model": "iPad mini (A17 Pro)",
+        "platform": "iOS Simulator",
+        "os": "27.0",
+        "startedAt": "2026-11-20T05:55:07.884000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "SessionTests/testVoiceOverWorkspaceOrder()",
+            "result": "Passed"
+          }
+        ],
+        "fixturePassed": true
+      }
+    }
+  },
+  "executionScope": "Targeted runs during the requirements audit. Each Apple scenario is counted only after both XCTest and the independent fixture finish successfully.",
+  "currentTestSuiteRevision": "2be23a4",
+  "unixSource": "6164d5e",
+  "testReferenceCoverage": {
+    "functional": 10,
+    "engineering": 7
+  },
+  "signedBuild": {
+    "number": "2611200557",
+    "platforms": [
+      "iOS",
+      "macOS"
+    ],
+    "codeSignatureVerified": true,
+    "mitNoticeVerified": true,
+    "macArchitectures": [
+      "arm64",
+      "x86_64"
+    ]
+  },
+  "hostedSharedSession": {
+    "revision": "6164d5e",
+    "job": "https://github.com/specialistvlad/clistream/actions/runs/44677340259/job/136092198839",
+    "cliAndSupervisorValidated": true,
+    "appleCases": {
+      "ipad": [
+        {
+          "test": "ClientTests/testSharedPipe()",
+          "result": "Passed",
+          "duration": "0.53s"
+        }
+      ],
+      "iphone": [
+        {
+          "test": "ClientTests/testSharedPipe()",
+          "result": "Passed",
+          "duration": "0.51s"
+        }
+      ],
+      "mac": [
+        {
+          "test": "ClientTests/testSharedPipe()",
+          "result": "Passed",
+          "duration": "46s"
+        }
+      ]
+    }
+  },
+  "localSharedSession": {
+    "revision": "9c182dc",
+    "cliAndSupervisorValidated": true,
+    "appleCases": {
+      "ipad": {
+        "model": "iPad mini (A17 Pro)",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T05:30:32.365000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "ClientTests/testSharedPipe()",
+            "result": "Passed"
+          }
+        ]
+      },
+      "iphone": {
+        "model": "iPhone 17 Pro",
+        "platform": "iOS Simulator",
+        "os": "26.4.1",
+        "startedAt": "2026-11-20T05:30:32.372000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "ClientTests/testSharedPipe()",
+            "result": "Passed"
+          }
+        ]
+      },
+      "mac": {
+        "model": "MacBook Pro",
+        "platform": "macOS",
+        "os": "27.2",
+        "startedAt": "2026-11-20T05:30:32.362000+00:00",
+        "passed": 1,
+        "failed": 0,
+        "skipped": 0,
+        "cases": [
+          {
+            "test": "ClientTests/testSharedPipe()",
+            "result": "Passed"
+          }
+        ]
+      }
+    }
+  },
+  "license": {
+    "spdx": "MIT",
+    "publicRepository": true,
+    "noticesComparedInArchives": true
+  },
+  "releaseGates": {
+    "liveAnthropic": "Separate provider request reached the account's weekly limit.",
+    "testFlight": "Last upload returned FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED. Installation unverified.",
+    "physicalCamera": "Simulator verified QR decoding and installed-app URL handoff. Physical camera untested."
+  }
+}
