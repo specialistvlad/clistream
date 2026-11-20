@@ -360,7 +360,7 @@ func dashboard(dir, link, direct string) (int, error) {
 						if d.cycle(1) {
 							direct = ""
 						}
-					case ev.MatchString("ctrl+[", "ctrl+^", "ctrl+6") || ev.Code == 0x1e:
+					case ev.MatchString("ctrl+["):
 						if d.cycle(-1) {
 							direct = ""
 						}

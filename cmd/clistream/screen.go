@@ -98,9 +98,9 @@ func (d *dashboardUI) draw() error {
 			s.SetCursorPosition(p.X, p.Y+2)
 			s.ShowCursor()
 		}
-		keys = "Ctrl-G Home   Ctrl-[ Previous   Ctrl-] Next   Ctrl-^ Previous (legacy)"
-		if w < 70 {
-			keys = "^G Home   ^[ / ^^ Prev   ^] Next"
+		keys = "Ctrl-G Home   Ctrl-[ Previous   Ctrl-] Next"
+		if s.StringWidth(keys) > w {
+			keys = "^G Home   ^[ Prev   ^] Next"
 		}
 		if d.notice != "" {
 			title += " │ " + d.notice

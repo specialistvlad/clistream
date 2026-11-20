@@ -6,7 +6,9 @@ The audit maps requirements to existing checks and identifies pending coverage. 
 
 ## Header and app switching · November 20, 2026
 
-`make test e2e` passed on macOS arm64 and Debian Linux arm64. Of 36 CLI cases, macOS passed 34 with two optional provider skips. Linux passed 31 with five optional driver or provider skips. The real-PTY navigation case identified the receiving child after each switch among three running apps, checked wraparound, both previous-app encodings, plain Escape delivery and Ctrl-G return to the table. The renderer test checked the two header rows during remote screen changes and verified output reached the bottom row. Both compatibility cases passed against binaries from `bd2d7ab`.
+`make test e2e` passed on macOS arm64 and Debian Linux arm64. Of 36 CLI cases, macOS passed 34 with two optional provider skips. Linux passed 31 with five optional driver or provider skips. The real-PTY navigation case identified the receiving child after each switch among three running apps, checked wraparound, the previous-app shortcut, plain Escape delivery and Ctrl-G return to the table. The renderer test checked the two header rows during remote screen changes and verified output reached the bottom row. Both compatibility cases passed against binaries from `bd2d7ab`.
+
+After removing the alternate previous-app shortcut, the macOS renderer tests and real-PTY navigation test passed. The active child received the raw Ctrl-^ byte, and Ctrl-[ still selected the previous app.
 
 ## Framed terminal and managed supervisors · November 20, 2026
 

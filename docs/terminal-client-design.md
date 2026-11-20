@@ -25,7 +25,7 @@ CLIStream Client │ Supervisors │ Connected to devbox:7443
 
 On a stopped row, `R` reads **Start** and the header omits Attach and Stop. On a narrow terminal, retain the client identity, target, state, and home key first. Show enough of each ID to distinguish visible rows.
 
-The client requests distinct keyboard codes for Ctrl-[ and Escape. On terminals that encode them identically, Escape reaches the app and Ctrl-^ selects the previous app. With only one running app, either switch key keeps the current attachment. Pasted controls remain app input.
+The client requests distinct keyboard codes for Ctrl-[ and Escape. On terminals that encode them identically, the key reaches the app as Escape. With only one running app, either switch key keeps the current attachment. Pasted controls remain app input.
 
 ## Supervisor actions
 
