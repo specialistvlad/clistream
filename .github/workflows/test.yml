@@ -32,7 +32,7 @@ jobs:
       fail-fast: false
       matrix:
         device: [macOS, iPhone, iPad, Duo, shared]
-    runs-on: macos-27
+    runs-on: xcode-27
     # A cold iOS runtime must finish migrating before the per-case watchdogs start.
     timeout-minutes: ${{ matrix.device == 'shared' && 65 || 50 }}
     steps:
@@ -40,6 +40,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Select the tested Xcode toolchain
+        run: sudo xcode-select --switch /Applications/Xcode_27.2.app/Contents/Developer
       - run: command -v xcodegen || brew install xcodegen
       - name: Install the simulator input test tool
         if: matrix.device != 'macOS' && matrix.device != 'shared'
@@ -56,9 +58,13 @@ jobs:
           DEVICE: ${{ matrix.device }}
         run: |
           simulator() {
-            xcrun simctl list devices available --json | jq -er --arg device "$1" '
+            local id
+            id=$(xcrun simctl list devices available --json | jq -er --arg device "$1" '
               [.devices | to_entries[] | select(.key | contains("iOS-27-"))
-               | .value[] | select(.name == $device)][-1].udid // error("missing simulator")'
+               | .value[] | select(.name == $device)][-1].udid // error("missing simulator")')
+            xcrun simctl rename "$id" "CLIStream CI $1"
+            xcrun simctl bootstatus "$id" -b >&2
+            echo "$id"
           }
           case "$DEVICE" in
             macOS) apple/test-native.sh macOS ;;

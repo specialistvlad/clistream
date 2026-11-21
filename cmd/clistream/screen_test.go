@@ -45,6 +45,16 @@ func TestFrameSurvivesRemoteScreenChanges(t *testing.T) {
 	}
 }
 
+// A host's fully qualified name can exceed the terminal width on its own.
+func TestResultHeaderKeepsExitCodeVisible(t *testing.T) {
+	d := dashboardUI{width: 80, height: 8, page: "result", exitCode: 23,
+		target: wire.Supervisor{Info: wire.Session{Name: "worker", Host: strings.Repeat("a", 63) + ".example.org"}}}
+	header, _, _ := strings.Cut(ansi.Strip(d.View().Content), "\n")
+	if !strings.Contains(header, "Exit 23") {
+		t.Fatalf("result header lost the exit code: %q", header)
+	}
+}
+
 // Run the real Bubble Tea renderer with a fixed view. Replay the frame up to
 // terminal restoration so the test can inspect its visible cells.
 type fixedView struct{ view tea.View }

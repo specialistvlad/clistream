@@ -31,3 +31,5 @@ The supervisor’s default local view exposes operation metadata. The private jo
 Apple clients scope session selection and port forwarding to the selected server profile. The interactive attachment owns input, resize, EOF, and named forwards. The Go supervisor continues to authorize file operations independently of the Apple apps. Removing the Apple Files interface does not disable files on the supervisor.
 
 Apple clients identify a saved server by its pinned identity. Each additional server has a private enrollment directory. Terminal input, results, lifecycle requests and forwarding use that server’s profile. Display names are local labels. The original enrollment is adopted in place on upgrade.
+
+The sandboxed Mac app uses client and server network entitlements for QUIC connections and local port forwards. Its workspace stays inside the app container.
