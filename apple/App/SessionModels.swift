@@ -1,6 +1,6 @@
 import Foundation
 
-struct SessionInfo: Codable, Identifiable {
+struct SessionInfo: Codable, Identifiable, Equatable {
   let ID, Name, Mode, Host, OS: String
   let Ports: [String: String]?
   var supervisor: String?
@@ -28,6 +28,8 @@ struct Reply: Decodable {
   var Handle: String?
   var Sessions: [SessionInfo]?
   var Address: String?
+  var Pin: String?
+  var RTTMicros: Int64?
   var Data: Foundation.Data?
   var Channel: String?
   var Exit: Int?

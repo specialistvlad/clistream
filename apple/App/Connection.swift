@@ -11,7 +11,21 @@ protocol TerminalRenderer: AnyObject {
 @MainActor
 final class Connection: ObservableObject {
   let readOnly: Bool
-  init(readOnly: Bool = false) { self.readOnly = readOnly }
+  let profile: String?
+  init(readOnly: Bool = false, profile: String? = nil) {
+    self.readOnly = readOnly
+    self.profile = profile
+  }
+  let focusInput = PassthroughSubject<Void, Never>()
+  var latency: Int64?
+  func measureLatency() async {
+    guard let key = handle else {
+      latency = nil
+      return
+    }
+    let reply = await Core.request(["Op": "stats", "Handle": key])
+    if handle == key { latency = reply.RTTMicros }
+  }
 
   @Published private(set) var pairingGeneration = UUID()
   @Published private(set) var paired = false
@@ -44,6 +58,7 @@ final class Connection: ObservableObject {
   private let inputQueue = DispatchQueue(label: "com.vlk.clistream.input")
   var directory: String {
     get throws {
+      if let profile { return profile }
       var dir = try FileManager.default.url(
         for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
       ).appendingPathComponent("CLIStream", isDirectory: true)
@@ -96,6 +111,7 @@ final class Connection: ObservableObject {
         return
       }
       listError = ""
+      latency = r.RTTMicros
       sessions = (r.Supervisors ?? []).map { row in
         var item = row.Info
         item.supervisor = row.ID
@@ -112,6 +128,7 @@ final class Connection: ObservableObject {
     generation = UUID()
     let closing = [handle].compactMap { $0 } + Array(forwards.values)
     handle = nil
+    latency = nil
     selected = nil
     forwards.removeAll()
     forwarding.removeAll()

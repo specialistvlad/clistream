@@ -67,4 +67,6 @@ Brokers and managed supervisors advertise `run-result-v1`. The negotiated `resul
 
 `fs/upload` stages a copy like `fs/put` and atomically replaces the destination. It carries the local basename in `Args` for directory destinations. `fs/cp` and `fs/mv` use `Path` for the source and one destination in `Args`. `fs/rm`, `fs/mkdir` and `fs/rmdir` use one shared `Path`. All operations target the selected child run and require an enabled workspace.
 
-The native Mac preview opens the same output channels as a viewer without opening stdin. A preview cannot issue input, EOF, or PTY resize messages. Interactive Apple sessions use the negotiated supervisor revision for lifecycle commands and the child run ID for terminal streams and port forwards.
+The read-only attachment operation opens only output channels. Selecting a CLI in the native workspace opens an interactive attachment. Interactive Apple sessions use the negotiated supervisor revision for lifecycle commands and the child run ID for terminal streams and port forwards.
+
+The native client reads the smoothed RTT from the QUIC connection to the broker. This is local transport telemetry. Multiple enrollments use the existing protocol independently, and supervisor identifiers are scoped to the authenticated broker.

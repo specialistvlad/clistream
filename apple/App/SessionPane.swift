@@ -62,6 +62,9 @@ struct SessionPane: View {
       .tint(.primary)
     #endif
     #if os(macOS)
+      .onReceive(connection.focusInput) {
+        if session.Mode == "pipe" { inputFocused = true }
+      }
       .onChange(of: connection.attached, initial: true) { _, attached in
         if attached && session.Mode == "pipe" { inputFocused = true }
       }
@@ -84,11 +87,11 @@ struct SessionPane: View {
       Menu("Keys") {
         Button("Show Keyboard") { connection.focusTerminal() }
         Button("Hide Keyboard") { _ = connection.terminal?.resignFirstResponder() }
-        Button("Escape") { connection.terminal?.send(txt: "\u{1b}") }
+        Button("Escape") { connection.send(.bytes(Data([0x1b]))) }
         Menu("Control Key") {
           ForEach(Array(65...90), id: \.self) { letter in
             Button("Control-" + String(UnicodeScalar(letter)!)) {
-              connection.terminal?.send(txt: String(UnicodeScalar(letter - 64)!))
+              connection.send(.bytes(Data([UInt8(letter - 64)])))
             }
           }
         }

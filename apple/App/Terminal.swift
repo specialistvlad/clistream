@@ -45,6 +45,15 @@ private func visibleText(in view: TerminalView) -> String {
 
 #if os(macOS)
   private final class AccessibleTerminal: TerminalView {
+    override func viewDidChangeEffectiveAppearance() {
+      super.viewDidChangeEffectiveAppearance()
+      effectiveAppearance.performAsCurrentDrawingAppearance {
+        configureNativeColors()
+        caretColor = .textColor
+        selectedTextBackgroundColor = .selectedTextBackgroundColor
+      }
+      needsDisplay = true
+    }
     override func accessibilityValue() -> Any? { visibleText(in: self) }
   }
 

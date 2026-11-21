@@ -154,6 +154,13 @@ func run(args []string) error {
 	}
 	path := "/" + hex.EncodeToString(secret[:]) + "/"
 	mux := http.NewServeMux()
+	if args[0] == "shared" || os.Getenv("CLISTREAM_HOSTED_TESTS") == "1" {
+		stopSecond, err := secondServer(root, bin, mux, path, launch)
+		if err != nil {
+			return err
+		}
+		defer stopSecond()
+	}
 	// Keep the fixture's own enrollment when testing removal of viewer credentials.
 	devices := func() (map[string]bool, error) {
 		raw, err := command("clistreamd", "devices").Output()

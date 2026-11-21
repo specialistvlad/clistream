@@ -1,177 +1,148 @@
 import AppKit
 import SwiftUI
 
-@main
-struct DesktopApp: App {
+@main struct DesktopApp: App {
   var body: some Scene {
-    WindowGroup("Sessions") { DesktopBrowser() }
+    WindowGroup("CLIStream") { DesktopBrowser() }
+      .defaultSize(width: 960, height: 560)
       .defaultLaunchBehavior(.presented)
       .commands { SidebarCommands() }
   }
 }
 
-@MainActor
-private final class SessionTabs: NSObject, NSWindowDelegate {
-  static let shared = SessionTabs()
-  static let showAttachment = Notification.Name("CLIStreamShowAttachment")
-  private var windows: [String: (NSWindow, Connection)] = [:]
-
-  func open(_ session: SessionInfo) {
-    if let existing = windows[session.id] {
-      if let current = existing.1.selected, current.ID != session.ID {
-        Task { await existing.1.attach(session) }
-      }
-      existing.0.tabGroup?.selectedWindow = existing.0
-      existing.0.makeKeyAndOrderFront(nil)
-      NotificationCenter.default.post(name: Self.showAttachment, object: existing.1)
+@MainActor private final class DesktopSelection: ObservableObject {
+  @Published var row: WorkspaceSession?
+  weak var window: NSWindow?
+  private static var auxiliaryWindows = [ObjectIdentifier: NSWindow]()
+  func closed(_ window: NSWindow) {
+    Self.auxiliaryWindows.removeValue(forKey: ObjectIdentifier(window))
+    // A window owns its suspended terminals until another window opens them.
+    for case let key as NSString in Self.owners.keyEnumerator().allObjects
+    where Self.owners.object(forKey: key) === self {
+      Self.owners.removeObject(forKey: key)
+      Workspace.shared.detach(key as String)
+    }
+    row = nil
+  }
+  private static let owners = NSMapTable<NSString, DesktopSelection>.strongToWeakObjects()
+  init(_ row: WorkspaceSession? = nil) { self.row = row }
+  func bind(_ window: NSWindow) {
+    self.window = window
+    window.tabbingIdentifier = "CLIStream"
+    if let row { Self.owners.setObject(self, forKey: row.id as NSString) }
+  }
+  func activate(_ next: WorkspaceSession) {
+    Workspace.shared.activate(next)
+    if let owner = Self.owners.object(forKey: next.id as NSString), owner.row?.id == next.id,
+      let existing = owner.window,
+      existing.isVisible || existing.tabGroup != nil
+    {
+      existing.tabGroup?.selectedWindow = existing
+      existing.makeKeyAndOrderFront(nil)
+      let connection = Workspace.shared.terminal(next)
+      connection.focusInput.send()
+      if let terminal = connection.terminal { existing.makeFirstResponder(terminal) }
       return
     }
-    let connection = Connection()
-    let window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 800, height: 520),
-      styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false
-    )
-    window.contentView = NSHostingView(
-      rootView: DesktopBrowser(activeTab: connection, initialSession: session))
-    window.title = session.Name
-    window.tabbingIdentifier = "CLIStreamSessions"
-    window.tabbingMode = .preferred
-    window.isReleasedWhenClosed = false
-    window.delegate = self
-    if let sibling = NSApp.keyWindow ?? windows.values.first?.0 {
-      sibling.tabbingIdentifier = window.tabbingIdentifier
-      sibling.tabbingMode = .preferred
-      sibling.addTabbedWindow(window, ordered: .above)
-    } else {
-      window.center()
+    row = next
+    Self.owners.setObject(self, forKey: next.id as NSString)
+  }
+  func open(_ next: WorkspaceSession, tab: Bool) {
+    if let owner = Self.owners.object(forKey: next.id as NSString), owner.row?.id == next.id,
+      let existing = owner.window
+    {
+      if tab, let window, window !== existing,
+        window.tabGroup !== existing.tabGroup || window.tabGroup == nil
+      {
+        window.addTabbedWindow(existing, ordered: .above)
+      } else if !tab, let group = existing.tabGroup, group.windows.count > 1 {
+        group.removeWindow(existing)
+      }
+      existing.tabGroup?.selectedWindow = existing
+      existing.makeKeyAndOrderFront(nil)
+      return
     }
-    windows[session.id] = (window, connection)
-    Task { await connection.attach(session) }
-    window.makeKeyAndOrderFront(nil)
-  }
-
-  func closeAll() {
-    for (window, _) in Array(windows.values) { window.close() }
-  }
-
-  func windowWillClose(_ notification: Notification) {
-    guard let window = notification.object as? NSWindow,
-      let key = windows.first(where: { $0.value.0 === window })?.key
-    else { return }
-    windows.removeValue(forKey: key)?.1.leave()
+    if tab && row == nil {
+      activate(next)
+      return
+    }
+    let state = DesktopSelection(next)
+    let child = NSWindow(
+      contentViewController: NSHostingController(rootView: DesktopBrowser(state: state)))
+    child.setContentSize(window?.contentLayoutRect.size ?? NSSize(width: 960, height: 560))
+    child.styleMask.formUnion([.resizable, .closable, .miniaturizable])
+    child.isReleasedWhenClosed = false
+    Self.auxiliaryWindows[ObjectIdentifier(child)] = child
+    state.bind(child)
+    child.title = next.item.Name
+    if tab, let window { window.addTabbedWindow(child, ordered: .above) } else { child.center() }
+    child.makeKeyAndOrderFront(nil)
   }
 }
 
-private struct DesktopSession: View {
-  @ObservedObject var connection: Connection
-  let session: SessionInfo
-
-  var body: some View {
-    VStack(spacing: 0) {
-      if let attached = connection.selected {
-        SessionPane(connection: connection, session: attached)
-      } else {
-        Text(connection.status.isEmpty ? "Connecting…" : connection.status)
-      }
-      Divider()
-      let current = connection.selected ?? session
-      let detail = current.running ? "Run " + String(current.ID.prefix(8)) : "Stopped"
-      Text("\(current.Host) · \(current.Mode.uppercased()) · \(detail)")
-        .accessibilityIdentifier("desktop-session-status")
-        .frame(maxWidth: .infinity, alignment: .leading).padding(6)
+private struct WindowReader: NSViewRepresentable {
+  let state: DesktopSelection
+  final class Reader: NSView {
+    var state: DesktopSelection?
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      if let window { state?.bind(window) }
     }
-
   }
+  func makeNSView(context: Context) -> Reader {
+    let view = Reader()
+    view.state = state
+    return view
+  }
+  func updateNSView(_ nsView: Reader, context: Context) {}
 }
 
 private struct DesktopBrowser: View {
-  var activeTab: Connection? = nil
-  var initialSession: SessionInfo? = nil
-  @StateObject private var catalog = Connection()
-  @StateObject private var preview = Connection(readOnly: true)
-  @State private var selected: String?
+  @ObservedObject private var workspace = Workspace.shared
+  @StateObject private var state: DesktopSelection
   @State private var pairing: Pairing?
-  private var item: SessionInfo? { catalog.sessions.first { $0.id == selected } }
-
+  init(state: DesktopSelection? = nil) {
+    _state = StateObject(wrappedValue: state ?? DesktopSelection())
+  }
   var body: some View {
     NavigationSplitView {
-      List(selection: $selected) {
-        if !catalog.listError.isEmpty && !catalog.sessions.isEmpty {
-          Text(catalog.listError).accessibilityIdentifier("catalog-error")
-        }
-        ForEach(Set(catalog.sessions.map(\.Host)).sorted(), id: \.self) { host in
-          Section(host) {
-            ForEach(catalog.sessions.filter { $0.Host == host }) { app in
-              Label(app.Name, systemImage: "terminal").tag(app.id)
-                .accessibilityIdentifier("session-" + app.id)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .highPriorityGesture(TapGesture(count: 2).onEnded {
-                  // Finish the list's selection event before revealing the active attachment.
-                  DispatchQueue.main.async { SessionTabs.shared.open(app) }
-                })
-            }
-          }
-        }
-      }
-      .onKeyPress(.return) {
-        guard let item else { return .ignored }
-        SessionTabs.shared.open(item)
-        return .handled
-      }
-      .navigationTitle("Sessions")
-      .toolbar {
-        Button("Pair") { pairing = Pairing() }.keyboardShortcut("k")
-        Button("Refresh") { Task { await catalog.refresh() } }.keyboardShortcut("r")
-      }
+      WorkspaceSidebar(
+        workspace: workspace, selected: state.row?.id, activate: state.activate,
+        openElsewhere: state.open, pairing: $pairing
+      )
+      .navigationSplitViewColumnWidth(min: 210, ideal: 265, max: 400)
     } detail: {
-      if let item {
-        VStack(alignment: .leading) {
-          if item.Mode == "pty", preview.selected?.ID == item.ID, item.running {
-            LiveTerminal(connection: preview).id(item.id).allowsHitTesting(false)
-          } else {
-            ScrollView {
-              Text(String(decoding: preview.stdout + preview.stderr, as: UTF8.self))
-                .font(.system(.body, design: .monospaced)).textSelection(.enabled)
-            }
-          }
-          if !preview.status.isEmpty {
-            Text(preview.status).font(.callout).foregroundStyle(.secondary)
-          }
-          Spacer()
-          Divider()
-          HStack {
-            Text("\(item.Host) · \(item.running ? "Running" : "Stopped") · Read-only preview")
-            Spacer()
-            Button("Open in Tab") { SessionTabs.shared.open(item) }.keyboardShortcut(.defaultAction)
-          }.padding(8)
-        }.navigationTitle(item.Name)
-      } else if let activeTab, let initialSession {
-        DesktopSession(connection: activeTab, session: initialSession)
-          .navigationTitle(initialSession.Name)
+      if let row = state.row {
+        WorkspaceTerminal(connection: workspace.terminal(row), workspace: workspace, row: row).id(
+          row.id
+        )
+        .navigationTitle(row.item.Name)
+        .navigationSubtitle(
+          row.item.Host + " · "
+            + (workspace.profiles.first { $0.id == row.server.id }?.name ?? row.server.name))
       } else {
-        ContentUnavailableView(
-          catalog.sessions.isEmpty ? catalog.listTitle : "Select a CLI app",
-          systemImage: "terminal",
-          description: Text(
-            catalog.sessions.isEmpty
-              ? catalog.listDetail : "Select a supervisor to preview its terminal."))
+        ContentUnavailableView {
+          Text(workspace.profiles.isEmpty ? "Pair with a server" : "Select a CLI")
+        } description: {
+          Text(
+            workspace.profiles.isEmpty
+              ? "Use an invitation from clistreamd."
+              : "Choose a program in the sidebar to open its terminal.")
+        } actions: {
+          if workspace.profiles.isEmpty { Button("Add Server…") { pairing = Pairing() } }
+        }
       }
-    }
-    .onReceive(NotificationCenter.default.publisher(for: SessionTabs.showAttachment)) { event in
-      if let owner = event.object as? Connection, owner === activeTab { selected = nil }
-    }
-    .onChange(of: catalog.pairingGeneration) { _, _ in
-      selected = nil
-      preview.leave()
-      SessionTabs.shared.closeAll()
-    }
-    .modifier(PairingPresentation(connection: catalog, pairing: $pairing))
-    .task { await catalog.watchSupervisors() }
-    .task(id: item.map { $0.id + $0.ID }) {
-      preview.leave()
-      if let item { await preview.attach(item) }
-    }
-    .onDisappear { preview.leave() }
+    }.background(WindowReader(state: state))
+      .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) {
+        event in
+        if let closed = event.object as? NSWindow, closed === state.window {
+          state.closed(closed)
+        }
+      }
+      .modifier(
+        PairingPresentation(
+          connection: workspace.pairing, pairing: $pairing, enroll: workspace.enroll)
+      )
+      .task { workspace.load() }
   }
 }

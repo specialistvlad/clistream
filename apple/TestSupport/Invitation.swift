@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 
 /// The fixture mints a short-lived invitation only after the test app is ready.
-func fixtureResponse(_ purpose: String, at point: CGPoint? = nil) async throws -> String {
+func fixtureResponse(_ purpose: String, at point: CGPoint? = nil, to end: CGPoint? = nil) async throws -> String {
   let env = ProcessInfo.processInfo.environment
   let base = try XCTUnwrap(env["CLISTREAM_FIXTURE"])
   let endpoint = try XCTUnwrap(URL(string: base))
@@ -11,6 +11,12 @@ func fixtureResponse(_ purpose: String, at point: CGPoint? = nil) async throws -
     url.append(queryItems: [
       URLQueryItem(name: "x", value: String(Double(point.x))),
       URLQueryItem(name: "y", value: String(Double(point.y))),
+    ])
+  }
+  if let end {
+    url.append(queryItems: [
+      URLQueryItem(name: "endX", value: String(Double(end.x))),
+      URLQueryItem(name: "endY", value: String(Double(end.y))),
     ])
   }
   var request = URLRequest(url: url)

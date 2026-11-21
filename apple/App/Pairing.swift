@@ -1,4 +1,5 @@
 import SwiftUI
+
 #if os(macOS)
   import AppKit
 #endif
@@ -12,6 +13,8 @@ struct Pairing: Identifiable {
 struct PairingPresentation: ViewModifier {
   @ObservedObject var connection: Connection
   @Binding var pairing: Pairing?
+  var enroll: ((String) async -> Void)? = nil
+  @State private var confirmedLink: String?
   @State private var invitation = ""
   @State private var pastedAddress: String?
   @FocusState private var invitationFocused: Bool
@@ -48,6 +51,10 @@ struct PairingPresentation: ViewModifier {
         onDismiss: {
           invitation = ""
           pastedAddress = nil
+          if let link = confirmedLink {
+            confirmedLink = nil
+            Task { if let enroll { await enroll(link) } else { await connection.pair(link) } }
+          }
         }
       ) { request in
         VStack(alignment: .leading, spacing: 16) {
@@ -69,8 +76,8 @@ struct PairingPresentation: ViewModifier {
               let link =
                 request.link?.absoluteString
                 ?? invitation.trimmingCharacters(in: .whitespacesAndNewlines)
+              confirmedLink = link
               pairing = nil
-              Task { await connection.pair(link) }
             }.keyboardShortcut(.defaultAction).disabled(request.link == nil && invitation.isEmpty)
           }
         }.padding(24).frame(minWidth: 290).presentationDetents([.medium])

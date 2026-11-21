@@ -28,4 +28,6 @@ Supervisor reconnects use the saved device key and pinned broker identity. A pin
 
 The supervisor’s default local view exposes operation metadata. The private journal is written in both display modes and excludes command arguments, names of accessed files and exports, terminal data, and peer error text. The supervisor observes the broker-facing channels and does not infer remote device identity. The child continues to run with the host account’s ordinary permissions.
 
-Apple session previews request only PTY or stdout/stderr output. The interactive attachment owns input, resize, EOF, and named forwards. The Go supervisor continues to authorize file operations independently of the Apple apps. Removing the Apple Files interface does not disable files on the supervisor.
+Apple clients scope session selection and port forwarding to the selected server profile. The interactive attachment owns input, resize, EOF, and named forwards. The Go supervisor continues to authorize file operations independently of the Apple apps. Removing the Apple Files interface does not disable files on the supervisor.
+
+Apple clients identify a saved server by its pinned identity. Each additional server has a private enrollment directory. Terminal input, results, lifecycle requests and forwarding use that server’s profile. Display names are local labels. The original enrollment is adopted in place on upgrade.

@@ -19,6 +19,20 @@ final class ClientTests: XCTestCase {
     return dir.path
   }
 
+  @MainActor func testAdoptsExistingEnrollment() async throws {
+    let dir = try await profile("PIPE")
+    let workspace = Workspace(directory: dir)
+    let key = URL(fileURLWithPath: dir).appendingPathComponent("key.pem")
+    let original = try Data(contentsOf: key)
+    workspace.load()
+    workspace.load()
+    XCTAssertEqual(workspace.profiles.map(\.directory), [dir])
+    let link = try await fixtureResponse("PIPE")
+    await workspace.enroll(link)
+    XCTAssertEqual(workspace.profiles.map(\.directory), [dir])
+    XCTAssertEqual(try Data(contentsOf: key), original)
+  }
+
   func session(_ key: String = "SESSION") throws -> String {
     try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_" + key])
   }
@@ -111,7 +125,8 @@ final class ClientTests: XCTestCase {
     let participant = ProcessInfo.processInfo.environment["CLISTREAM_PARTICIPANT"] ?? "apple"
     let names = participant == "apple" ? ["apple"] : ["iphone", "ipad", "mac", "cli"]
     func send(_ line: String) async throws {
-      _ = try await request("input", ["Handle": key, "Data": Data((line + "\n").utf8).base64EncodedString()])
+      _ = try await request(
+        "input", ["Handle": key, "Data": Data((line + "\n").utf8).base64EncodedString()])
     }
     var sent = names.count == 1
     try await send(sent ? "hosted-\(participant)-echo" : "ready-\(participant)")
@@ -131,7 +146,8 @@ final class ClientTests: XCTestCase {
           && channels["stderr"]?.range(of: stderr) != nil
       }
     }
-    if let expected = ProcessInfo.processInfo.environment["CLISTREAM_EXPECT_EXIT"].flatMap(Int.init) {
+    if let expected = ProcessInfo.processInfo.environment["CLISTREAM_EXPECT_EXIT"].flatMap(Int.init)
+    {
       try await send("verified-\(participant)")
       try await consume(key, seconds: 90) { event in
         guard let code = event.Exit else { return false }
@@ -150,7 +166,10 @@ final class ClientTests: XCTestCase {
     let id = try session()
     let item = try XCTUnwrap(model.sessions.first { $0.id == id })
     let reader = Task { await model.attach(item) }
-    defer { model.leave(); reader.cancel() }
+    defer {
+      model.leave()
+      reader.cancel()
+    }
     try await waitUntil { model.selected?.id == id }
     model.send(.bytes(Data("before-detach\n".utf8)))
     model.leave()
@@ -196,7 +215,9 @@ final class ClientTests: XCTestCase {
   }
 
   /// Closing a handle unblocks a pending "next", including on a failed assertion.
-  private func consume(_ key: String, seconds: Int = 12, until complete: (Reply) async throws -> Bool)
+  private func consume(
+    _ key: String, seconds: Int = 12, until complete: (Reply) async throws -> Bool
+  )
     async throws
   {
     let timer = Task {

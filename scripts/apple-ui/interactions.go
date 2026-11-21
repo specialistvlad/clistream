@@ -72,9 +72,14 @@ func interactionRoutes(mux *http.ServeMux, path, root string, link []byte) error
 	if udid == "" {
 		return nil
 	}
-	mux.HandleFunc(path+"WORD", func(w http.ResponseWriter, r *http.Request) {
+	touch := func(w http.ResponseWriter, r *http.Request) {
+		keys := []string{"x", "y"}
+		extend := r.URL.Path == path+"EXTEND"
+		if extend {
+			keys = append(keys, "endX", "endY")
+		}
 		var pos []string
-		for _, key := range []string{"x", "y"} {
+		for _, key := range keys {
 			v, err := strconv.ParseFloat(r.URL.Query().Get(key), 64)
 			if err != nil || !(v >= 0 && v <= 8192) {
 				http.Error(w, "invalid point", 400)
@@ -82,12 +87,18 @@ func interactionRoutes(mux *http.ServeMux, path, root string, link []byte) error
 			}
 			pos = append(pos, strconv.FormatFloat(v, 'f', 2, 64))
 		}
-		if err := exec.CommandContext(r.Context(), "axe", "tap", "-x", pos[0], "-y", pos[1], "--hold", "1", "--udid", udid).Run(); err != nil {
+		args := []string{"tap", "-x", pos[0], "-y", pos[1], "--hold", "1"}
+		if extend {
+			args = []string{"swipe", "--start-x", pos[0], "--start-y", pos[1], "--end-x", pos[2], "--end-y", pos[3], "--duration", "1", "--delta", "2"}
+		}
+		if err := exec.CommandContext(r.Context(), "axe", append(args, "--udid", udid)...).Run(); err != nil {
 			http.Error(w, "touch delivery failed", 500)
 			return
 		}
 		fmt.Fprint(w, "delivered")
-	})
+	}
+	mux.HandleFunc(path+"WORD", touch)
+	mux.HandleFunc(path+"EXTEND", touch)
 	mux.HandleFunc(path+"HID", func(w http.ResponseWriter, r *http.Request) {
 		if err := exec.CommandContext(r.Context(), "axe", "key-combo", "--modifiers", "224", "--key", "7", "--udid", udid).Run(); err != nil {
 			http.Error(w, "keyboard delivery failed", 500)

@@ -4,6 +4,16 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Multi-server workspace · November 21, 2026
+
+On macOS and Debian Linux arm64, race-enabled Go tests, vet and end-to-end tests passed. The Mac UI paired two separate brokers publishing the same program, entered markers into each terminal, stopped the second broker and exchanged more input with the first child. The Mac UI and app-hosted suites also verified adoption and re-pairing of an existing enrollment with the original key, all six tree/list grouping combinations, live Light/Dark changes, native tabs and windows, draft retention and connection latency. A desktop rerun verified renaming a server, relaunching, and reconnecting to the correct child. One overlapping run timed out while XCTest synthesized typing on the Mac during the Duo’s Device Hub automation. The isolated rerun passed.
+
+The iPhone 18 Pro and iPad Pro simulators each passed all 19 required cases in one run, including two-server routing, accessibility, expired invitations, terminal input and scrollback, and TCP and UDP forwarding. The optional external Claude and Codex driver case was skipped on both devices.
+
+The Duo simulator passed 18 required cases in its full run and both remaining cases in focused reruns. Device Hub folded the attached terminal through Closed, Partially Open, Open and back to Closed. The focused checks verified switching back to a live server after a different broker went offline and copying a wrapped two-word selection at large text size by dragging the native selection handle. Physical-device verification and sessions with external Claude and Codex drivers remain outstanding.
+
+A Mac, iPhone, iPad and an independent Go CLI exchanged markers in one pipe. The Mac switched to a PTY and then to a child on a second server. The phone sent input to the original pipe while the Mac was on the second server. The iPad, Go CLI and returning Mac all observed the original child’s reply. A separate Duo UI run paired to a Linux daemon and verified terminal input and both TCP and UDP forwarding.
+
 ## Native client parity · November 20, 2026
 
 The race-enabled Go packages, vet and end-to-end suite passed on macOS and Debian Linux arm64. The deployment suite and compatibility checks against both previous releases passed on macOS.

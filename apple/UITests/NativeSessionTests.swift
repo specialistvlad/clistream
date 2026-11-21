@@ -27,6 +27,73 @@ final class NativeSessionTests: XCTestCase {
       app.descendants(matching: .any).matching(shown).firstMatch.waitForExistence(timeout: 15))
     XCTAssertFalse(app.buttons["Files"].exists)
   }
+  @MainActor func testTwoServersRouteInputIndependently() async throws {
+    let app = try await openPipe()
+    let field = app.textFields["session-input"].firstMatch
+    activate(field)
+    field.typeText("first-server-marker\n")
+    let invitation = try await fixtureResponse("SECOND")
+    let id = try await fixtureResponse("SECOND-ID")
+    app.open(try XCTUnwrap(URL(string: invitation)))
+    let confirm = app.buttons["Pair device"].firstMatch
+    activate(confirm)
+    #if os(iOS)
+      func showServerList(for id: String) {
+        let row = app.descendants(matching: .any)["session-" + id].firstMatch
+        if row.waitForExistence(timeout: 6) && row.isHittable { return }
+        let back = app.navigationBars.descendants(matching: .any)["Back"].firstMatch
+        if back.exists && back.isHittable {
+          back.tap()
+        } else {
+          let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.45))
+          let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.45))
+          start.press(forDuration: 0.1, thenDragTo: end)
+        }
+      }
+      showServerList(for: id)
+    #endif
+    activate(app.descendants(matching: .any)["session-" + id].firstMatch)
+    activate(field)
+    field.typeText("second-server-marker\n")
+    func output(_ text: String) -> XCUIElement {
+      app.descendants(matching: .any).matching(
+        NSPredicate(
+          format: "value CONTAINS %@ OR label CONTAINS %@", text, text)
+      ).firstMatch
+    }
+    XCTAssertTrue(output("second:second-server-marker").waitForExistence(timeout: 10))
+    XCTAssertFalse(output("first-server-marker").exists)
+    let offline = try await fixtureResponse("SECOND-OFFLINE")
+    XCTAssertEqual(offline, "stopped")
+    let pipe = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PIPE_ID"])
+    #if os(iOS)
+      showServerList(for: pipe)
+    #endif
+    activate(app.descendants(matching: .any)["session-" + pipe].firstMatch)
+    activate(field)
+    field.typeText("still-connected\n")
+    XCTAssertTrue(output("out:still-connected").waitForExistence(timeout: 10))
+    XCTAssertFalse(output("second-server-marker").exists)
+    #if os(macOS)
+      let endpoint = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_ENDPOINT"])
+      activate(app.descendants(matching: .any)["workspace-view-options"].firstMatch)
+      app.menuItems["Rename Server…"].firstMatch.hover()
+      activate(app.menuItems[endpoint].firstMatch)
+      let name = app.textFields["Name"].firstMatch
+      let alias = "Build server " + UUID().uuidString.prefix(8)
+      activate(name)
+      name.typeKey("a", modifierFlags: .command)
+      name.typeText(alias)
+      activate(app.buttons["Save"].firstMatch)
+      app.terminate()
+      app.launch()
+      XCTAssertTrue(app.descendants(matching: .any).matching(
+        NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", alias, alias)
+      ).firstMatch.waitForExistence(timeout: 12))
+      activate(app.descendants(matching: .any)["session-" + pipe].firstMatch)
+      XCTAssertTrue(field.waitForExistence(timeout: 12))
+    #endif
+  }
   @MainActor func testManagedLifecycle() async throws {
     let app = try await openPipe()
     activate(app.buttons["Stop"].firstMatch)
@@ -85,19 +152,8 @@ final class NativeSessionTests: XCTestCase {
       NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", text, text)
     ).firstMatch
     XCTAssertTrue(output.waitForExistence(timeout: 15))
-    #if os(macOS)
-      let status = app.staticTexts["desktop-session-status"].firstMatch
-      let oldRun = try XCTUnwrap(status.value as? String)
-    #endif
     activate(app.buttons["Restart"].firstMatch)
     activate(app.buttons["Restart Session"].firstMatch)
-    #if os(macOS)
-      let changed = XCTNSPredicateExpectation(
-        predicate: NSPredicate(
-          format: "exists == true AND value != %@ AND value CONTAINS %@", oldRun, "Run "),
-        object: status)
-      XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 15), .completed)
-    #endif
     let field = app.textFields["session-input"].firstMatch
     activate(field)
     field.typeText("after-restart\n")
@@ -130,6 +186,47 @@ final class NativeSessionTests: XCTestCase {
   }
 
   #if os(macOS)
+    @MainActor func testWorkspaceGroupingAndLatency() async throws {
+      let app = try await openPipe()
+      let status = app.staticTexts["desktop-session-status"].firstMatch
+      let measured = XCTNSPredicateExpectation(
+        predicate: NSPredicate(
+          format:
+            "value CONTAINS %@ AND value ENDSWITH %@", "Connected", " ms"), object: status)
+      XCTAssertEqual(XCTWaiter.wait(for: [measured], timeout: 15), .completed)
+      let id = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PIPE_ID"])
+      let row = app.descendants(matching: .any)["session-" + id].firstMatch
+      let field = app.textFields["session-input"].firstMatch
+      activate(field)
+      field.typeText("layout")
+      let originalAppearance = XCUIDevice.shared.appearance
+      defer { XCUIDevice.shared.appearance = originalAppearance }
+      XCUIDevice.shared.appearance = .dark
+      app.typeText(" draft")
+      XCUIDevice.shared.appearance = .light
+      XCTAssertEqual(field.value as? String, "layout draft")
+      func choose(_ title: String) {
+        let menu = app.descendants(matching: .any)["workspace-view-options"].firstMatch
+        activate(menu)
+        let option = app.menuItems[title].firstMatch
+        activate(option)
+        XCTAssertTrue(option.waitForNonExistence(timeout: 5))
+      }
+      for layout in ["List", "Tree"] {
+        choose(layout)
+        for group in ["Host", "CLI Name", "Server"] {
+          choose(group)
+          XCTAssertTrue(row.waitForExistence(timeout: 10))
+          XCTAssertEqual(field.value as? String, "layout draft")
+        }
+      }
+      app.typeText("!")
+      XCTAssertEqual(field.value as? String, "layout draft!")
+      app.terminate()
+      app.launch()
+      activate(row)
+      XCTAssertTrue(field.waitForExistence(timeout: 12))
+    }
     @MainActor func testOpenAndReuseNativeTab() async throws {
       let app = try await openPipe(pairInWindow: true)
       XCTAssertTrue(
@@ -141,14 +238,16 @@ final class NativeSessionTests: XCTestCase {
       input.typeText("kept draft")
       let pipe = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PIPE_ID"])
       let row = app.descendants(matching: .any)["session-" + pipe].firstMatch
+      let pty = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PTY_ID"])
+      let other = app.descendants(matching: .any)["session-" + pty].firstMatch
+      other.rightClick()
+      activate(app.menuItems["Open in New Tab"])
+      XCTAssertTrue(
+        app.descendants(matching: .any)["session-terminal"].firstMatch.waitForExistence(timeout: 12)
+      )
+      other.rightClick()
+      activate(app.menuItems["Open in New Window"])
       activate(row)
-      XCTAssertTrue(app.buttons["Open in Tab"].firstMatch.waitForExistence(timeout: 10))
-      XCTAssertFalse(input.exists)
-      app.activate()
-      app.typeKey(.return, modifierFlags: [])
-      XCTAssertTrue(input.waitForExistence(timeout: 10))
-      XCTAssertEqual(input.value as? String, "kept draft")
-      row.doubleClick()
       XCTAssertTrue(input.waitForExistence(timeout: 10))
       XCTAssertEqual(input.value as? String, "kept draft")
     }
@@ -204,6 +303,7 @@ final class NativeSessionTests: XCTestCase {
   @MainActor func testConcurrentViewers() async throws {
     let participant = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PARTICIPANT"])
     let app = try await openPipe()
+    defer { app.terminate() }
     let input = app.textFields["session-input"].firstMatch
     activate(input)
     let ready = try await fixtureResponse("ready/" + participant)
@@ -219,13 +319,24 @@ final class NativeSessionTests: XCTestCase {
     #if os(macOS)
       let pty = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PTY_ID"])
       activate(app.descendants(matching: .any)["session-" + pty].firstMatch)
-      activate(app.buttons["Open in Tab"])
       let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
       activate(terminal)
       terminal.typeKey("c", modifierFlags: .control)
       let received = XCTNSPredicateExpectation(
         predicate: NSPredicate(format: "value CONTAINS %@", "[03]"), object: terminal)
       XCTAssertEqual(XCTWaiter.wait(for: [received], timeout: 12), .completed)
+      let invitation = try await fixtureResponse("SECOND")
+      let otherSession = try await fixtureResponse("SECOND-ID")
+      app.open(try XCTUnwrap(URL(string: invitation)))
+      activate(app.buttons["Pair device"].firstMatch)
+      activate(app.descendants(matching: .any)["session-" + otherSession].firstMatch)
+      activate(input)
+      input.typeText("independent-mac\n")
+      XCTAssertTrue(
+        app.descendants(matching: .any).matching(
+          NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@",
+                      "second:independent-mac", "second:independent-mac")
+        ).firstMatch.waitForExistence(timeout: 12))
     #endif
     _ = try await fixtureResponse("switch/" + participant)
     if participant == "phone" {
@@ -244,7 +355,6 @@ final class NativeSessionTests: XCTestCase {
     #if os(macOS)
       let pipe = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PIPE_ID"])
       activate(app.descendants(matching: .any)["session-" + pipe].firstMatch)
-      activate(app.buttons["Open in Tab"])
       XCTAssertTrue(app.textFields["session-input"].firstMatch.waitForExistence(timeout: 12))
       XCTAssertTrue(
         app.descendants(matching: .any).matching(
@@ -255,7 +365,9 @@ final class NativeSessionTests: XCTestCase {
     #endif
   }
 
-  @MainActor private func openPipe(terminal: Bool = false, eof: Bool = false, pairInWindow: Bool = false) async throws
+  @MainActor private func openPipe(
+    terminal: Bool = false, eof: Bool = false, pairInWindow: Bool = false
+  ) async throws
     -> XCUIApplication
   {
     continueAfterFailure = false
@@ -292,17 +404,6 @@ final class NativeSessionTests: XCTestCase {
         terminal ? "CLISTREAM_PTY_ID" : (eof ? "CLISTREAM_EOF_ID" : "CLISTREAM_PIPE_ID")])
     let session = app.descendants(matching: .any)["session-" + id].firstMatch
     activate(session)
-    #if os(macOS)
-      if !terminal && !eof {
-        XCTAssertTrue(
-          app.staticTexts.matching(
-            NSPredicate(
-              format: "value CONTAINS %@ OR label CONTAINS %@", "preview-ready", "preview-ready")
-          ).firstMatch.waitForExistence(timeout: 15))
-      }
-      XCTAssertFalse(app.textFields["session-input"].exists)
-      activate(app.buttons["Open in Tab"])
-    #endif
     return app
   }
   private func invitation() async throws -> String { try await fixtureResponse("QR") }

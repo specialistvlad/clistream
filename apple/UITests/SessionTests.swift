@@ -34,7 +34,7 @@ final class SessionTests: XCTestCase {
       app.open(url)
       XCTAssertTrue(app.staticTexts[address].waitForExistence(timeout: 10))
       tap(app.buttons["Cancel"])
-      tap(app.buttons["Pair"])
+      tap(app.buttons["Add Server"])
       let field = app.secureTextFields["Pairing link"]
       field.tap()
       field.typeText(invitation)
@@ -241,6 +241,7 @@ final class SessionTests: XCTestCase {
       // and wrapping in a narrow split view. The OS owns the selection handles.
       let reselection = try await fixtureResponse("WORD", at: word.screenPoint)
       XCTAssertEqual(reselection, "delivered")
+      if !copyAction.waitForExistence(timeout: 3) { word.doubleTap() }
       let geometry = UITextView(frame: CGRect(origin: .zero, size: output.frame.size))
       geometry.font = UIFontMetrics(forTextStyle: .body).scaledFont(
         for: .monospacedSystemFont(ofSize: 17, weight: .regular),
@@ -254,11 +255,21 @@ final class SessionTests: XCTestCase {
         return output.coordinate(withNormalizedOffset: .zero).withOffset(
           CGVector(dx: caret.midX, dy: handle ? caret.maxY + 3 : caret.midY))
       }
-      let handle = try point(after: 8, handle: true)
-      handle.press(
-        forDuration: 0.15,
-        thenDragTo: output.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.9)),
-        withVelocity: .slow, thenHoldForDuration: 0.2)
+      let lastCharacter = try point(after: geometry.text.utf16.count, handle: false)
+      let firstCharacter = try point(after: 0, handle: false)
+      if lastCharacter.screenPoint.y > firstCharacter.screenPoint.y + 1 {
+        let handle = try point(after: 8, handle: true)
+        // The touch handle tracks below the caret. Drag past the last line.
+        let end = output.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.92))
+        let result = try await fixtureResponse(
+          "EXTEND", at: handle.screenPoint, to: end.screenPoint)
+        XCTAssertEqual(result, "delivered")
+      } else {
+        try point(after: 8, handle: true).press(
+          forDuration: 0.15,
+          thenDragTo: lastCharacter.withOffset(CGVector(dx: 3, dy: 0)),
+          withVelocity: .slow, thenHoldForDuration: 0.2)
+      }
       let copy = app.descendants(matching: .any)["Copy"].firstMatch
       if !copy.waitForExistence(timeout: 2) { word.tap() }
       tap(copy)
@@ -294,10 +305,14 @@ final class SessionTests: XCTestCase {
     #if os(iOS)
       XCUIDevice.shared.orientation = .portrait
     #endif
-    app.launch()
+    #if os(macOS)
+      app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]
+      if app.state != .notRunning { app.terminate() }
+    #else
+      app.launch()
+    #endif
     let invitation = try await fixtureResponse("QR")
-    let link = try XCTUnwrap(URL(string: invitation))
-    app.open(link)
+    app.open(try XCTUnwrap(URL(string: invitation)))
     tap(app.buttons["Pair device"])
     let target = app.descendants(matching: .any)["session-" + id].firstMatch
     XCTAssertTrue(target.waitForExistence(timeout: 15))
@@ -308,9 +323,6 @@ final class SessionTests: XCTestCase {
       #endif
     }
     tap(target)
-    #if os(macOS)
-      tap(app.buttons["Open in Tab"])
-    #endif
     return app
   }
 

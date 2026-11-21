@@ -14,7 +14,7 @@ Open the daemon’s invitation or paste it into Pair. Review the advertised serv
 
 ## Mac windows
 
-The Sessions window has a collapsible leading sidebar grouped by host. Selecting a row previews its terminal output. The preview subscribes only to output channels, so browsing cannot type into a child or resize another viewer’s terminal. Open in Tab, Return, or a double-click opens an interactive terminal. Opening a supervisor that already has a tab focuses that tab. Closing the tab detaches this viewer and releases its port forwards.
+The Servers sidebar separates the broker from the computers running supervisors. Select a CLI to work in its terminal. Change the sidebar layout with View or open a CLI in its own tab or window through the row’s context menu. The terminal subtitle identifies its host and server. The status bar shows connection state and measured round-trip latency to the selected broker.
 
 ## Touch-only operation on iPhone and iPad
 
@@ -32,4 +32,4 @@ The Go CLI supports remote workspace operations today. Apple file access is defe
 
 ## Acceptance
 
-Drive pairing, previews, tab and session switching, terminal input and output, lifecycle requests, completed runs and port forwards through the production user interfaces. Include simultaneous clients, touch-only navigation, keyboard and pointer input, accessibility, and live resizing on Mac, iPhone, iPad and iPhone Duo. Record observed results and outstanding scenarios in the verification record.
+Drive multi-server pairing, grouping, tab and session switching, terminal input and output, lifecycle requests, completed runs and port forwards through the production user interfaces. Include simultaneous clients, touch-only navigation, keyboard and pointer input, accessibility, and live resizing on Mac, iPhone, iPad and iPhone Duo. Record observed results and outstanding scenarios in the verification record.

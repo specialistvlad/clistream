@@ -62,7 +62,7 @@ func shared(root, url, pipeID, pipeRun, terminalID string, command func(string, 
 			scheme = "iOS"
 			suite = "CLIStream-UITests"
 		}
-		test := exec.CommandContext(ctx, "xcodebuild", "-quiet", "-project", "apple/CLIStream.xcodeproj", "-scheme", "CLIStream-"+scheme, "-derivedDataPath", filepath.Join(root, "build-"+name), "-destination", dest, "CLISTREAM_APP_ID=com.vlk.clistream.acceptance", "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never", "-resultBundlePath", filepath.Join("apple/build", fmt.Sprintf("shared-%d-%s.xcresult", time.Now().Unix(), name)), "-only-testing:"+suite+"/NativeSessionTests/testConcurrentViewers", "test")
+		test := exec.CommandContext(ctx, "xcodebuild", "-quiet", "-project", "apple/CLIStream.xcodeproj", "-scheme", "CLIStream-"+scheme, "-derivedDataPath", filepath.Join(root, "build-"+name), "-destination", dest, "CLISTREAM_APP_ID=com.vlk.clistream.acceptance.shared", "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never", "-resultBundlePath", filepath.Join("apple/build", fmt.Sprintf("shared-%d-%s.xcresult", time.Now().Unix(), name)), "-only-testing:"+suite+"/NativeSessionTests/testConcurrentViewers", "test")
 		test.Env = append(os.Environ(), "TEST_RUNNER_CLISTREAM_FIXTURE="+url, "TEST_RUNNER_CLISTREAM_PARTICIPANT="+name, "TEST_RUNNER_CLISTREAM_PIPE_ID="+pipeID, "TEST_RUNNER_CLISTREAM_PTY_ID="+terminalID)
 		test.Stdout = os.Stdout
 		test.Stderr = os.Stderr

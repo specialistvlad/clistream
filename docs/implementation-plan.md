@@ -73,4 +73,8 @@ Exercise the documented commands on macOS and Linux and add a two-viewer case to
 
 ## Native client parity
 
-Use separate native macOS and universal iOS entry points, sharing the Go client, Apple bridge, session state and terminal rendering. Target OS 27. The Mac sidebar selects a read-only preview and opens interactive sessions in native tabs. Mobile adapts navigation to available space. Verify pairing, live input and output, independent switching, lifecycle, results, forwards and interruption through shipping UI on Mac, iPhone, iPad and iPhone Duo. Run Go acceptance on both supported hosts. Apple file handling is deferred to a File Provider extension. Preserve existing Go file operations and their security guarantees.
+Use separate native macOS and universal iOS entry points, sharing the Go client, Apple bridge, session state and terminal rendering. Target OS 27. Selecting a CLI in the Mac sidebar activates its terminal. Its context menu can open it in a native tab or a separate window. Mobile adapts navigation to available space. Verify pairing, live input and output, independent switching, lifecycle, results, forwards and interruption through shipping UI on Mac, iPhone, iPad and iPhone Duo. Run Go acceptance on both supported hosts. Apple file handling is deferred to a File Provider extension. Preserve existing Go file operations and their security guarantees.
+
+## Multi-server native workspace
+
+Share enrolled profiles, catalog grouping and route selection across Apple platforms. The native Mac shell owns separate tabs and windows. The Go bridge reads active QUIC connection statistics. Existing daemon, supervisor and command-line behavior on Linux and macOS uses the same protocol. Exercise independent routing, offline recovery, saved profiles, window movement and display preferences in UI automation.

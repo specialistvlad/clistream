@@ -31,6 +31,8 @@ type request struct {
 	Cols, Rows                      uint16
 }
 type response struct {
+	Pin                             string            `json:",omitempty"`
+	RTTMicros                       int64             `json:",omitempty"`
 	Supervisors                     []wire.Supervisor `json:",omitempty"`
 	Command                         [][]byte          `json:",omitempty"`
 	Run                             string            `json:",omitempty"`
@@ -81,7 +83,7 @@ func call(q request) (response, error) {
 		if i.Role != "" && i.Role != "client" {
 			return r, errors.New("expected a client pairing invitation")
 		}
-		return response{Address: i.Address}, nil
+		return response{Address: i.Address, Pin: i.Pin}, nil
 	case "pair":
 		return r, identity.Pair(context.Background(), q.Dir, q.Link, "client")
 	case "result", "supervisors", "command", "run-command", "start", "stop", "restart":
@@ -96,6 +98,7 @@ func call(q request) (response, error) {
 				return r, err
 			}
 			r.Supervisors, err = client.Supervisors(c, slices.Contains(caps, wire.ManagedSupervisors), slices.Contains(caps, wire.EditCommand), slices.Contains(caps, wire.RunResult))
+			r.RTTMicros = c.ConnectionStats().SmoothedRTT.Microseconds()
 			return r, err
 		}
 		if q.Op == "result" {
@@ -159,6 +162,8 @@ func call(q request) (response, error) {
 	}
 	h := v.(*handle)
 	switch q.Op {
+	case "stats":
+		return response{RTTMicros: h.conn.ConnectionStats().SmoothedRTT.Microseconds()}, h.conn.Context().Err()
 	case "close":
 		if _, ok := handles.LoadAndDelete(q.Handle); ok {
 			close(h.done)
