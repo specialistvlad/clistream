@@ -1,13 +1,19 @@
 import SwiftTerm
 import SwiftUI
 
+extension TerminalView: TerminalRenderer {
+  func receive(_ bytes: Data) { feed(byteArray: Array(bytes)[...]) }
+  var columns: Int { getTerminal().cols }
+  var rows: Int { getTerminal().rows }
+}
+
 final class TerminalDelegate: NSObject, TerminalViewDelegate {
   let connection: Connection
   init(_ connection: Connection) { self.connection = connection }
   func send(source: TerminalView, data: ArraySlice<UInt8>) {
     let bytes = Data(data)
     MainActor.assumeIsolated {
-      connection.send(["Op": "input", "Data": bytes.base64EncodedString()])
+      connection.send(.bytes(bytes))
     }
   }
   func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
@@ -16,7 +22,7 @@ final class TerminalDelegate: NSObject, TerminalViewDelegate {
     let valid = 1...Int(UInt16.max)
     guard valid.contains(newCols), valid.contains(newRows) else { return }
     MainActor.assumeIsolated {
-      connection.send(["Op": "resize", "Cols": newCols, "Rows": newRows])
+      connection.send(.resize(columns: newCols, rows: newRows))
     }
   }
   func setTerminalTitle(source: TerminalView, title: String) {}
@@ -53,7 +59,7 @@ private func visibleText(in view: TerminalView) -> String {
       view.setAccessibilityLabel("Terminal")
       view.setAccessibilityIdentifier("session-terminal")
       connection.install(view)
-      DispatchQueue.main.async { view.window?.makeFirstResponder(view) }
+      if !connection.readOnly { DispatchQueue.main.async { view.window?.makeFirstResponder(view) } }
       return view
     }
     func updateNSView(_ view: TerminalView, context: Context) {}
@@ -118,6 +124,7 @@ private func visibleText(in view: TerminalView) -> String {
 #endif
 
 extension Connection {
+  var terminal: TerminalView? { renderer as? TerminalView }
   func focusTerminal() {
     #if os(macOS)
       if let terminal { terminal.window?.makeFirstResponder(terminal) }

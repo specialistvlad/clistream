@@ -8,7 +8,9 @@ Run Codex, Claude, or any other CLI app on your own machine. CLIStream lets mult
 
 *Watch the Mac type into Codex. Each keystroke appears on the laptop and iPad at the same time. When the Mac switches to Claude Code, the iPad keeps showing the test run.*
 
-**Compatibility.** The Go CLI runs on macOS and Linux. The native macOS, iPhone and iPad apps need a compatibility update to display sessions from this release. Upgrade the Go daemon (`clistreamd`), supervisor (`clistreams`) and client (`clistream`) together.
+**Compatibility.** The Go CLI runs on macOS and Linux. Build the native apps from this revision for macOS 27 and iOS/iPadOS 27, including iPhone Duo. Older native builds need an update to display sessions. Upgrade the Go daemon (`clistreamd`), supervisor (`clistreams`) and client (`clistream`) together.
+
+On Mac, select a CLI app in the sidebar to preview its output. Press Return or double-click to open its interactive tab. On iPhone and iPad, tap a session to attach. Remote files are available through the Go CLI. [Native client guide](docs/apple-client-design.md)
 
 ## Try it with /bin/sh
 

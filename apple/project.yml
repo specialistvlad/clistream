@@ -3,8 +3,8 @@ options:
   postGenCommand: mkdir -p CLIStream.xcodeproj/project.xcworkspace/xcshareddata/swiftpm && cp Package.resolved CLIStream.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
   bundleIdPrefix: com.vlk
   deploymentTarget:
-    iOS: "17.0"
-    macOS: "14.0"
+    iOS: "27.0"
+    macOS: "27.0"
 packages:
   SwiftTerm:
     url: https://github.com/migueldeicaza/SwiftTerm.git
@@ -37,22 +37,14 @@ targetTemplates:
         PRODUCT_NAME: CLIStream
 targets:
   CLIStream-iOS:
+    sources: [Mobile]
     templates: [Client]
     platform: iOS
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1,2"
-  CLIStream-SharedTestHost:
-    templates: [Client]
-    platform: iOS
-    sources: [SharedTestSupport]
-    settings:
-      base:
-        PRODUCT_NAME: CLIStreamSharedTestHost
-        PRODUCT_BUNDLE_IDENTIFIER: com.vlk.clistream.shared-acceptance
-        TARGETED_DEVICE_FAMILY: "1,2"
-        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CLISTREAM_SHARED_TEST_HOST"
   CLIStream-macOS:
+    sources: [Desktop]
     templates: [Client]
     platform: macOS
     settings:
@@ -115,10 +107,6 @@ targets:
         BUNDLE_LOADER: "$(TEST_HOST)"
         SWIFT_OBJC_BRIDGING_HEADER: ""
 schemes:
-  CLIStream-SharedTestHost:
-    build:
-      targets:
-        CLIStream-SharedTestHost: all
   CLIStream-macOS:
     build:
       targets:

@@ -43,6 +43,15 @@ type Attachment struct {
 }
 
 func Attach(c *quic.Conn, id string) (*Attachment, error) {
+	return attach(c, id, true)
+}
+
+// Preview subscribes to output without opening the shared input stream.
+func Preview(c *quic.Conn, id string) (*Attachment, error) {
+	return attach(c, id, false)
+}
+
+func attach(c *quic.Conn, id string, interactive bool) (*Attachment, error) {
 	items, e := List(c)
 	if e != nil {
 		return nil, e
@@ -61,7 +70,10 @@ func Attach(c *quic.Conn, id string) (*Attachment, error) {
 		channels = []string{"pty"}
 	}
 	a := &Attachment{outputs: map[string]*quic.Stream{}}
-	for _, ch := range append(channels, "stdin") {
+	if interactive {
+		channels = append(channels, "stdin")
+	}
+	for _, ch := range channels {
 		s, _, e := wire.Open(c, wire.Message{Op: "open", ID: id, Channel: ch})
 		if e != nil {
 			a.Close()
@@ -86,6 +98,9 @@ func (a *Attachment) Close() {
 	}
 }
 func (a *Attachment) Send(m wire.Message) error {
+	if a.input == nil {
+		return errors.New("read-only attachment")
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.input.SetDeadline(time.Now().Add(10 * time.Second))

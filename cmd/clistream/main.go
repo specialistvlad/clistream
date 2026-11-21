@@ -109,7 +109,7 @@ func run() (int, error) {
 	if e != nil {
 		return 1, e
 	}
-	rows, e := listRows(c, slices.Contains(caps, wire.ManagedSupervisors), slices.Contains(caps, wire.EditCommand), slices.Contains(caps, wire.RunResult))
+	rows, e := client.Supervisors(c, slices.Contains(caps, wire.ManagedSupervisors), slices.Contains(caps, wire.EditCommand), slices.Contains(caps, wire.RunResult))
 	if e != nil {
 		if automatic && strings.Contains(e.Error(), "client authorization required") {
 			return 1, errors.New("device is no longer authorized. Request a fresh pairing link from clistreamd")

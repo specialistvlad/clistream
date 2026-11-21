@@ -14,7 +14,9 @@ func fixtureResponse(_ purpose: String, at point: CGPoint? = nil) async throws -
     ])
   }
   var request = URLRequest(url: url)
-  request.timeoutInterval = 45
+  request.timeoutInterval =
+    (purpose == "EXPIRED" || ["ready/", "switch/", "return/"].contains(where: purpose.hasPrefix)
+      || purpose.hasPrefix("pose/")) ? 310 : 45
   let (data, response) = try await URLSession.shared.data(for: request)
   XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
   return try XCTUnwrap(String(data: data, encoding: .utf8)).trimmingCharacters(
