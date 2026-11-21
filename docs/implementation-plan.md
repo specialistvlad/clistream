@@ -67,6 +67,6 @@ Use the existing revision-checked lifecycle requests on Linux and macOS. Resolve
 
 ## README walkthrough and animated demo
 
-Use a drawn macOS desktop to show the server relaying two watcher updates to two viewers, then route editor input and the next watcher update independently. Place compatibility information beside the illustration. Review the quickstart and examples against the deployment, protocol, security and platform guides. Their runtime contracts and product requirements stay the same.
+Use a drawn macOS desktop to show a Mac typing into Codex on a laptop and two clients receiving its output through the server. Switch the Mac to Claude Code while the iPad continues following Codex. Show direction with moving arrows on the connection lines. Place compatibility information beside the illustration. Review the quickstart and examples against the deployment, protocol, security and platform guides. Their runtime contracts and product requirements stay the same.
 
 Exercise the documented commands on macOS and Linux and add a two-viewer case to the shared Go end-to-end suite. Both viewers should receive the same lines before one changes CLI apps. Run the package, end-to-end and cross-host deployment suites and inspect the GIF at desktop and phone widths. The walkthrough uses existing Go daemon, supervisor and client behavior. Native macOS, iPhone and iPad implementation and runtime verification are deferred.
