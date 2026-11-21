@@ -180,6 +180,35 @@ func TestCycleRunningApps(t *testing.T) {
 	equal(t, len(f.sessions("a")), 3)
 }
 
+func TestTwoViewersSwitchIndependently(t *testing.T) {
+	f := setup(t)
+	editor := f.managed("/bin/cat")
+	editorID := editor.sessionID()
+	watcher := f.managed("/bin/sh", "-c", `while read -r count; do echo "$count passed"; done`)
+	watcherID := watcher.sessionID()
+
+	mac := f.ui("a", client, "attach", editorID)
+	other := f.ui("b", client, "attach", watcherID)
+	mac.see("Ctrl-G Home")
+	other.see("Ctrl-G Home")
+	mac.send("\x1d18\r")
+	mac.see("18 passed")
+	other.see("18 passed")
+	other.send("19\r")
+	mac.see("19 passed")
+	other.see("19 passed")
+
+	mac.send("\x1b[91;5uTODO\r")
+	editor.see("TODO\n")
+	mac.see("TODO")
+	other.send("20\r")
+	other.see("20 passed")
+	mac.send("still editing\r")
+	editor.see("still editing\n")
+	equal(t, strings.Contains(mac.out.contents(), "20 passed"), false)
+	equal(t, strings.Contains(other.out.contents(), "TODO"), false)
+}
+
 func TestRestartCommandWidget(t *testing.T) {
 	f := setup(t)
 	path := filepath.Join(f.work, "worker")
