@@ -1,51 +1,19 @@
+import Combine
 import Foundation
-import SwiftTerm
-import SwiftUI
 
-struct SessionInfo: Codable, Identifiable {
-  let ID, Name, Mode, Driver, Version, Host, OS: String
-  let Ports: [String: String]?
-  var id: String { self.ID }
-}
-
-struct WorkspaceEntry: Decodable, Identifiable, Equatable {
-  let Name: String
-  let Directory: Bool
-  let Size, Modified: Int64
-  var id: String { Name }
-}
-struct Reply: Decodable {
-  var Entries: [WorkspaceEntry]?
-  var Error: String?
-  var Handle: String?
-  var Sessions: [SessionInfo]?
-  var Address: String?
-  var Data: Foundation.Data?
-  var Channel: String?
-  var Exit: Int?
-}
-
-enum Core {
-  static func call(_ fields: [String: Any]) -> Reply {
-    do {
-      let data = try JSONSerialization.data(withJSONObject: fields)
-      guard let raw = CSCall(String(decoding: data, as: UTF8.self)) else {
-        return Reply(Error: "Client returned no response")
-      }
-      defer { free(raw) }
-      return try JSONDecoder().decode(Reply.self, from: Data(bytes: raw, count: strlen(raw)))
-    } catch { return Reply(Error: error.localizedDescription) }
-  }
-
-  static func request(_ fields: [String: Any]) async -> Reply {
-    await withCheckedContinuation { resume in
-      DispatchQueue.global(qos: .userInitiated).async { resume.resume(returning: call(fields)) }
-    }
-  }
+@MainActor
+protocol TerminalRenderer: AnyObject {
+  func receive(_ bytes: Data)
+  var columns: Int { get }
+  var rows: Int { get }
 }
 
 @MainActor
 final class Connection: ObservableObject {
+  let readOnly: Bool
+  init(readOnly: Bool = false) { self.readOnly = readOnly }
+
+  @Published private(set) var pairingGeneration = UUID()
   @Published private(set) var paired = false
   @Published var pairingError: String?
   @Published private(set) var listError = ""
@@ -63,12 +31,14 @@ final class Connection: ObservableObject {
   @Published var selected: SessionInfo?
   @Published var status = ""
   @Published var forwarding = [String: String]()
+  @Published var draft = ""
   @Published var stdout = Data()
   @Published var stderr = Data()
-  private(set) var terminal: TerminalView?
+  private(set) var renderer: (any TerminalRenderer)?
   private var refreshTicket = UUID()
   private var pending = Data()
-  private var handle: String?
+  @Published private var handle: String?
+  var attached: Bool { handle != nil }
   private var forwards = [String: String]()
   private var generation = UUID()
   private let inputQueue = DispatchQueue(label: "com.vlk.clistream.input")
@@ -96,9 +66,17 @@ final class Connection: ObservableObject {
         return
       }
       pairingError = nil
+      pairingGeneration = UUID()
       leave()
       await refresh()
     } catch { pairingError = error.localizedDescription }
+  }
+
+  func watchSupervisors() async {
+    while !Task.isCancelled {
+      await refresh()
+      do { try await Task.sleep(for: .seconds(2)) } catch { return }
+    }
   }
 
   func refresh() async {
@@ -108,10 +86,24 @@ final class Connection: ObservableObject {
       let dir = try directory
       guard FileManager.default.fileExists(atPath: dir + "/server.json") else { return }
       paired = true
-      let r = await Core.request(["Op": "list", "Dir": dir])
+      let r = await Core.request(["Op": "supervisors", "Dir": dir])
       guard refreshTicket == ticket else { return }
-      listError = r.Error ?? ""
-      sessions = r.Sessions ?? []
+      if let error = r.Error {
+        listError =
+          error.contains("client authorization required")
+          ? "Device access was revoked. Pair again with a fresh invitation." : error
+        status = listError
+        return
+      }
+      listError = ""
+      sessions = (r.Supervisors ?? []).map { row in
+        var item = row.Info
+        item.supervisor = row.ID
+        item.revision = row.Revision
+        item.editable = row.EditableCommand
+        item.hasResult = row.RunResult
+        return item
+      }
       status = r.Error ?? (sessions.isEmpty ? "No active sessions" : "")
     } catch { status = error.localizedDescription }
   }
@@ -123,10 +115,12 @@ final class Connection: ObservableObject {
     selected = nil
     forwards.removeAll()
     forwarding.removeAll()
-    terminal = nil
+    renderer = nil
     pending = Data()
+    draft = ""
     stdout = Data()
     stderr = Data()
+    status = ""
     // Flush accepted keystrokes and pointer reports before closing their stream.
     inputQueue.async {
       for key in closing { _ = Core.call(["Op": "close", "Handle": key]) }
@@ -135,11 +129,29 @@ final class Connection: ObservableObject {
 
   func attach(_ item: SessionInfo) async {
     leave()
+    guard item.running else {
+      selected = item
+      status = "Stopped"
+      let ticket = generation
+      if item.hasResult == true {
+        let result = await manage(.result, item: item)
+        guard generation == ticket else { return }
+        stdout = result.Data ?? Data()
+        status =
+          result.Exit.map { "Process exited with status " + String($0) } ?? result.Error ?? status
+      }
+      return
+    }
     let ticket = generation
     do {
-      let r = await Core.request(["Op": "attach", "Dir": try directory, "ID": item.ID])
+      let r = await Core.request([
+        "Op": readOnly ? "preview" : "attach", "Dir": try directory, "ID": item.ID,
+      ])
       guard let key = r.Handle else {
-        if ticket == generation { status = r.Error ?? "Attach failed" }
+        if ticket == generation {
+          selected = item
+          status = r.Error ?? "Attach failed"
+        }
         return
       }
       guard ticket == generation else {
@@ -149,6 +161,7 @@ final class Connection: ObservableObject {
       handle = key
       selected = item
       status = ""
+      var childExited = false
       while handle == key {
         let event = await Core.request(["Op": "next", "Handle": key])
         guard handle == key else { return }
@@ -157,13 +170,14 @@ final class Connection: ObservableObject {
           break
         }
         if let exit = event.Exit {
+          childExited = true
           status = "Process exited with status \(exit)"
           break
         }
         if let data = event.Data {
           if item.Mode == "pty" {
-            if let terminal {
-              terminal.feed(byteArray: Array(data)[...])
+            if let renderer {
+              renderer.receive(data)
             } else {
               pending.append(data)
               pending = pending.suffix(1024 * 1024)
@@ -176,35 +190,101 @@ final class Connection: ObservableObject {
         }
       }
       if handle == key {
+        let finalStatus = status
+        let closing = Array(forwards.values) + [key]
         handle = nil
-        _ = await Core.request(["Op": "close", "Handle": key])
+        forwards.removeAll()
+        forwarding.removeAll()
+        for id in closing { _ = await Core.request(["Op": "close", "Handle": id]) }
+        guard ticket == generation else { return }
+        // The child sends its exit on the output stream before the supervisor
+        // publishes its next revision to the broker.
+        let deadline = ContinuousClock.now + .seconds(6)
+        repeat {
+          await refresh()
+          guard ticket == generation else { return }
+          guard childExited, listError.isEmpty, (item.revision ?? 0) > 0,
+            sessions.contains(where: { $0.id == item.id && $0.ID == item.ID }),
+            ContinuousClock.now < deadline
+          else { break }
+          try? await Task.sleep(for: .milliseconds(150))
+        } while !Task.isCancelled
+        guard ticket == generation else { return }
+        if let current = sessions.first(where: { $0.id == item.id }), !current.running {
+          selected = current
+          if current.hasResult == true {
+            let result = await manage(.result, item: current)
+            guard ticket == generation else { return }
+            if let data = result.Data { stdout = data }
+          }
+        }
+        status = finalStatus
       }
     } catch { status = error.localizedDescription }
   }
 
-  func install(_ view: TerminalView) {
-    terminal = view
+  func manage(_ action: SessionAction, item: SessionInfo, command: [Data]? = nil) async -> Reply {
+    do {
+      return await Core.action(
+        action, directory: try directory, target: item, arguments: command,
+        columns: renderer?.columns, rows: renderer?.rows)
+    } catch { return Reply(Error: error.localizedDescription) }
+  }
+
+  func changeRun(_ action: SessionAction, item: SessionInfo, arguments: [Data]?) async -> String? {
+    let ticket = generation
+    let reply = await manage(action, item: item, command: arguments)
+    guard generation == ticket else { return nil }
+    if let error = reply.Error {
+      await refresh()
+      return error
+    }
+    // Stop the old reader before its exit event can replace the new run's state.
+    leave()
+    selected = item
+    let replacement = generation
+    await refresh()
+    guard replacement == generation else { return nil }
+    guard listError.isEmpty, let current = sessions.first(where: { $0.id == item.id }) else {
+      status = listError.isEmpty ? "The supervisor is unavailable." : listError
+      return status
+    }
+    if let acknowledged = reply.Run, current.ID != acknowledged {
+      status = "The supervisor changed again. Reconnect to its current run."
+      return status
+    }
+    await attach(current)
+    return nil
+  }
+
+  func reconnect(_ item: SessionInfo) async {
+    let ticket = generation
+    await refresh()
+    guard ticket == generation else { return }
+    guard listError.isEmpty, let current = sessions.first(where: { $0.id == item.id }) else {
+      status = listError.isEmpty ? "This supervisor is unavailable." : listError
+      return
+    }
+    await attach(current)
+  }
+
+  func install(_ view: any TerminalRenderer) {
+    renderer = view
     if !pending.isEmpty {
-      view.feed(byteArray: Array(pending)[...])
+      view.receive(pending)
       pending.removeAll()
     }
   }
 
-  func send(_ fields: [String: Any]) {
-    guard let key = handle else { return }
-    let request = fields.merging(["Handle": key]) { _, new in new }
+  func send(_ input: TerminalInput) {
+    guard !readOnly, let key = handle else { return }
+    let request = input.fields(handle: key)
     inputQueue.async {
       let r = Core.call(request)
       if let error = r.Error {
         Task { @MainActor in if self.handle == key { self.status = error } }
       }
     }
-  }
-
-  func workspace(_ fields: [String: Any], session: SessionInfo) async -> Reply {
-    guard selected?.id == session.id, let handle else { return Reply(Error: "Session detached") }
-    return await Core.request(
-      fields.merging(["Handle": handle, "ID": session.id]) { _, new in new })
   }
 
   func forward(_ name: String, item: SessionInfo) async {

@@ -9,7 +9,7 @@
 7. Exercise both platforms, two simultaneous clients, unauthorized access, replay, port exports and terminal behavior. Record executed checks and release gates in verification.md.
 8. Run app-hosted and UI tests on iPhone and iPad simulators and native macOS. Verify repeatable file-picker round trips, terminal rendering and forwarded sockets.
 9. Attach the three Apple clients and a CLI client concurrently to one child. Exercise packet loss, delay, address changes and a lost handshake. Record the commands, results and remaining provider and distribution gates in the verification record.
-10. Implement and verify the native Apple session and workspace navigation. Exercise keyboard focus, terminal mouse reporting, Finder and Files interactions, adaptive layout and accessibility on each supported form factor. Run every mobile workflow by touch alone on both iPhone and iPad simulators and record the gesture outcomes. [Design acceptance criteria](apple-client-design.md#design-acceptance)
+10. Implement and verify the native Apple session and workspace navigation. Exercise keyboard focus, terminal mouse reporting, Finder and Files interactions, adaptive layout and accessibility on each supported form factor. Run every mobile workflow by touch alone on both iPhone and iPad simulators and record the gesture outcomes. [Design acceptance criteria](apple-client-design.md#acceptance)
 
 ## Server activity logs
 
@@ -29,7 +29,7 @@ Track acceptance against the eleven functional requirements and the engineering 
 
 The Linux and macOS daemon, supervisor and CLI share the registry, lifecycle protocol, Unix process-group handling and terminal implementation. The Go client uses Bubble Tea v2 for terminal interaction, Bubbles for the command field, and x/vt for child output and input encoding. Native Mac, iPhone and iPad clients use the existing running-session protocol and receive an exit event for the old run. Management controls are delivered in the Go client. [Approved feature specification](terminal-client-design.md)
 
-Run `make test e2e` on Linux and macOS, the four-host Linux deployment suite, and the compatibility harness with the previous binaries. Exercise terminal clear, alternate screen, resize, input, stale actions, argument round trips, loss of a restart acknowledgement, reconnection and one-shot status. Run `apple/test-shared.py` with both simulators and native macOS. All four viewers must observe the first exit and exchange input again on the distinct replacement run. [Execution record](verification.md)
+Run `make test e2e` on Linux and macOS, the four-host Linux deployment suite, and the compatibility harness with the previous binaries. Exercise terminal clear, alternate screen, resize, input, stale actions, argument round trips, loss of a restart acknowledgement, reconnection and one-shot status. Run the shared-session acceptance harness with both simulators and native macOS. All four viewers must observe the first exit and exchange input again on the distinct replacement run. [Execution record](verification.md)
 
 The header and app-switching update is shared Go CLI code on Linux and macOS. Each switch uses the existing discovery and attachment operations, so the daemon, supervisor and native Apple apps require no changes. Run the renderer checks and the real-PTY `TestCycleRunningApps` in both platform suites. Verify next, previous, wraparound, input destination, Escape and return to the supervisor table.
 
@@ -70,3 +70,7 @@ Use the existing revision-checked lifecycle requests on Linux and macOS. Resolve
 Use a drawn macOS desktop to show a Mac typing into Codex on a laptop and two clients receiving its output through the server. Switch the Mac to Claude Code while the iPad continues following Codex. Show direction with moving arrows on the connection lines. Place compatibility information beside the illustration. Review the quickstart and examples against the deployment, protocol, security and platform guides. Their runtime contracts and product requirements stay the same.
 
 Exercise the documented commands on macOS and Linux and add a two-viewer case to the shared Go end-to-end suite. Both viewers should receive the same lines before one changes CLI apps. Run the package, end-to-end and cross-host deployment suites and inspect the GIF at desktop and phone widths. The walkthrough uses existing Go daemon, supervisor and client behavior. Native macOS, iPhone and iPad implementation and runtime verification are deferred.
+
+## Native client parity
+
+Use separate native macOS and universal iOS entry points, sharing the Go client, Apple bridge, session state and terminal rendering. Target OS 27. The Mac sidebar selects a read-only preview and opens interactive sessions in native tabs. Mobile adapts navigation to available space. Verify pairing, live input and output, independent switching, lifecycle, results, forwards and interruption through shipping UI on Mac, iPhone, iPad and iPhone Duo. Run Go acceptance on both supported hosts. Apple file handling is deferred to a File Provider extension. Preserve existing Go file operations and their security guarantees.

@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/quic-go/quic-go"
@@ -22,16 +23,21 @@ import (
 )
 
 type request struct {
-	Op, Dir, Link, ID, Name, Handle, Path, Local string
-	Data                                         []byte
-	Cols, Rows                                   uint16
+	Run                             string
+	Revision                        uint64
+	Command                         [][]byte
+	Op, Dir, Link, ID, Name, Handle string
+	Data                            []byte
+	Cols, Rows                      uint16
 }
 type response struct {
-	Entries                         []wire.FileEntry `json:",omitempty"`
-	Error, Handle, Channel, Address string           `json:",omitempty"`
-	Sessions                        []wire.Session   `json:",omitempty"`
-	Data                            []byte           `json:",omitempty"`
-	Exit                            *int             `json:",omitempty"`
+	Supervisors                     []wire.Supervisor `json:",omitempty"`
+	Command                         [][]byte          `json:",omitempty"`
+	Run                             string            `json:",omitempty"`
+	Error, Handle, Channel, Address string            `json:",omitempty"`
+	Sessions                        []wire.Session    `json:",omitempty"`
+	Data                            []byte            `json:",omitempty"`
+	Exit                            *int              `json:",omitempty"`
 }
 type handle struct {
 	conn     *quic.Conn
@@ -78,42 +84,30 @@ func call(q request) (response, error) {
 		return response{Address: i.Address}, nil
 	case "pair":
 		return r, identity.Pair(context.Background(), q.Dir, q.Link, "client")
-	case "ls", "get", "put":
-		var c *quic.Conn
-		var e error
-		if q.Handle != "" {
-			value, ok := handles.Load(q.Handle)
-			if !ok {
-				return r, errors.New("attachment closed")
-			}
-			h := value.(*handle)
-			if h.attach == nil {
-				return r, errors.New("terminal attachment required")
-			}
-			c = h.conn
-		} else {
-			c, e = client.Connect(q.Dir)
-			if e != nil {
-				return r, e
-			}
-			defer c.CloseWithError(0, "")
+	case "result", "supervisors", "command", "run-command", "start", "stop", "restart":
+		c, err := client.Connect(q.Dir)
+		if err != nil {
+			return r, err
 		}
-		switch q.Op {
-		case "ls":
-			e = client.Files(c, q.ID, q.Path, func(i wire.FileEntry) error {
-				if len(r.Entries) >= 50000 {
-					return errors.New("directory exceeds display limit")
-				}
-				r.Entries = append(r.Entries, i)
-				return nil
-			})
-		case "get":
-			e = client.Get(c, q.ID, q.Path, q.Local)
-		case "put":
-			e = client.Put(c, q.ID, q.Path, q.Local)
+		defer c.CloseWithError(0, "")
+		if q.Op == "supervisors" {
+			caps, err := wire.Capabilities(c)
+			if err != nil {
+				return r, err
+			}
+			r.Supervisors, err = client.Supervisors(c, slices.Contains(caps, wire.ManagedSupervisors), slices.Contains(caps, wire.EditCommand), slices.Contains(caps, wire.RunResult))
+			return r, err
 		}
-		return r, e
-	case "list", "attach", "forward":
+		if q.Op == "result" {
+			result, err := client.Result(c, q.ID, q.Run, q.Revision)
+			if err != nil {
+				return r, err
+			}
+			return response{Data: []byte(result.Text), Exit: &result.Exit}, nil
+		}
+		msg, err := wire.Request(c, wire.Message{Op: q.Op, ID: q.ID, Revision: q.Revision, Run: q.Run, Command: q.Command, Cols: q.Cols, Rows: q.Rows})
+		return response{Command: msg.Command, Run: msg.Run}, err
+	case "list", "attach", "preview", "forward":
 		c, e := client.Connect(q.Dir)
 		if e != nil {
 			return r, e
@@ -124,8 +118,12 @@ func call(q request) (response, error) {
 			return r, e
 		}
 		h := &handle{conn: c, events: make(chan response, 32), done: make(chan struct{})}
-		if q.Op == "attach" {
-			h.attach, e = client.Attach(c, q.ID)
+		if q.Op != "forward" {
+			if q.Op == "preview" {
+				h.attach, e = client.Preview(c, q.ID)
+			} else {
+				h.attach, e = client.Attach(c, q.ID)
+			}
 			if e == nil {
 				go h.run()
 			}
