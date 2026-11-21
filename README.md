@@ -4,9 +4,9 @@
 
 Run Codex, Claude, or any other CLI app on your own machine. CLIStream lets multiple devices see and control the same running CLI app. You host the server, and each device connects to it over an encrypted connection.
 
-![Codex and Claude Code run on the laptop. The second Mac asks Codex to run tests and both devices see its output. The Mac switches to Claude Code to draft release notes. The iPad stays with Codex and sees “18 tests passed.”](docs/media/clistream-demo.gif)
+![Codex and Claude Code run on the laptop. A “Typing here” marker identifies the second Mac. As it types “Run the tests.”, the same letters appear in Codex on the laptop and iPad. The Mac switches to Claude Code to draft release notes. The iPad stays with Codex and sees “18 tests passed.”](docs/media/clistream-demo.gif)
 
-*The Mac and iPad start in the same Codex session. When the Mac switches to Claude Code, the iPad keeps showing the test run.*
+*Watch the Mac type into Codex. Each keystroke appears on the laptop and iPad at the same time. When the Mac switches to Claude Code, the iPad keeps showing the test run.*
 
 **Compatibility.** The Go CLI runs on macOS and Linux. The native macOS, iPhone and iPad apps need a compatibility update to display sessions from this release. Upgrade the Go daemon (`clistreamd`), supervisor (`clistreams`) and client (`clistream`) together.
 

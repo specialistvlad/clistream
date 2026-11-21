@@ -8,7 +8,7 @@ The audit maps requirements to existing checks and identifies pending coverage. 
 
 On macOS and Debian Linux arm64, `make test e2e` passed. `TestTwoViewersSwitchIndependently` used two Go clients and two supervised CLI apps. Both clients saw `18 passed` and `19 passed`. After one switched back and typed `TODO` into the editor, the other received `20 passed` from the watcher. The cross-host deployment suite also passed.
 
-A separate smoke check on each OS enrolled the supervisor using `clistreamd invite`, launched `/bin/sh`, exchanged shell output, uploaded and downloaded a file, compared its contents and exercised start and stop. The smoke checks used an ephemeral loopback port. The 18-second GIF was inspected at 640 and 360 pixels wide. The iPad is an illustration. Native app updates and runtime verification remain deferred.
+A separate smoke check on each OS enrolled the supervisor using `clistreamd invite`, launched `/bin/sh`, exchanged shell output, uploaded and downloaded a file, compared its contents and exercised start and stop. The smoke checks used an ephemeral loopback port. The 18-second GIF was inspected at 640 and 360 pixels wide. The rendered prompt text matched frame by frame across the Mac, laptop and iPad during Codex typing, then across the Mac and laptop during Claude Code typing. The Mac carries the keyboard marker and blinking input caret. The iPad is an illustration. Native app updates and runtime verification remain deferred.
 
 ## Interactive client frame with pipe children
 
