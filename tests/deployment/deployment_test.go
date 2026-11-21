@@ -48,7 +48,7 @@ func (c cluster) docker(args ...string) string {
 
 func (c cluster) container(host string, flags ...string) {
 	name := c.prefix + "-" + host
-	args := []string{"run", "-d", "--name", name, "--hostname", host, "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--tmpfs", "/state", "--tmpfs", "/tmp", "-e", "HOME=/state", "-v", c.bin + ":/opt/cli:ro"}
+	args := []string{"run", "-d", "--name", name, "--hostname", host, "--read-only", "--cap-drop", "ALL", "--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "--security-opt", "no-new-privileges", "--tmpfs", "/state", "--tmpfs", "/tmp", "-e", "HOME=/state", "-v", c.bin + ":/opt/cli:ro"}
 	args = append(args, flags...)
 	c.docker(append(args, c.image, "sleep", "infinity")...)
 	c.t.Cleanup(func() { c.docker("rm", "-f", name) })

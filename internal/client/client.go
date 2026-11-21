@@ -147,12 +147,18 @@ func (a *Attachment) Receive(fn func(string, []byte) error) (int, error) {
 		}()
 	}
 	code := 0
+	var firstErr error
 	for range a.outputs {
 		r := <-results
-		if r.e != nil {
-			return 1, r.e
+		if r.e != nil && firstErr == nil {
+			firstErr = r.e
+			// Stop other streams and join their readers before callers release callback state.
+			a.Close()
 		}
 		code = r.code
+	}
+	if firstErr != nil {
+		return 1, firstErr
 	}
 	return code, nil
 }

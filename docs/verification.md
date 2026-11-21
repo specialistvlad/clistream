@@ -8,6 +8,8 @@ The audit maps requirements to existing checks and identifies pending coverage. 
 
 Ubuntu 26.04 reproduced the privacy fixture failure when its multicall `cat` rejected a renamed executable. The fixture now launches a privately named shell wrapper. A regression test uses a long hostname and verifies the terminal still shows the child's exit status. The Apple CI matrix uses GitHub's `xcode-27` runner with Xcode 27.2 and boots the selected simulator before launching XCTest.
 
+The packaged-client run exposed a race while switching pipe sessions. The client now cancels the other streams on the first receive error and waits for their callbacks before returning. The multi-host deployment fixture runs its containers as the owner of the bind-mounted workspaces with all capabilities dropped.
+
 ## Multi-server workspace · November 21, 2026
 
 On macOS and Debian Linux arm64, race-enabled Go tests, vet and end-to-end tests passed. The Mac UI paired two separate brokers publishing the same program, entered markers into each terminal, stopped the second broker and exchanged more input with the first child. The Mac UI and app-hosted suites also verified adoption and re-pairing of an existing enrollment with the original key, all six tree/list grouping combinations, live Light/Dark changes, native tabs and windows, draft retention and connection latency. A desktop rerun verified renaming a server, relaunching, and reconnecting to the correct child. One overlapping run timed out while XCTest synthesized typing on the Mac during the Duo’s Device Hub automation. The isolated rerun passed.
