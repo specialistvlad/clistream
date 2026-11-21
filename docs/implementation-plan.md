@@ -64,3 +64,9 @@ Ship `clistreamd`, `clistreams` and `clistream` on Linux and macOS. Group help b
 ## Session-first Go commands
 
 Use the existing revision-checked lifecycle requests on Linux and macOS. Resolve the session to a child run for file operations. Share atomic file publication and directory-descriptor checks between both Go builds. Negotiate completed-run retrieval separately, retain the most recent result in supervisor memory, and display finished text commands in a scrollable client viewport. Verify scripts, fast exits, explicit I/O modes, workspace boundaries, concurrent copies and custom logs in the Go suites and cross-host deployment. Native macOS, iPhone and iPad implementation and verification are deferred at the operator’s request.
+
+## README walkthrough and animated demo
+
+Use a drawn macOS desktop to show the server relaying two watcher updates to two viewers, then route editor input and the next watcher update independently. Place compatibility information beside the illustration. Review the quickstart and examples against the deployment, protocol, security and platform guides. Their runtime contracts and product requirements stay the same.
+
+Exercise the documented commands on macOS and Linux and add a two-viewer case to the shared Go end-to-end suite. Both viewers should receive the same lines before one changes CLI apps. Run the package, end-to-end and cross-host deployment suites and inspect the GIF at desktop and phone widths. The walkthrough uses existing Go daemon, supervisor and client behavior. Native macOS, iPhone and iPad implementation and runtime verification are deferred.

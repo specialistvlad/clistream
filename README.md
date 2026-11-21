@@ -1,104 +1,104 @@
 # CLIStream
 
-Share one running terminal between your Mac, Linux machine, iPhone and iPad. A Go supervisor launches the command locally. Enrolled devices can attach to that same process, exchange terminal input, browse its workspace and forward explicitly exported ports.
+**Leave your laptop and pick up where you left off on your iPhone, iPad, or in another macOS terminal.**
 
-Upgrade the daemon, supervisor, and Go CLI together. The supervisor is now `clistreams`. Existing account keys and pairings carry over. Update launch scripts to the spellings in `clistreams --help`. The existing native Apple apps require a decoder update before they can display sessions from this release.
+Run Codex, Claude, or any other CLI app on your own machine. CLIStream lets multiple devices see and control the same running CLI app. You host the server, and each device connects to it over an encrypted connection.
 
-## Build and try it
+![A laptop’s test watcher prints “18 passed” and “19 passed”. The server relays each line to a second Mac and an iPad. The Mac switches to the editor and sends TODO back to the laptop while “20 passed” reaches the iPad.](docs/media/clistream-demo.gif)
 
-Install Go 1.27.4 or newer. Linux filesystem transfers use openat2 or, when unavailable, verify mount IDs through /proc/self/fdinfo. Run `make build` to produce three binaries in `bin/`. Put the absolute bin directory on PATH before changing to a session's working directory.
+*Watch one CLI app stream to two devices. Switch CLI apps on the Mac, and the iPad keeps following the original session.*
+
+**Compatibility.** The Go CLI runs on macOS and Linux. The native macOS, iPhone and iPad apps need a compatibility update to display sessions from this release. Upgrade the Go daemon (`clistreamd`), supervisor (`clistreams`) and client (`clistream`) together.
+
+## Try it with /bin/sh
+
+Open three terminals in the repository directory on the same machine, using the same OS account. With Go 1.27.4 or newer installed, build the tools and start the server in terminal 1.
+
+```sh
+make build && ./bin/clistreamd
+```
+
+In terminal 2, start a shell in its own workspace. The supervisor enrolls using an invitation from the running server. Leave this terminal open to see its activity feed.
 
 ```sh
 export PATH="$PWD/bin:$PATH"
-clistreamd
+mkdir -p "$HOME/clistream-demo" && cd "$HOME/clistream-demo" &&
+  clistreams "$(clistreamd invite)" /bin/sh
 ```
 
-The daemon prints two commands and a QR code for each listening address. Both commands use the same three-minute link, such as `clistream://127.0.0.1/?token=<token>`. The signed token includes the port. Keep the single quotes when pasting a displayed command into your shell. Replace `LINK` below with the link for the machine where the program will run.
+In terminal 3, open the client. It shares the supervisor’s saved server and device key on this account.
 
 ```sh
-mkdir -p ~/clistream-demo
-cd ~/clistream-demo
-clistreams LINK /bin/sh
+./bin/clistream
 ```
 
-In a third terminal on the same OS account, run `clistream`. The two Go tools share a device key and saved server, so you can also pair with `clistream LINK` first and then run `clistreams /bin/sh`. On a different machine, use the same invitation before it expires. Press **p** in the daemon terminal to invalidate outstanding invitations and display a fresh link for each address.
+Select the shell with the arrow keys and press **Enter**. Type `echo hello` in the attached client. Press **Ctrl-G** to return to the list while the shell keeps running. Attach again and type `exit` to finish the shell. **Ctrl-C** in the supervisor terminal ends supervision.
 
-For scripts, `clistreamd invite` prints a single link. Both CLIs still accept invitations on stdin through `clistream pair` and `clistreams --pair-stdin`.
+## Pair over the LAN
 
-On the program host, `clistreams PROGRAM` shows a timestamped activity feed on stderr. The child stays accessible through enrolled clients. Local typing, piped input, and local EOF never reach it. Ctrl-C stops supervision. The startup line gives the path to the private JSON journal.
-
-Use `clistreams --interactive PROGRAM` to see and control the child locally under the **CLIStream Supervisor** header. Add `--local-input=false` for a read-only terminal. Scripts that send input or capture child stdout and stderr must also pass `--interactive`. Both modes save the same operation metadata. [Supervisor activity logs](docs/deployment.md#supervisor-activity-logs)
-
-Run `clistream` to open the supervisor table. Select a running program with the arrow keys and press Enter to attach. While attached, **Ctrl-]** selects the next running app, **Ctrl-[** selects the previous app, and **Ctrl-G** returns home to the supervisor table. Ctrl-[ requires a terminal that distinguishes it from Escape. Switching keeps every app running. Use **S** to stop. **R** or **E** opens a single editable line containing the last launched command and its arguments. The cursor starts at the end, so you can append an argument such as ` --help` immediately. Press **Enter** to start or restart and attach, or **Esc** to cancel. Quote an argument containing spaces and use `""` for an empty argument. The supervisor runs the command directly on its host. The highlighted header identifies the target and shows the available keys. When input or output is redirected it prints the session list as JSON. Explicit `list`, `attach ID`, and `pair` (invitation on stdin) remain available to scripts. Type into the attached client, or into a supervisor launched with `--interactive`. The shell exits for every viewer when you run `exit`. Its supervisor stays available for another start. To share a single run, launch `clistreams --once PROGRAM`. Its row shows **Attach only**. **Ctrl-G Disconnect** leaves the program available to other viewers. When the program exits, sharing ends and the supervisor returns its exit status. Launch it locally to share again. In pipe mode, `clistream --send-eof attach ID` closes the child's shared stdin when the client's input ends.
-
-`make dist` builds checksummed CLI archives in `dist/` for Linux and macOS on amd64 and arm64. Extract the matching archive on each host.
-
-## Connect another machine
-
-Choose the network interfaces to serve when starting the daemon. For example, on a Mac whose Wi-Fi interface is `en0`, run:
+The default server listens on loopback. To connect a second machine, stop the demo server and start it with a LAN interface too. This example uses `en0` on a Mac. Substitute the server’s LAN interface on Linux or another Mac. Allow inbound UDP on the displayed port.
 
 ```sh
-clistreamd --interface loopback --interface en0
+./bin/clistreamd --interface loopback --interface en0
 ```
 
-Use a network link printed for an IP address reachable from the phone. The default loopback link works only on the server machine. Scan the QR code, open the link in CLIStream, or paste it into **Pair**, then tap **Pair device**. Each device can redeem the invitation during its three-minute lifetime. Fresh enrollment requires software that accepts the hostname-and-token link. With a background daemon, run `clistreamd` as the same user in a terminal to open the pairing display. Start supervisors on the machines where the target executables are installed.
+On the second machine, install the Go CLI on your PATH and paste the **Network** client command printed by the server, including the single quotes around the link. Select the same shell to share its input and output. Invitations last three minutes. Press **p** in the server terminal to replace outstanding links. After pairing, reconnect with just `clistream`.
 
-```sh
-clistreams LINK claude
-clistreams codex
-clistreams --io-mode pipe -- your-command --your-option
-clistreams --interactive --local-input=false -- /bin/cat
-```
+Each client and supervisor connects to the server using QUIC with TLS 1.3. The self-hosted server decrypts and relays traffic, so run it on a machine you trust. An enrolled device can control CLI apps and access their shared workspaces. [Security model](docs/security.md)
 
-Use the first command to pair a new account and launch Claude. Later launches on that account can omit the link. The supervisor runs the supplied program directly and passes through its arguments. Auto mode checks the launching terminal for each run. The initial run uses the supervisor’s terminal. Remote starts use the client’s terminal dimensions when available and pipes for redirected commands. Any version can run this way, including Claude and Codex. Use `--io-mode pipe` or `--io-mode pty` to override I/O selection.
+## Switch and control CLI apps
 
-## Control a session from the command line
+With the Go tools on your PATH, run `clistreams codex` or `clistreams claude` in another terminal on a paired host where that CLI app is installed. Add `--interactive` before the executable to use the CLI app from the supervisor terminal too.
 
-Run `clistream list` and copy the session’s `ID`. This identifies the same supervisor across stops, starts and command changes. The `Run` field identifies its current child and is empty while stopped. Lifecycle commands exit when the supervisor acknowledges the request. A one-shot supervisor supports attachment for its single run.
+| While using the Go client | Action |
+| --- | --- |
+| **Ctrl-]** / **Ctrl-[** while attached | Switch to the next / previous running CLI app on this client. Ctrl-[ needs a terminal that distinguishes it from Escape. |
+| **Ctrl-G** while attached | Return to the supervisor list. Other viewers stay attached. |
+| **S** in the list | Stop the selected CLI app for everyone. |
+| **R** or **E** in the list | Edit the last command. Press Enter to launch it or Esc to cancel. |
+
+For scripts, run `clistream list` and set `ID` to the supervisor’s `ID` field. It stays the same across restarts. For example, stop the shell, then start it again.
 
 ```sh
 clistream "$ID" stop
 clistream "$ID" start
-clistream "$ID" restart
-clistream "$ID" edit -- codex --help
 ```
 
-`edit` immediately launches the supplied executable and arguments. In the dashboard, press **Enter** on a stopped session to read its latest output inside the client frame. Use the arrow keys or Page Up and Page Down to scroll. Press **Enter** again to return, then **R** to edit and launch another command.
+Use `clistreams --once /bin/sh` to share a single run. When that shell exits, its supervisor exits too. [Terminal controls and launch examples](docs/terminal-client-design.md)
 
-## Workspace files and forwarded ports
+## Share files and forward a port
+
+The supervisor shares its launch directory by default. To try a round trip in the demo workspace, run these commands from another directory on the client. The `local:` prefix identifies the client side of a copy.
 
 ```sh
+printf 'demo note\n' > notes.txt
+clistream "$ID" fs cp local:./notes.txt notes.txt
 clistream "$ID" fs ls
-clistream "$ID" fs mkdir reports
-clistream "$ID" fs cp local:./notes.txt reports/
-clistream "$ID" fs mv reports/notes.txt reports/summary.txt
-clistream "$ID" fs cp reports/summary.txt local:./download.txt
-clistream "$ID" fs rm reports/summary.txt
-clistream "$ID" fs rmdir reports
-clistreams --share-port web=tcp:127.0.0.1:8080 --share-port echo=udp:127.0.0.1:9000 -- your-command
-clistream forward ID web 127.0.0.1:8081
+clistream "$ID" fs cp notes.txt local:./download.txt
 ```
 
-By default, enrolled devices can browse, download and upload files in the directory where you start `clistreams`. Run `clistreams --workspace ./reports my-program` to share the reports folder while running the program in the launch directory. Use `--files=FALSE` to disable file access for that supervisor. [Session folder selection](docs/requirements.md#session-folder-selection)
+Use `clistreams --workspace ./reports /bin/sh` to share a different folder or `clistreams --files=FALSE /bin/sh` to disable file access. [Session folder selection](docs/requirements.md#session-folder-selection)
 
-Go CLI file paths start at the shared folder. Use `local:` for the client side of a copy. Copying to a directory uses the source name, and copying to an existing regular file replaces it atomically. Use `clistream [OPTIONS] [PAIRING_LINK] SESSION_ID fs COMMAND` to pair and operate in one invocation. In the Apple app, attach and select **Files** to browse, upload or save a file. On iPhone and iPad, Upload imports a copy of the selected local document. Canceling the picker keeps the current remote folder. The visible directory refreshes every two seconds. A session's **Forward** button displays the loopback address where an exported service is available on that device.
+To share a web service already listening on port 8080 on the CLI app host, launch a supervisor with a named export.
+
+```sh
+clistreams --share-port web=tcp:127.0.0.1:8080 /bin/sh
+```
+
+On the client, set `ID` to the new supervisor’s ID from `clistream list`. Run the forward and open `http://127.0.0.1:8081` on the client while it runs.
+
+```sh
+clistream forward "$ID" web 127.0.0.1:8081
+```
 
 ## Administration and development
 
-The daemon prints each JSON activity event to the server console (stderr) and appends the same record to `server.log` in its private state directory. Follow it with `tail -F /path/to/state/server.log`. Start the daemon with `clistreamd --log-file=FALSE` for console-only logging or `--log-file=PATH` to choose the rotating file. The log records connections, disconnects, sessions, file operations and forwards. Terminal and file contents stay private. [Server activity logs](docs/deployment.md#server-activity-logs)
+Run `clistreamd devices` to list enrolled fingerprints and `clistreamd revoke FINGERPRINT` to revoke a device. The daemon writes activity events to stderr and its private rotating `server.log`. The supervisor prints its journal path at startup. [Deployment, migration and logs](docs/deployment.md)
 
-`clistreamd devices` lists enrolled key fingerprints. `clistreamd revoke FINGERPRINT` removes that device and closes active connections. On upgrade, previously enrolled supervisors gain permission to control every session. A holder of a valid invitation can enroll again after revocation. Press **p** to replace outstanding invitations. Global flags precede subcommands. Long options require two dashes. Use `--help` for usage. All three commands use the OS account’s configuration directory.
+Run `make test e2e` for race-enabled Go tests, vet and multi-process acceptance tests. Use `make dist` to build checksummed Linux and macOS archives for amd64 and arm64. On macOS with Xcode and XcodeGen, `make apple` builds the shared Go XCFramework and generates the native project.
 
-On upgrade, the Go tools reuse the sole saved profile, or the client profile when both legacy profiles have the same address and server pin. If the servers differ, each tool keeps its existing connection until you explicitly pair with the shared server. Older daemons retain their original enrollment rules.
-
-- [Product requirements and acceptance criteria](docs/requirements.md)
-- [Interactive terminal client and supervisor controls](docs/terminal-client-design.md)
+- [Product requirements](docs/requirements.md)
 - [Apple client interaction design](docs/apple-client-design.md)
-- [Deployment and Apple build instructions](docs/deployment.md)
-- [Security model and file-service permissions](docs/security.md)
 - [Wire protocol](docs/protocol.md)
 - [Implementation plan](docs/implementation-plan.md) and [verification record](docs/verification.md)
-
-Run `make test e2e` for race-enabled Go tests, vet and multi-process acceptance tests. Use `make apple` on macOS with Xcode and XcodeGen to build the shared Go XCFramework and generate the Xcode project.
-
-[MIT license](LICENSE)
+- [MIT license](LICENSE)
