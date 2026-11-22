@@ -26,6 +26,10 @@ The final full Duo rerun without screenshots passed 16 of 20 required cases. Fol
 
 The isolated four-client test passed with the native Mac, iPhone and iPad apps and an independent Go terminal client attached to the same pipe. All four exchanged input. The Mac switched to a PTY and then to a second server while the other three continued using the original child. When the Mac returned, it saw the phone’s input from its time away. [Four-client test](https://github.com/specialistvlad/clistream/actions/runs/45019186229)
 
+## TestFlight 0.1.0 (2611221901)
+
+The iOS and native macOS archives were built from revision `3dcb2ce`, signature-checked, and uploaded to App Store Connect. Both builds finished processing and are available to the existing internal tester group. The same export-compliance declaration used for the previous builds was applied after checking that the encryption code and dependencies had not changed. The hosted UI results for this revision are recorded above.
+
 ## TestFlight 0.1.0 (2611220152)
 
 App Store Connect processed the native macOS and universal iOS builds and made both available to the internal tester group. Release verification passed 16 required Mac cases, 19 each on iPhone and iPad simulators, and 20 on Duo. The four-client exchange used the Mac, iPhone, iPad, and a separate Go CLI. The optional external CLI driver case was skipped. Physical-device installation and camera handoff require separate verification. [Release review](https://github.com/specialistvlad/clistream/pull/3)
