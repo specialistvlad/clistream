@@ -41,7 +41,7 @@ func mobileViewer(ctx context.Context, name, udid, fixture, pipeID string, invit
 	run := func(args ...string) error {
 		return exec.CommandContext(ctx, "axe", append(args, "--udid", udid)...).Run()
 	}
-	tap := func(id string) error {
+	tap := func(id, label, next string) error {
 		err := run("tap", "--id", id, "--wait-timeout", "30")
 		if err == nil {
 			return nil
@@ -50,6 +50,18 @@ func mobileViewer(ctx context.Context, name, udid, fixture, pipeID string, invit
 		tree, readErr := exec.CommandContext(ctx, "axe", "describe-ui", "--minimal-keys", "--udid", udid).Output()
 		if readErr != nil {
 			return fmt.Errorf("%w (could not read the accessibility tree)", err)
+		}
+		// A lost simulator input receipt can arrive after the app changed screens.
+		if next != "" && bytes.Contains(tree, []byte(next)) {
+			return nil
+		}
+		if label != "" && bytes.Contains(tree, []byte(label)) {
+			err = run("tap", "--label", label, "--wait-timeout", "15")
+		} else if bytes.Contains(tree, []byte(id)) {
+			err = run("tap", "--id", id, "--wait-timeout", "15")
+		}
+		if err == nil {
+			return nil
 		}
 		var visible []string
 		for _, label := range []string{"Servers", "Add Server", "Pairing link", "Pair device", "Pair a server", "Couldn’t pair this device", "Open", "Allow", "Don't Allow", "Paste", "SpringBoard", "Lock Screen", "session-terminal"} {
@@ -103,10 +115,10 @@ func mobileViewer(ctx context.Context, name, udid, fixture, pipeID string, invit
 	if err := exec.CommandContext(ctx, "xcrun", "simctl", "launch", udid, "com.vlk.clistream.acceptance.shared").Run(); err != nil {
 		return fmt.Errorf("bring the app to the foreground: %w", err)
 	}
-	if err := tap("workspace-add-server"); err != nil {
+	if err := tap("workspace-add-server", "Add Server", "pairing-link"); err != nil {
 		return fmt.Errorf("open Add Server: %w", err)
 	}
-	if err := tap("pairing-link"); err != nil {
+	if err := tap("pairing-link", "Pairing link", ""); err != nil {
 		return fmt.Errorf("focus invitation field: %w", err)
 	}
 	invitation, err := invite()
@@ -126,13 +138,13 @@ func mobileViewer(ctx context.Context, name, udid, fixture, pipeID string, invit
 	if err := waitForText(review.Address, "the reviewed server address", 45*time.Second); err != nil {
 		return err
 	}
-	if err := tap("workspace-confirm"); err != nil {
+	if err := tap("workspace-confirm", "Pair device", "session-"+pipeID); err != nil {
 		return fmt.Errorf("confirm pairing: %w", err)
 	}
-	if err := tap("session-" + pipeID); err != nil {
+	if err := tap("session-"+pipeID, "", "session-terminal"); err != nil {
 		return fmt.Errorf("select remote session: %w", err)
 	}
-	if err := tap("session-terminal"); err != nil {
+	if err := tap("session-terminal", "", ""); err != nil {
 		return fmt.Errorf("focus terminal: %w", err)
 	}
 	if err := barrier("ready"); err != nil {
