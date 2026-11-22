@@ -183,7 +183,9 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 			return
 		}
 		for attempt := 0; attempt < 2; attempt++ {
-			cmd := exec.CommandContext(r.Context(), "axe", "hinge", "set", strconv.Itoa(degrees), "--udid", udid, "--timeout", "15")
+			// The movement receipt confirms the mechanical angle. XCTest waits for
+			// the app's live layout; screenshots independently resolve the active display.
+			cmd := exec.CommandContext(r.Context(), "axe", "hinge", "set", strconv.Itoa(degrees), "--udid", udid, "--timeout", "15", "--no-wait")
 			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 			if err := cmd.Run(); err == nil {
 				fmt.Fprint(w, "applied")
