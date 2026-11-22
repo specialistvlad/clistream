@@ -31,22 +31,24 @@ func buildTestPlan(root, platform, destination string) (string, error) {
 	return plans[0], nil
 }
 
-func prepareViewers(root string) (string, error) {
+type viewerPlans struct{ mac, mobile string }
+
+func prepareViewers(root string) (viewerPlans, error) {
 	for _, key := range []string{"IPHONE_SIMULATOR_ID", "IPAD_SIMULATOR_ID"} {
 		if os.Getenv(key) == "" {
-			return "", fmt.Errorf("%s required", key)
+			return viewerPlans{}, fmt.Errorf("%s required", key)
 		}
 	}
 	fmt.Println("Building the Mac and mobile test plans")
 	macPlan, err := buildTestPlan(root, "macOS", "generic/platform=macOS")
 	if err != nil {
-		return "", err
+		return viewerPlans{}, err
 	}
 	mobilePlan, err := buildTestPlan(root, "iOS", "generic/platform=iOS Simulator")
 	if err != nil {
-		return "", err
+		return viewerPlans{}, err
 	}
-	app := filepath.Join(filepath.Dir(mobilePlan), "Debug-iphonesimulator", "CLIStream.app")
+	products := filepath.Join(filepath.Dir(mobilePlan), "Debug-iphonesimulator")
 	// Migrate and install each simulator while it has the runner to itself.
 	// Leave the iPad up for pairing and start the prepared phone only after that.
 	for _, device := range []string{"IPHONE_SIMULATOR_ID", "IPAD_SIMULATOR_ID"} {
@@ -54,26 +56,27 @@ func prepareViewers(root string) (string, error) {
 		fmt.Println("Preparing", device)
 		for _, cmd := range []*exec.Cmd{
 			exec.Command("apple/boot-simulator.sh", id),
-			exec.Command("xcrun", "simctl", "install", id, app),
+			exec.Command("xcrun", "simctl", "install", id, filepath.Join(products, "CLIStream.app")),
+			exec.Command("xcrun", "simctl", "install", id, filepath.Join(products, "CLIStreamUITests-Runner.app")),
 		} {
 			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 			if err := cmd.Run(); err != nil {
-				return "", err
+				return viewerPlans{}, err
 			}
 		}
 		if device == "IPHONE_SIMULATOR_ID" {
 			if err := exec.Command("xcrun", "simctl", "shutdown", id).Run(); err != nil {
-				return "", fmt.Errorf("shut down the prepared phone: %w", err)
+				return viewerPlans{}, fmt.Errorf("shut down the prepared phone: %w", err)
 			}
 		}
 	}
-	return macPlan, nil
+	return viewerPlans{macPlan, mobilePlan}, nil
 }
 
 // Run each UI runner against the same broker. The independent CLI joins via
 // its normal attach command. A unique marker from each writer is retained in
 // the child's history so simulator launch order does not affect the assertion.
-func shared(macPlan string, arrivals <-chan string, url, pipeID, pipeRun, terminalID string, command func(string, ...string) *exec.Cmd) error {
+func shared(plans viewerPlans, arrivals <-chan string, url, pipeID, pipeRun, terminalID string, command func(string, ...string) *exec.Cmd) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	var participants sync.WaitGroup
 	defer func() {
@@ -82,7 +85,7 @@ func shared(macPlan string, arrivals <-chan string, url, pipeID, pipeRun, termin
 	}()
 	results := make(chan error, 4)
 	for _, device := range []struct{ name, id string }{
-		{"pad", os.Getenv("IPAD_SIMULATOR_ID")}, {"phone", os.Getenv("IPHONE_SIMULATOR_ID")},
+		{"pad", os.Getenv("IPAD_SIMULATOR_ID")}, {"phone", os.Getenv("IPHONE_SIMULATOR_ID")}, {"mac", ""},
 	} {
 		if device.name == "phone" {
 			boot := exec.CommandContext(ctx, "xcrun", "simctl", "bootstatus", device.id, "-b")
@@ -91,12 +94,19 @@ func shared(macPlan string, arrivals <-chan string, url, pipeID, pipeRun, termin
 				return fmt.Errorf("boot the prepared iPhone: %w", err)
 			}
 		}
+		dest, plan, suite := "platform=macOS", plans.mac, "CLIStream-MacUITests"
+		if device.id != "" {
+			dest, plan, suite = "platform=iOS Simulator,id="+device.id, plans.mobile, "CLIStream-UITests"
+		}
 		fmt.Println("Pairing shared viewer:", device.name)
-		participants.Go(func() {
-			results <- mobileViewer(ctx, device.name, device.id, url, pipeID, func() ([]byte, error) {
-				return command("clistreamd", "invite").Output()
-			})
-		})
+		test := exec.CommandContext(ctx, "xcodebuild", "-quiet", "-xctestrun", plan, "-destination", dest,
+			"-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never",
+			"-resultBundlePath", filepath.Join("apple/build", fmt.Sprintf("shared-%d-%s.xcresult", time.Now().Unix(), device.name)),
+			"-only-testing:"+suite+"/NativeSessionTests/testConcurrentViewers", "test-without-building")
+		test.Env = append(os.Environ(), "TEST_RUNNER_CLISTREAM_FIXTURE="+url, "TEST_RUNNER_CLISTREAM_PARTICIPANT="+device.name,
+			"TEST_RUNNER_CLISTREAM_PIPE_ID="+pipeID, "TEST_RUNNER_CLISTREAM_PTY_ID="+terminalID, "TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY=0")
+		test.Stdout, test.Stderr = os.Stdout, os.Stderr
+		participants.Go(func() { results <- test.Run() })
 		select {
 		case <-arrivals:
 		case err := <-results:
@@ -104,18 +114,6 @@ func shared(macPlan string, arrivals <-chan string, url, pipeID, pipeRun, termin
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-	}
-	fmt.Println("Launching shared viewer: mac")
-	mac := exec.CommandContext(ctx, "xcodebuild", "-quiet", "-xctestrun", macPlan, "-destination", "platform=macOS", "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never", "-resultBundlePath", filepath.Join("apple/build", fmt.Sprintf("shared-%d-mac.xcresult", time.Now().Unix())), "-only-testing:CLIStream-MacUITests/NativeSessionTests/testConcurrentViewers", "test-without-building")
-	mac.Env = append(os.Environ(), "TEST_RUNNER_CLISTREAM_FIXTURE="+url, "TEST_RUNNER_CLISTREAM_PARTICIPANT=mac", "TEST_RUNNER_CLISTREAM_PIPE_ID="+pipeID, "TEST_RUNNER_CLISTREAM_PTY_ID="+terminalID)
-	mac.Stdout, mac.Stderr = os.Stdout, os.Stderr
-	participants.Go(func() { results <- mac.Run() })
-	select {
-	case <-arrivals:
-	case err := <-results:
-		return fmt.Errorf("a shared viewer stopped before the Mac paired: %w", err)
-	case <-ctx.Done():
-		return ctx.Err()
 	}
 	participants.Go(func() { results <- observeCLI(ctx, command("clistream", "attach", pipeRun)) })
 	for range 4 {
