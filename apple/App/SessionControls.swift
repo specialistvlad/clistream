@@ -129,9 +129,18 @@ struct SessionActions: ViewModifier {
         }
       }
     }
-    if session.Mode == "pipe" && connection.attached {
-      Button("Send EOF", systemImage: "text.append") { connection.send(.eof) }
+    if session.Mode == "pipe" {
+      #if os(macOS)
+        sendEOF.disabled(!connection.attached)
+      #else
+        if connection.attached { sendEOF }
+      #endif
     }
+  }
+
+  private var sendEOF: some View {
+    Button("Send EOF", systemImage: "text.append") { connection.send(.eof) }
+      .accessibilityIdentifier("session-send-eof")
   }
 
   private func perform(_ action: SessionAction, target: SessionInfo, argv: [Data]? = nil) {

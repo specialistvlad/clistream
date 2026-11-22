@@ -158,7 +158,14 @@ final class NativeSessionTests: XCTestCase {
     terminal.typeText("finished-child")
     expectOutput("finished-child", in: terminal)
     terminal.typeText("\n")
-    action("Send EOF",app)
+    #if os(macOS)
+      let eof = app.toolbars.buttons["session-send-eof"].firstMatch
+      XCTAssertTrue(eof.waitForExistence(timeout: 12))
+      XCTAssertTrue(eof.isEnabled)
+      eof.click()
+    #else
+      action("Send EOF", app)
+    #endif
     let result = app.staticTexts.containing(NSPredicate(
       format: "value CONTAINS %@ OR label CONTAINS %@", "finished-child","finished-child"
     )).firstMatch
@@ -510,7 +517,12 @@ final class NativeSessionTests: XCTestCase {
       ProcessInfo.processInfo.environment[
         terminal ? "CLISTREAM_PTY_ID" : (eof ? "CLISTREAM_EOF_ID" : "CLISTREAM_PIPE_ID")])
     let session = app.descendants(matching: .any)["session-" + id].firstMatch
-    activate(session)
+    #if os(macOS)
+      XCTAssertTrue(session.waitForExistence(timeout: 15))
+      session.click()
+    #else
+      activate(session)
+    #endif
     return app
   }
   private func invitation() async throws -> String { try await fixtureResponse("QR") }
