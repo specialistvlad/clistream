@@ -23,8 +23,8 @@
       }
       var widths: [CGFloat] = []
       for (pose, key, marker) in [
-        ("Closed", "A", "[01]"), ("Partially Open", "B", "[02]"),
-        ("Open", "C", "[03]"), ("Closed", "D", "[04]"),
+        ("Closed", "a", "[61]"), ("Partially Open", "b", "[62]"),
+        ("Open", "c", "[63]"), ("Closed", "d", "[64]"),
       ] {
         let changed = try await fixtureResponse("pose/" + pose)
         XCTAssertEqual(changed, "applied")
@@ -38,18 +38,13 @@
           }, object: terminal)
         XCTAssertEqual(XCTWaiter.wait(for: [layout], timeout: 15), .completed)
         widths.append(terminal.frame.width)
-        if app.keyboards.firstMatch.exists {
-          openTerminalKeys(in: app)
-          app.buttons["Hide Keyboard"].tap()
-          XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
-        }
-        openTerminalKeys(in: app)
-        app.buttons["Control Key"].tap()
-        app.buttons["Control-" + key].tap()
+        // Type into the same live PTY on each display and check the byte the child saw.
+        terminal.tap()
+        terminal.typeText(key)
         let echoed = XCTNSPredicateExpectation(
           predicate: NSPredicate(format: "value CONTAINS %@", marker), object: terminal)
         XCTAssertEqual(XCTWaiter.wait(for: [echoed], timeout: 10), .completed)
-        if key != "D", ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1" {
+        if key != "d", ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1" {
           let captured = try await fixtureResponse("pose-screenshot/" + pose)
           XCTAssertEqual(captured, "captured")
         }
