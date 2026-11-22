@@ -1,5 +1,11 @@
 # Implementation and acceptance plan
 
+## Delivery status
+
+The shipped clients cover live sessions, managed command editing and restarts, completed results, and named port forwarding. The Apple apps also support several servers, adaptive navigation and system appearance. Workspace file commands ship in the Go CLI. Finder and Files integration remains deferred. The dated plans below record the sequence of implementation, including earlier Apple file UI work. [Native client guide](apple-client-design.md) · [Verification record](verification.md)
+
+## Original implementation sequence
+
 1. Establish TLS identities, reusable three-minute invitations and mandatory bounded compression.
 2. Connect the daemon and its local administration socket to a session registry and multiplexed QUIC relay.
 3. Implement pipe and PTY process execution, terminal fan-out, local interaction and explicit port exports.
@@ -21,7 +27,7 @@ Compare default file and stderr records byte for byte and verify foreground pair
 
 The daemon and Go CLIs implement reusable v2 invitations and a shared default identity. Real-daemon tests cover both pairing directions, concurrent first use, profile migration, conflicting saved servers, revocation and restart. The supervisor runs the supplied program directly.
 
-Apple v2 acceptance remains open. Update the remaining mobile UI single-use assertions, then verify opening and pasting the same invitation on iPhone and iPad and enrolling the native Mac client. Record the server address shown for confirmation and verify session input and output after pairing. Physical-camera scanning and opening a link from Messages require a device run. [Verification record](verification.md)
+At this milestone Apple v2 acceptance was pending. Subsequent native UI runs verified reusable invitations on Mac, iPhone and iPad. The tests confirm the displayed server address and exchange input and output after pairing. Physical-camera scanning and opening a link from Messages require a device run. [Verification record](verification.md)
 
 Track acceptance against the eleven functional requirements and the engineering checks in the [requirements audit](test-results/requirements-audit.md).
 

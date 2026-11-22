@@ -75,7 +75,7 @@ The optional Docker test, `make test-deployment`, starts a broker, two independe
 
 ## Apple client and TestFlight
 
-Fresh enrollment requires a client build that accepts the daemon’s hostname-and-token links. Existing enrolled devices can reconnect with their saved keys. The Go CLIs also accept invitations from older daemons. The historical shared-session suite covered the previous v2 link form. Native Apple enrollment with the new form remains unverified. When upgrading a running daemon, restart the process to activate the new terminal display. If the saved network address changes, enroll with a link containing a reachable address.
+Fresh enrollment requires a client build that accepts the daemon’s hostname-and-token links. Existing enrolled devices can reconnect with their saved keys. The Go CLIs also accept invitations from older daemons. The native apps accept hostname-and-token invitations through **Add Server** or by opening the link. Confirm the advertised server address on the device. When upgrading a running daemon, restart the process to activate the new terminal display. If the saved network address changes, enroll with a link containing a reachable address.
 
 Install full Xcode, Go and XcodeGen. Run `make apple` and open apple/CLIStream.xcodeproj. Select CLIStream-iOS for iPhone and iPad, or CLIStream-macOS for Mac. The static Go library contains arm64 device, arm64/x86_64 simulator, and universal macOS slices. Simulator and local builds can use separate signing settings. The application uses SwiftTerm for PTY rendering.
 
@@ -84,6 +84,10 @@ Create or select an App Store Connect record matching the bundle identifier and 
 Use `ARCHIVE_ONLY=1` to create a signed local archive. The native Mac app is inside its Products/Applications directory.
 
 ### Install an internal beta
+
+**Testers:** Accept the internal testing invitation with your enrolled Apple Account. In TestFlight, open **CLIStream** and choose **Install** or **Update**. The same iOS build runs on iPhone, iPad, and Duo. Mac uses its own native build.
+
+**Release operators:**
 
 1. Sign in to the Apple Developer account for the team that owns `com.vlk.clistream`. If an upload reports `FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`, the team's Account Holder can review any updated program terms on the account landing page. App Store Connect also displays agreement status under **Business → Agreements**. [Developer account](https://developer.apple.com/account/) · [Apple's agreement guide](https://developer.apple.com/help/app-store-connect/manage-agreements/sign-and-update-agreements/)
 2. Under **App Store Connect → Apps**, open the record for that bundle identifier. If it is missing, use **+ → New App**, choose iOS and macOS, and enter the primary language, bundle ID and a unique SKU. One iOS build serves both iPhone and iPad. [App record instructions](https://developer.apple.com/help/app-store-connect/create-an-app-record/add-a-new-app/)

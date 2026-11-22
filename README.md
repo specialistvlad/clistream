@@ -1,16 +1,24 @@
 # CLIStream
 
-**Leave your laptop and pick up where you left off on your iPhone, iPad, or in another macOS terminal.**
-
-Run Codex, Claude, or any other CLI app on your own machine. CLIStream lets multiple devices see and control the same running CLI app. You host the server, and each device connects to it over an encrypted connection.
+**Share a live terminal across your devices.** Run a shell, coding agent, or build on one machine and pick it up from a Mac, Linux terminal, iPhone, or iPad. Paired devices see the same output and can type into the same process through a server you control. The program keeps running when you disconnect.
 
 ![Codex and Claude Code run on the laptop. A “Typing here” marker identifies the second Mac. As it types “Run the tests.”, the same letters appear in Codex on the laptop and iPad. The Mac switches to Claude Code to draft release notes. The iPad stays with Codex and sees “18 tests passed.”](docs/media/clistream-demo.gif)
 
 *Watch the Mac type into Codex. Each keystroke appears on the laptop and iPad at the same time. When the Mac switches to Claude Code, the iPad keeps showing the test run.*
 
-**Compatibility.** The Go CLI runs on macOS and Linux. Build the native apps from this revision for macOS 27 and iOS/iPadOS 27, including iPhone Duo. Older native builds need an update to display sessions. Upgrade the Go daemon (`clistreamd`), supervisor (`clistreams`) and client (`clistream`) together.
+## What you can do
 
-Choose **Add Server** to pair each server. Click or tap a CLI to open its terminal. The sidebar supports tree and list views grouped by server, host, or CLI name. On Mac, use the row’s context menu to open a separate tab or window. Remote files are available through the Go CLI. [Native client guide](docs/apple-client-design.md)
+| Task | Where it works |
+| --- | --- |
+| Share a live terminal or a pipe-backed process with several viewers. Send input, see output, and detach independently. | All clients |
+| Start, stop, or restart a managed program, edit its executable and arguments, and read its retained output after exit. | All clients |
+| Forward a named TCP or UDP service to a local port on the viewing device. | All clients |
+| Pair and rename servers, see connection latency, and browse programs in a tree or list grouped by server, host, or CLI name. | Native Mac, iPhone, and iPad apps |
+| Open sessions in native tabs or separate windows. | Mac app |
+| Use touch terminal keys, select and paste text, and keep a session across size or fold changes. | iPhone, iPad, and iPhone Duo apps |
+| List, copy, move, or remove files and manage directories in the supervisor’s shared workspace. | Go CLI on macOS and Linux |
+
+The **server** handles pairing and routes traffic. A **supervisor** runs beside each program on its **host** and keeps it available when viewers leave. A server can bring together programs from several hosts. The Apple apps require macOS 27 or iOS/iPadOS 27 and follow the system appearance. Upgrade the Go client, daemon, and supervisor together. Older native builds also need an update to display current sessions. [Native client guide](docs/apple-client-design.md) · [Build and TestFlight instructions](docs/deployment.md#apple-client-and-testflight)
 
 ## Try it with /bin/sh
 

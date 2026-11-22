@@ -6,3 +6,5 @@
 *.xcuserstate
 /dist/
 __pycache__/
+
+/docs/screenshots/
