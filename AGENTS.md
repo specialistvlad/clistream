@@ -8,6 +8,10 @@ Every CLIStream implementation plan must cover all three areas below.
 
 If an area or platform requires no changes, explain why. Record any work the user explicitly defers and identify the remaining verification.
 
+# UI automation
+
+Run Apple UI automation exclusively on isolated CI runners, including simulator, Device Hub, screenshot, and shared-session tests. Keep the developer’s desktop and monitors free. Use the Apple matrix in the GitHub Actions Test workflow. Local compilation, Go tests and static checks can run without a GUI.
+
 # Delivery
 
 Commit and push requested changes to the current branch's upstream as soon as verification passes. Keep unrelated working-tree changes out of the commit.

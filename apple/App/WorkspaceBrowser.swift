@@ -11,6 +11,7 @@ struct WorkspaceSidebar: View {
   @State private var collapsed = Set<[String]>()
   @State private var renameTarget: ServerProfile?
   @State private var name = ""
+  @FocusState private var editingName: Bool
   private func rename(_ server: ServerProfile) {
     name = server.name
     renameTarget = server
@@ -128,32 +129,21 @@ struct WorkspaceSidebar: View {
       #if os(macOS)
         .onChange(of: grouping) { _, _ in workspace.focus(selected) }
         .onChange(of: flat) { _, _ in workspace.focus(selected) }
-        .safeAreaInset(edge: .top, spacing: 0) {
-          HStack {
-            Text("Servers").font(.headline)
-            Spacer()
-            sidebarControls
-          }.labelStyle(.iconOnly).padding(.horizontal, 12).padding(.vertical, 6)
-        }
+        .toolbar { ToolbarItemGroup(placement: .navigation) { sidebarControls } }
       #else
         .toolbar { ToolbarItemGroup(placement: .topBarTrailing) { sidebarControls } }
       #endif
       .sheet(item: $renameTarget) { target in
-        VStack(alignment: .leading, spacing: 12) {
-          Text("Rename Server").font(.headline)
+        WorkspaceSheet(title: "Rename Server", confirmation: "Save",
+                       enabled: !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                       cancel: { renameTarget = nil }, confirm: {
+          workspace.rename(target, to: name)
+          renameTarget = nil
+        }) {
           TextField("Name", text: $name)
+            .focused($editingName).onAppear { editingName = true }
             .accessibilityIdentifier("server-name-field")
-          HStack {
-            Spacer()
-            Button("Cancel") { renameTarget = nil }.keyboardShortcut(.cancelAction)
-            Button("Save") {
-              workspace.rename(target, to: name)
-              renameTarget = nil
-            }.keyboardShortcut(.defaultAction)
-              .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-          }
-        }.padding().frame(minWidth: 280)
-          .presentationDetents([.medium])
+        }
       }
   }
   @ViewBuilder private var sidebarControls: some View {

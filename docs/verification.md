@@ -4,6 +4,16 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Local screenshot gallery
+
+Open `docs/screenshots/index.html` in the checkout used for capture. The gallery groups full-resolution PNGs by the native Mac app, iPhone, iPad, iPhone Duo, and the Go terminal client on macOS and Linux. Apple captures use the running desktop app and mobile simulators. The terminal captures use output from the compiled Go programs connected to a pseudo-terminal. Git ignores the entire gallery, so a fresh clone contains only the published README animation.
+
+## TestFlight 0.1.0 (2611220152)
+
+App Store Connect processed the native macOS and universal iOS builds and made both available to the internal tester group. Release verification passed 16 required Mac cases, 19 each on iPhone and iPad simulators, and 20 on Duo. The four-client exchange used the Mac, iPhone, iPad, and a separate Go CLI. The optional external CLI driver case was skipped. Physical-device installation and camera handoff require separate verification. [Release review](https://github.com/specialistvlad/clistream/pull/3)
+
+The dated entries below preserve the commands and results from the revisions that produced them. For commands in the current checkout, use [Reproduction](#reproduction).
+
 ## Release review · November 21, 2026
 
 Ubuntu 26.04 reproduced the privacy fixture failure when its multicall `cat` rejected a renamed executable. The fixture now launches a privately named shell wrapper. A regression test uses a long hostname and verifies the terminal still shows the child's exit status. The Apple CI matrix uses GitHub's `xcode-27` runner with Xcode 27.2 and boots the selected simulator before launching XCTest.
@@ -205,6 +215,8 @@ A fresh Go vulnerability scan reported zero reachable known vulnerabilities. The
 
 ## Feature coverage
 
+This table summarizes the earlier baseline, including the retired Apple file interface. Current Apple releases use session and forwarding controls. Workspace file commands ship in the Go client.
+
 | Feature | Evidence |
 |---|---|
 | Pairing and authentication | The Go suite redeems one v2 link from independent devices, checks expiry and replacement, rejects mismatched pins and unknown keys, and verifies durable enrollment. Revoking an attached viewer disconnects it while another viewer continues. The November 20 v1 record above covers Apple QR decoding and confirmation. |
@@ -231,7 +243,7 @@ make dist test-dist
 
 Set `CLISTREAM_LEGACY_BIN` and `CLISTREAM_MANAGED_V1_BIN` to binary directories built from `bd2d7ab` and `50cbcaa` to run `make test-compatibility`. Run `make test-deployment` with Docker for the four-container test and, on macOS, the native CLI to Linux supervisor check.
 
-On macOS with Xcode 27.1 or later, XcodeGen and Go installed, build the native apps and run the UI suites against private test peers.
+Build the native apps locally with Xcode, XcodeGen and Go. Run the UI commands below on the isolated macOS CI runner. The GitHub Actions Test workflow runs the native Mac, iPhone, iPad, Duo and shared-session jobs on separate runners. A second monitor shares the logged-in desktop’s keyboard and pointer focus.
 
 ```sh
 make apple

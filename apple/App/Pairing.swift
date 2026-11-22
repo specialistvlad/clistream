@@ -57,8 +57,12 @@ struct PairingPresentation: ViewModifier {
           }
         }
       ) { request in
-        VStack(alignment: .leading, spacing: 16) {
-          Text("Pair a server").font(.title2)
+        WorkspaceSheet(title: "Pair a server", confirmation: "Pair device",
+                       enabled: request.link != nil || !invitation.isEmpty,
+                       cancel: { pairing = nil }, confirm: {
+          confirmedLink = request.link?.absoluteString ?? invitation.trimmingCharacters(in: .whitespacesAndNewlines)
+          pairing = nil
+        }) {
           if let address = request.address {
             Text(address)
           } else {
@@ -70,18 +74,37 @@ struct PairingPresentation: ViewModifier {
               }
             if let pastedAddress { Text(pastedAddress) }
           }
-          HStack {
-            Button("Cancel") { pairing = nil }.keyboardShortcut(.cancelAction)
-            Button("Pair device") {
-              let link =
-                request.link?.absoluteString
-                ?? invitation.trimmingCharacters(in: .whitespacesAndNewlines)
-              confirmedLink = link
-              pairing = nil
-            }.keyboardShortcut(.defaultAction).disabled(request.link == nil && invitation.isEmpty)
-          }
-        }.padding(24).frame(minWidth: 290).presentationDetents([.medium])
+        }
       }
   }
 
+}
+
+/// Use the platform's presentation and button ordering for single-task sheets.
+struct WorkspaceSheet<Fields: View>: View {
+  let title: String
+  let confirmation: String
+  let enabled: Bool
+  let cancel: () -> Void
+  let confirm: () -> Void
+  @ViewBuilder let fields: () -> Fields
+
+  var body: some View {
+    NavigationStack {
+      Form { fields() }.formStyle(.grouped)
+        .navigationTitle(title)
+        .toolbar {
+          ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: cancel) }
+          ToolbarItem(placement: .confirmationAction) {
+            Button(confirmation, action: confirm).disabled(!enabled)
+              .keyboardShortcut(.defaultAction)
+          }
+        }
+    }
+    #if os(macOS)
+      .frame(minWidth: 420, idealWidth: 500, minHeight: 170)
+    #else
+      .presentationDetents([.medium, .large])
+    #endif
+  }
 }

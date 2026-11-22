@@ -1,85 +1,57 @@
 import SwiftUI
 
-struct SessionControls: View {
+/// Each presentation retains the supervisor revision that the operator reviewed.
+struct SessionActions: ViewModifier {
   @ObservedObject var connection: Connection
   let session: SessionInfo
-  @State private var action: SessionAction?
+  @State private var confirmation: SessionInfo?
+  @State private var confirmingRestart = false
+  @State private var editor: CommandDraft?
   @State private var error: String?
-  @State private var arguments: [String] = []
-  @State private var editing = false
-  @State private var editTarget: SessionInfo?
+  @State private var ports = false
 
-  var body: some View {
-    HStack {
-      if session.running {
-        Button("Stop") { action = .stop }
-        Button("Restart") { action = .restart }
-      } else {
-        Button("Start") { perform(.start) }
-      }
-      if session.editable == true {
-        Button("Edit Command…") {
-          Task {
-            let target = session
-            let reply = await connection.manage(.command, item: target)
-            guard let argv = reply.Command else {
-              error = reply.Error ?? "Command unavailable"
-              return
-            }
-            let decoded = argv.compactMap { String(data: $0, encoding: .utf8) }
-            guard decoded.count == argv.count else {
-              error = "Command contains non-UTF-8 arguments"
-              return
-            }
-            editTarget = target
-            arguments = decoded
-            editing = true
-          }
+  func body(content: Content) -> some View {
+    content.toolbar {
+      #if os(macOS)
+        ToolbarItemGroup { actions }
+      #else
+        ToolbarItem {
+          Menu("Session", systemImage: "ellipsis.circle") { actions }
         }
+      #endif
+      ToolbarItem {
+        Button("Ports", systemImage: "sidebar.right") { ports.toggle() }
+          .accessibilityIdentifier("session-ports").help("Show or hide port forwarding")
       }
     }
-    .confirmationDialog(
-      "Confirm " + (action?.rawValue ?? ""),
+    .inspector(isPresented: $ports) {
+      PortsInspector(connection: connection, session: session, close: { ports = false })
+        .inspectorColumnWidth(min: 230, ideal: 280, max: 400)
+    }
+    .sheet(item: $editor) { draft in
+      CommandSheet(draft: draft) { argv in
+        editor = nil
+        perform(.launch, target: draft.session, argv: argv)
+      }
+    }
+    .alert(
+      (confirmingRestart ? "Restart “" : "Stop “") + (confirmation?.Name ?? "") + "”?",
       isPresented: Binding(
-        get: { action != nil }, set: { if !$0 { action = nil } }
-      ), presenting: action
-    ) { operation in
-      Button(operation.rawValue.capitalized + " Session", role: .destructive) { perform(operation) }
-    }
-    .sheet(isPresented: $editing) {
-      VStack {
-        Text("Edit Command").font(.headline)
-        ScrollViewReader { scroll in
-          ScrollView {
-            ForEach(arguments.indices, id: \.self) { i in
-              HStack {
-                TextField(i == 0 ? "Executable" : "Argument", text: $arguments[i])
-                  .autocorrectionDisabled()
-                  #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                  #endif
-                  .accessibilityIdentifier("argument-" + String(i))
-                if i > 0 { Button("Remove") { arguments.remove(at: i) } }
-              }.id(i)
-            }
-          }
-          .onChange(of: arguments.count) { oldCount, newCount in
-            if newCount > oldCount { scroll.scrollTo(newCount - 1, anchor: .bottom) }
-          }
-        }
-        HStack {
-          Button("Add Argument") { arguments.append("") }
-          Button("Cancel") { editing = false }
-          Button("Launch") {
-            editing = false
-            perform(.launch, target: editTarget, argv: arguments.map { Data($0.utf8) })
-          }.disabled(arguments.first?.isEmpty != false)
-        }
-      }.padding()
+        get: { confirmation != nil }, set: { if !$0 { confirmation = nil } }
+      ), presenting: confirmation
+    ) { target in
+      Button("Cancel", role: .cancel) {}
+      Button(confirmingRestart ? "Restart" : "Stop", role: .destructive) {
+        perform(confirmingRestart ? .restart : .stop, target: target)
+      }
+    } message: { _ in
+      Text("This ends the current run for everyone connected.")
     }
     .alert(
       "Session action failed",
-      isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })
+      isPresented: Binding(
+        get: { error != nil }, set: { if !$0 { error = nil } }
+      )
     ) {
       Button("OK") {}
     } message: {
@@ -87,10 +59,160 @@ struct SessionControls: View {
     }
   }
 
-  private func perform(_ operation: SessionAction, target: SessionInfo? = nil, argv: [Data]? = nil)
-  {
-    Task {
-      error = await connection.changeRun(operation, item: target ?? session, arguments: argv)
+  @ViewBuilder private var actions: some View {
+    if session.running && !connection.attached {
+      Button("Reconnect", systemImage: "arrow.clockwise") {
+        Task { await connection.reconnect(session) }
+      }
+    }
+    if (session.revision ?? 0) > 0 {
+      Button(
+        session.running ? "Restart…" : "Start…",
+        systemImage: session.running ? "arrow.counterclockwise" : "play"
+      ) {
+        let target = session
+        if target.editable == true {
+          Task {
+            let reply = await connection.manage(.command, item: target)
+            guard let argv = reply.Command else {
+              error = reply.Error ?? "Command unavailable"
+              return
+            }
+            let formatted = Core.call([
+              "Op": "format-command", "Command": argv.map { $0.base64EncodedString() },
+            ])
+            guard let line = formatted.Line else {
+              error = formatted.Error ?? "Command unavailable"
+              return
+            }
+            editor = CommandDraft(session: target, line: line)
+          }
+        } else if target.running {
+          confirmingRestart = true
+          confirmation = target
+        } else {
+          perform(.start, target: target)
+        }
+      }
+      if session.running {
+        Button("Stop…", systemImage: "stop") {
+          confirmingRestart = false
+          confirmation = session
+        }
+      }
+    }
+    if session.Mode == "pipe" && connection.attached {
+      Button("Send EOF", systemImage: "text.append") { connection.send(.eof) }
+    }
+  }
+
+  private func perform(_ action: SessionAction, target: SessionInfo, argv: [Data]? = nil) {
+    Task { error = await connection.changeRun(action, item: target, arguments: argv) }
+  }
+}
+
+private struct CommandDraft: Identifiable {
+  let id = UUID()
+  let session: SessionInfo
+  let line: String
+}
+
+private struct CommandSheet: View {
+  let draft: CommandDraft
+  let submit: ([Data]) -> Void
+  @Environment(\.dismiss) private var dismiss
+  @State private var line: String
+  @State private var validation: Reply
+
+  init(draft: CommandDraft, submit: @escaping ([Data]) -> Void) {
+    self.draft = draft
+    self.submit = submit
+    _line = State(initialValue: draft.line)
+    _validation = State(initialValue: Core.call(["Op": "parse-command", "Line": draft.line]))
+  }
+
+  var body: some View {
+    NavigationStack {
+      Form {
+        if draft.session.running { Text("Restarting ends the current run for everyone connected.") }
+        VStack(alignment: .leading) {
+          Text("Command")
+          CommandField(line: $line, submit: launch).frame(minHeight: 32)
+          if let error = validation.Error { Text(error).foregroundStyle(.red) }
+        }
+      }
+      .formStyle(.grouped)
+      .navigationTitle((draft.session.running ? "Restart “" : "Start “") + draft.session.Name + "”")
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+        ToolbarItem(placement: .confirmationAction) {
+          Button(draft.session.running ? "Restart" : "Start", action: launch)
+            .disabled(validation.Command == nil)
+        }
+      }
+    }
+    #if os(macOS)
+      .frame(minWidth: 460, idealWidth: 540, minHeight: 200)
+    #endif
+    .onChange(of: line) { _, value in
+      validation = Core.call(["Op": "parse-command", "Line": value])
+    }
+  }
+  private func launch() {
+    if let argv = Core.call(["Op": "parse-command", "Line": line]).Command { submit(argv) }
+  }
+}
+
+private struct PortsInspector: View {
+  @ObservedObject var connection: Connection
+  let session: SessionInfo
+  let close: () -> Void
+  @State private var changing = Set<String>()
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack {
+        Text("Ports").font(.headline).accessibilityAddTraits(.isHeader)
+        Spacer()
+        Button("Done", action: close)
+      }.padding()
+      Divider()
+      List {
+        ForEach((session.Ports ?? [:]).keys.sorted(), id: \.self) { name in
+          VStack(alignment: .leading) {
+            Toggle(
+              isOn: Binding(
+                get: { connection.forwarding[name] != nil },
+                set: { _ in
+                  guard changing.insert(name).inserted else { return }
+                  Task {
+                    await connection.forward(name, item: session)
+                    changing.remove(name)
+                  }
+                })
+            ) {
+              Text(name)
+              Text((session.Ports?[name] ?? "").uppercased()).font(.caption)
+            }.disabled(!connection.attached || changing.contains(name))
+              .accessibilityIdentifier("forward-" + name)
+            if let address = connection.forwarding[name] {
+              Text(address).textSelection(.enabled).accessibilityIdentifier(
+                "forward-address-" + name)
+              Button("Copy Address") {
+                #if os(macOS)
+                  NSPasteboard.general.clearContents()
+                  NSPasteboard.general.setString(address, forType: .string)
+                #else
+                  UIPasteboard.general.string = address
+                #endif
+              }
+            }
+          }
+        }
+      }.overlay {
+        if session.Ports?.isEmpty != false {
+          Text("This session has no shared ports.").foregroundStyle(.secondary)
+        }
+      }
     }
   }
 }

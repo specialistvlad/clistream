@@ -17,12 +17,14 @@ import (
 
 	"github.com/quic-go/quic-go"
 	"github.com/specialistvlad/clistream/internal/client"
+	"github.com/specialistvlad/clistream/internal/commandline"
 	"github.com/specialistvlad/clistream/internal/forward"
 	"github.com/specialistvlad/clistream/internal/identity"
 	"github.com/specialistvlad/clistream/internal/wire"
 )
 
 type request struct {
+	Line                            string
 	Run                             string
 	Revision                        uint64
 	Command                         [][]byte
@@ -31,6 +33,7 @@ type request struct {
 	Cols, Rows                      uint16
 }
 type response struct {
+	Line                            string            `json:",omitempty"`
 	Pin                             string            `json:",omitempty"`
 	RTTMicros                       int64             `json:",omitempty"`
 	Supervisors                     []wire.Supervisor `json:",omitempty"`
@@ -75,6 +78,11 @@ func (h *handle) run() {
 func call(q request) (response, error) {
 	var r response
 	switch q.Op {
+	case "format-command":
+		return response{Line: commandline.Format(q.Command)}, nil
+	case "parse-command":
+		argv, err := commandline.Parse(q.Line)
+		return response{Command: argv}, err
 	case "inspect-invitation":
 		i, e := identity.ParseInvitation(q.Link)
 		if e != nil {
