@@ -84,3 +84,9 @@ Use separate native macOS and universal iOS entry points, sharing the Go client,
 ## Multi-server native workspace
 
 Share enrolled profiles, catalog grouping and route selection across Apple platforms. The native Mac shell owns separate tabs and windows. The Go bridge reads active QUIC connection statistics. Existing daemon, supervisor and command-line behavior on Linux and macOS uses the same protocol. Exercise independent routing, offline recovery, saved profiles, window movement and display preferences in UI automation.
+
+## Native terminal workspace and session controls
+
+The desktop workspace placed sidebar and lifecycle actions inside the content area, presented command arguments as separate fields, and displayed pipe I/O as logs and a Send form. Move actions into the window toolbar, put port forwarding in an adaptive trailing inspector, and review a single highlighted command in a native sheet. Route both pipe and PTY attachments through the terminal renderer on all Apple platforms. Reuse the Go command grammar across macOS and Linux clients and the local Apple bridge. The daemon, supervisor, and wire operations already support these interactions.
+
+Verify keyboard and touch input, return and paste, EOF, lifecycle review and cancellation, native windows, inspector toggling during active forwarding, and compact and wide layouts using the production apps. Compare shared pipe interactions with the Go CLI and refresh local screenshots after verification.

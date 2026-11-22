@@ -243,7 +243,7 @@ make dist test-dist
 
 Set `CLISTREAM_LEGACY_BIN` and `CLISTREAM_MANAGED_V1_BIN` to binary directories built from `bd2d7ab` and `50cbcaa` to run `make test-compatibility`. Run `make test-deployment` with Docker for the four-container test and, on macOS, the native CLI to Linux supervisor check.
 
-On macOS with Xcode 27.1 or later, XcodeGen and Go installed, build the native apps and run the UI suites against private test peers.
+Build the native apps locally with Xcode, XcodeGen and Go. Run the UI commands below on the isolated macOS CI runner. The GitHub Actions Test workflow runs the native Mac, iPhone, iPad, Duo and shared-session jobs on separate runners. A second monitor shares the logged-in desktop’s keyboard and pointer focus.
 
 ```sh
 make apple

@@ -144,7 +144,7 @@ final class SessionTests: XCTestCase {
         let app = try await pairedApp(session: "CLISTREAM_SESSION")
         try voice.enable()
         XCTAssertTrue(voice.isEnabled)
-        app.textFields["session-input"].tap()
+        app.descendants(matching: .any)["session-terminal"].firstMatch.tap()
         var readings = [String]()
         let focus = XCTNSPredicateExpectation(
           predicate: NSPredicate { _, _ in
@@ -165,13 +165,13 @@ final class SessionTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(500))
             continue
           }
-          if ["Input", "Send", "EOF"].allSatisfy({ label in
+          if ["Terminal", "Ports"].allSatisfy({ label in
             readings.contains { $0.localizedCaseInsensitiveContains(label) }
           }) {
             break
           }
         }
-        for label in ["Input", "Send", "EOF"] {
+        for label in ["Terminal", "Ports"] {
           XCTAssertTrue(
             readings.contains { $0.localizedCaseInsensitiveContains(label) },
             "Missing \(label) in VoiceOver focus order: \(readings)")
@@ -224,75 +224,18 @@ final class SessionTests: XCTestCase {
 
     @MainActor func testTouchNavigationAndEditing() async throws {
       let app = try await pairedApp(session: "CLISTREAM_TOUCH_SESSION", largeText: true)
-      let output = app.textViews["Standard output"]
-      assertText("copyword selection", in: output)
-      XCTAssertGreaterThan(
-        output.frame.height, 35, "Pipe output must leave room for text selection")
-      let word = output.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 37, dy: 20))
-      let delivery = try await fixtureResponse("WORD", at: word.screenPoint)
-      XCTAssertEqual(delivery, "delivered")
-      let copyAction = app.descendants(matching: .any)["Copy"].firstMatch
-      if !copyAction.waitForExistence(timeout: 3) { word.doubleTap() }
-      if !copyAction.waitForExistence(timeout: 5) {
-        XCTContext.runActivity(named: "Text selection") {
-          $0.add(XCTAttachment(screenshot: output.screenshot()))
-        }
-      }
-      tap(copyAction)
-      let input = app.textFields["session-input"]
-      input.press(forDuration: 1)
+      let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
+      assertText("copyword selection", in: terminal)
+      let word = terminal.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 16, dy: 8))
+      word.press(forDuration: 1)
+      tap(app.descendants(matching: .any)["Select"].firstMatch)
+      tap(app.descendants(matching: .any)["Copy"].firstMatch)
+      word.press(forDuration: 1)
       tap(app.descendants(matching: .any)["Paste"].firstMatch)
-      tap(app.buttons["Send"])
-      assertText("out:copyword", in: app.textViews["Standard error"])
-      if app.keyboards.firstMatch.exists {
-        tap(app.buttons["dismiss-input-keyboard"].firstMatch)
-        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
-      }
-
-      // Use UIKit's text layout for these coordinates, including Dynamic Type
-      // and wrapping in a narrow split view. The OS owns the selection handles.
-      let reselection = try await fixtureResponse("WORD", at: word.screenPoint)
-      XCTAssertEqual(reselection, "delivered")
-      if !copyAction.waitForExistence(timeout: 3) { word.doubleTap() }
-      let geometry = UITextView(frame: CGRect(origin: .zero, size: output.frame.size))
-      geometry.font = UIFontMetrics(forTextStyle: .body).scaledFont(
-        for: .monospacedSystemFont(ofSize: 17, weight: .regular),
-        compatibleWith: UITraitCollection(preferredContentSizeCategory: .accessibilityLarge))
-      geometry.text = "copyword selection"
-      geometry.layoutIfNeeded()
-      func point(after offset: Int, handle: Bool) throws -> XCUICoordinate {
-        let pos = try XCTUnwrap(
-          geometry.position(from: geometry.beginningOfDocument, offset: offset))
-        let caret = geometry.caretRect(for: pos)
-        return output.coordinate(withNormalizedOffset: .zero).withOffset(
-          CGVector(dx: caret.midX, dy: handle ? caret.maxY + 3 : caret.midY))
-      }
-      let lastCharacter = try point(after: geometry.text.utf16.count, handle: false)
-      let firstCharacter = try point(after: 0, handle: false)
-      if lastCharacter.screenPoint.y > firstCharacter.screenPoint.y + 1 {
-        let handle = try point(after: 8, handle: true)
-        // The touch handle tracks below the caret. Drag past the last line.
-        let end = output.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.92))
-        let result = try await fixtureResponse(
-          "EXTEND", at: handle.screenPoint, to: end.screenPoint)
-        XCTAssertEqual(result, "delivered")
-      } else {
-        try point(after: 8, handle: true).press(
-          forDuration: 0.15,
-          thenDragTo: lastCharacter.withOffset(CGVector(dx: 3, dy: 0)),
-          withVelocity: .slow, thenHoldForDuration: 0.2)
-      }
-      let copy = app.descendants(matching: .any)["Copy"].firstMatch
-      if !copy.waitForExistence(timeout: 2) { word.tap() }
-      tap(copy)
-      input.press(forDuration: 1)
-      tap(app.descendants(matching: .any)["Paste"].firstMatch)
-      tap(app.buttons["Send"])
-      assertText("out:copyword selection", in: output)
-      if app.keyboards.firstMatch.exists {
-        tap(app.buttons["dismiss-input-keyboard"].firstMatch)
-        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
-      }
+      terminal.typeText("\n")
+      assertText("out:copyword", in: terminal)
+      tap(app.buttons["Keys"])
+      tap(app.buttons["Hide Keyboard"])
       try app.performAccessibilityAudit(for: [
         .sufficientElementDescription, .contrast, .dynamicType,
       ])

@@ -45,9 +45,7 @@ final class Connection: ObservableObject {
   @Published var selected: SessionInfo?
   @Published var status = ""
   @Published var forwarding = [String: String]()
-  @Published var draft = ""
   @Published var stdout = Data()
-  @Published var stderr = Data()
   private(set) var renderer: (any TerminalRenderer)?
   private var refreshTicket = UUID()
   private var pending = Data()
@@ -134,9 +132,7 @@ final class Connection: ObservableObject {
     forwarding.removeAll()
     renderer = nil
     pending = Data()
-    draft = ""
     stdout = Data()
-    stderr = Data()
     status = ""
     // Flush accepted keystrokes and pointer reports before closing their stream.
     inputQueue.async {
@@ -192,17 +188,18 @@ final class Connection: ObservableObject {
           break
         }
         if let data = event.Data {
-          if item.Mode == "pty" {
-            if let renderer {
-              renderer.receive(data)
-            } else {
-              pending.append(data)
-              pending = pending.suffix(1024 * 1024)
+          var bytes = data
+          if item.Mode == "pipe" {
+            bytes = Data()
+            for byte in data {
+              if byte == 10 { bytes.append(13) }
+              bytes.append(byte)
             }
-          } else if event.Channel == "stderr" {
-            stderr = (stderr + data).suffix(65536)
-          } else {
-            stdout = (stdout + data).suffix(65536)
+          }
+          if let renderer { renderer.receive(bytes) }
+          else {
+            pending.append(bytes)
+            pending = pending.suffix(1024 * 1024)
           }
         }
       }
@@ -316,7 +313,7 @@ final class Connection: ObservableObject {
         "Op": "forward", "Dir": try directory, "ID": item.ID, "Name": name,
       ])
       if let key = r.Handle, let address = r.Address {
-        guard ticket == generation, forwards[name] == nil else {
+        guard ticket == generation, attached, forwards[name] == nil else {
           _ = await Core.request(["Op": "close", "Handle": key])
           return
         }

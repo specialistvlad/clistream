@@ -4,7 +4,14 @@ final class NativeSessionTests: XCTestCase {
   @MainActor func testPairPreviewAndSend() async throws {
     let app = try await openPipe()
     for proto in ["tcp", "udp"] {
-      activate(app.buttons["Forward " + proto].firstMatch)
+      activate(app.buttons["session-ports"].firstMatch)
+      let toggle = app.descendants(matching: .any)["forward-" + proto].firstMatch
+      #if os(iOS)
+        let control = toggle.switches.firstMatch
+        activate(control.exists ? control : toggle)
+      #else
+        activate(toggle)
+      #endif
       let address = app.staticTexts["forward-address-" + proto].firstMatch
       XCTAssertTrue(address.waitForExistence(timeout: 12))
       #if os(macOS)
@@ -13,11 +20,19 @@ final class NativeSessionTests: XCTestCase {
         let endpoint = address.label
       #endif
       let port = try XCTUnwrap(endpoint.split(separator: ":").last.flatMap { UInt16($0) })
+      capture("port-forwards", app)
+      activate(app.buttons["Done"].firstMatch)
       try exchange(port: port, datagram: proto == "udp")
-      activate(app.buttons["Stop " + proto].firstMatch)
-      XCTAssertFalse(address.exists)
+      activate(app.buttons["session-ports"].firstMatch)
+      #if os(iOS)
+        activate(control.exists ? control : toggle)
+      #else
+        activate(toggle)
+      #endif
+      XCTAssertTrue(address.waitForNonExistence(timeout: 5))
+      activate(app.buttons["Done"].firstMatch)
     }
-    let field = app.textFields["session-input"].firstMatch
+    let field = app.descendants(matching: .any)["session-terminal"].firstMatch
     activate(field)
     field.typeText("native-client\n")
     let shown = NSPredicate(
@@ -29,7 +44,7 @@ final class NativeSessionTests: XCTestCase {
   }
   @MainActor func testTwoServersRouteInputIndependently() async throws {
     let app = try await openPipe()
-    let field = app.textFields["session-input"].firstMatch
+    let field = app.descendants(matching: .any)["session-terminal"].firstMatch
     activate(field)
     field.typeText("first-server-marker\n")
     let invitation = try await fixtureResponse("SECOND")
@@ -97,76 +112,82 @@ final class NativeSessionTests: XCTestCase {
   }
   @MainActor func testManagedLifecycle() async throws {
     let app = try await openPipe()
+    action("Stop…", app)
+    capture("stop-confirmation", app)
     activate(app.buttons["Stop"].firstMatch)
-    activate(app.buttons["Stop Session"].firstMatch)
+    action("Start…", app)
     activate(app.buttons["Start"].firstMatch)
-    let input = app.textFields["session-input"].firstMatch
-    activate(input)
-    input.typeText("after-start\n")
-    XCTAssertTrue(
-      app.descendants(matching: .any).matching(
-        NSPredicate(
-          format: "value CONTAINS %@ OR label CONTAINS %@", "out:after-start", "out:after-start")
-      ).firstMatch.waitForExistence(timeout: 12))
-    activate(app.buttons["Edit Command…"].firstMatch)
-    XCTAssertTrue(app.buttons["Add Argument"].waitForExistence(timeout: 10))
+    let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
+    activate(terminal)
+    terminal.typeText("after-start\n")
+    expectOutput("out:after-start", in: terminal)
+    action("Restart…", app)
+    XCTAssertTrue(app.textFields["command-line"].waitForExistence(timeout: 10))
     activate(app.buttons["Cancel"].firstMatch)
+    expectOutput("out:after-start", in: terminal)
   }
 
   @MainActor func testEOFAndCompletedOutput() async throws {
     let app = try await openPipe(eof: true)
-    let input = app.textFields["session-input"].firstMatch
-    activate(input)
-    input.typeText("finished-child\n")
-    let live = app.descendants(matching: .any).matching(
-      NSPredicate(
-        format: "value CONTAINS %@ OR label CONTAINS %@", "finished-child", "finished-child")
-    ).firstMatch
-    XCTAssertTrue(live.waitForExistence(timeout: 12))
-    activate(app.buttons["EOF"])
-    let start = app.buttons["Start"].firstMatch
-    XCTAssertTrue(start.waitForExistence(timeout: 15))
-    let result = app.descendants(matching: .any).matching(
-      NSPredicate(
-        format: "value CONTAINS %@ OR label CONTAINS %@", "finished-child", "finished-child")
-    ).firstMatch
-    XCTAssertTrue(result.waitForExistence(timeout: 12))
-    XCTAssertFalse(input.exists)
-    activate(start)
-    XCTAssertTrue(input.waitForExistence(timeout: 15))
+    let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
+    activate(terminal)
+    terminal.typeText("finished-child\n")
+    expectOutput("finished-child", in: terminal)
+    action("Send EOF",app)
+    let result = app.staticTexts.containing(NSPredicate(
+      format: "value CONTAINS %@ OR label CONTAINS %@", "finished-child","finished-child"
+    )).firstMatch
+    XCTAssertTrue(result.waitForExistence(timeout: 15))
+    capture("completed-session",app)
+    action("Start…", app)
+    activate(app.buttons["Start"].firstMatch)
+    XCTAssertTrue(terminal.waitForExistence(timeout: 15))
   }
 
   @MainActor func testEditArgumentsAndRestart() async throws {
     let app = try await openPipe()
-    activate(app.buttons["Edit Command…"])
-    let add = app.buttons["Add Argument"]
-    // sh -c assigns the first extra operand to $0.
-    activate(add)
-    XCTAssertTrue(app.textFields["argument-3"].waitForExistence(timeout: 5))
-    activate(add)
-    let argument = app.textFields["argument-4"]
-    activate(argument)
-    argument.typeText("two words")
-    XCTAssertEqual(argument.value as? String, "two words")
-    activate(add)
-    XCTAssertTrue(app.textFields["argument-5"].waitForExistence(timeout: 5))
-    activate(app.buttons["Launch"])
-    let text = "args=2 first=<two words> second=<>"
-    let output = app.descendants(matching: .any).matching(
-      NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", text, text)
-    ).firstMatch
-    XCTAssertTrue(output.waitForExistence(timeout: 35), "The replacement did not display its literal arguments")
-    activate(app.buttons["Restart"].firstMatch)
-    activate(app.buttons["Restart Session"].firstMatch)
-    let field = app.textFields["session-input"].firstMatch
+    action("Restart…", app)
+    let field = app.textFields["command-line"].firstMatch
     activate(field)
-    field.typeText("after-restart\n")
-    XCTAssertTrue(
-      app.descendants(matching: .any).matching(
-        NSPredicate(
-          format: "value CONTAINS %@ OR label CONTAINS %@", "out:after-restart", "out:after-restart"
-        )
-      ).firstMatch.waitForExistence(timeout: 15))
+    let saved = try XCTUnwrap(field.value as? String)
+    field.typeKey("a", modifierFlags: .command)
+    field.typeText("'")
+    XCTAssertFalse(app.buttons["Restart"].firstMatch.isEnabled)
+    field.typeKey("a", modifierFlags: .command)
+    field.typeText(saved + " placeholder 'two words' \"\"")
+    capture("restart-confirmation",app)
+    activate(app.buttons["Restart"].firstMatch)
+    let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
+    expectOutput("args=2 first=<two words> second=<>", in: terminal)
+    activate(terminal)
+    terminal.typeText("after-restart\n")
+    expectOutput("out:after-restart", in: terminal)
+    capture("pipe-session",app)
+  }
+
+  @MainActor private func expectOutput(_ value: String, in terminal: XCUIElement) {
+    let shown = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS %@", value), object: terminal)
+    XCTAssertEqual(XCTWaiter.wait(for: [shown], timeout: 20), .completed)
+  }
+
+  @MainActor private func action(_ title: String, _ app: XCUIApplication) {
+    #if os(iOS)
+      activate(app.buttons["Session"].firstMatch)
+    #endif
+    activate(app.buttons[title].firstMatch)
+  }
+
+  @MainActor private func capture(_ name: String, _ app: XCUIApplication) {
+    guard ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1" else { return }
+    #if os(macOS)
+      let screenshot = app.windows.firstMatch.screenshot()
+    #else
+      let screenshot = XCUIScreen.main.screenshot()
+    #endif
+    let attachment = XCTAttachment(screenshot: screenshot)
+    attachment.name = "gallery-" + name
+    attachment.lifetime = .keepAlways
+    add(attachment)
   }
 
   @MainActor func testTerminalKeysAndAttachOnly() async throws {
@@ -200,15 +221,15 @@ final class NativeSessionTests: XCTestCase {
       XCTAssertEqual(XCTWaiter.wait(for: [measured], timeout: 15), .completed)
       let id = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PIPE_ID"])
       let row = app.descendants(matching: .any)["session-" + id].firstMatch
-      let field = app.textFields["session-input"].firstMatch
+      let field = app.descendants(matching: .any)["session-terminal"].firstMatch
       activate(field)
-      field.typeText("layout draft")
+      field.typeText("layout draft\n")
       let originalAppearance = XCUIDevice.shared.appearance
       defer { XCUIDevice.shared.appearance = originalAppearance }
       XCUIDevice.shared.appearance = .dark
-      XCTAssertEqual(field.value as? String, "layout draft")
+      expectOutput("out:layout draft", in: field)
       XCUIDevice.shared.appearance = .light
-      XCTAssertEqual(field.value as? String, "layout draft")
+      expectOutput("out:layout draft", in: field)
       func choose(_ title: String) {
         let menu = app.descendants(matching: .any)["workspace-view-options"].firstMatch
         activate(menu)
@@ -221,11 +242,11 @@ final class NativeSessionTests: XCTestCase {
         for group in ["Host", "CLI Name", "Server"] {
           choose(group)
           XCTAssertTrue(row.waitForExistence(timeout: 10))
-          XCTAssertEqual(field.value as? String, "layout draft")
+          expectOutput("out:layout draft", in: field)
         }
       }
-      app.typeText("!")
-      XCTAssertEqual(field.value as? String, "layout draft!")
+      app.typeText("focus-check\n")
+      expectOutput("out:focus-check", in: field)
       app.terminate()
       app.launch()
       activate(row)
@@ -237,9 +258,9 @@ final class NativeSessionTests: XCTestCase {
         app.staticTexts["desktop-session-status"].firstMatch.waitForExistence(timeout: 10))
       activate(app.buttons["Hide Sidebar"].firstMatch)
       activate(app.buttons["Show Sidebar"].firstMatch)
-      let input = app.textFields["session-input"].firstMatch
+      let input = app.descendants(matching: .any)["session-terminal"].firstMatch
       activate(input)
-      input.typeText("kept draft")
+      input.typeText("kept draft\n")
       let pipe = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PIPE_ID"])
       let row = app.descendants(matching: .any)["session-" + pipe].firstMatch
       let pty = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PTY_ID"])
@@ -253,7 +274,7 @@ final class NativeSessionTests: XCTestCase {
       activate(app.menuItems["Open in New Window"])
       activate(row)
       XCTAssertTrue(input.waitForExistence(timeout: 10))
-      XCTAssertEqual(input.value as? String, "kept draft")
+      expectOutput("out:kept draft", in: input)
     }
   #endif
 
@@ -285,6 +306,9 @@ final class NativeSessionTests: XCTestCase {
     let app = try await openPipe()
     let response = try await fixtureResponse("REVOKE")
     XCTAssertEqual(response, "revoked")
+    #if os(iOS)
+      activate(app.buttons["Session"].firstMatch)
+    #endif
     let reconnect = app.buttons["Reconnect"].firstMatch
     XCTAssertTrue(reconnect.waitForExistence(timeout: 15))
     activate(reconnect)
@@ -293,7 +317,7 @@ final class NativeSessionTests: XCTestCase {
     ).firstMatch
     XCTAssertTrue(denied.waitForExistence(timeout: 15))
     let recovered = try await openPipe()
-    let input = recovered.textFields["session-input"].firstMatch
+    let input = recovered.descendants(matching: .any)["session-terminal"].firstMatch
     activate(input)
     input.typeText("access-restored\n")
     XCTAssertTrue(
@@ -308,7 +332,7 @@ final class NativeSessionTests: XCTestCase {
     let participant = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PARTICIPANT"])
     let app = try await openPipe()
     defer { app.terminate() }
-    let input = app.textFields["session-input"].firstMatch
+    let input = app.descendants(matching: .any)["session-terminal"].firstMatch
     activate(input)
     let ready = try await fixtureResponse("ready/" + participant)
     XCTAssertEqual(ready, "ready")
@@ -359,7 +383,7 @@ final class NativeSessionTests: XCTestCase {
     #if os(macOS)
       let pipe = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PIPE_ID"])
       activate(app.descendants(matching: .any)["session-" + pipe].firstMatch)
-      XCTAssertTrue(app.textFields["session-input"].firstMatch.waitForExistence(timeout: 12))
+      XCTAssertTrue(app.descendants(matching: .any)["session-terminal"].firstMatch.waitForExistence(timeout: 12))
       XCTAssertTrue(
         app.descendants(matching: .any).matching(
           NSPredicate(

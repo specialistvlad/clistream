@@ -21,6 +21,7 @@ struct SupervisorInfo: Decodable {
 }
 
 struct Reply: Decodable {
+  var Line: String?
   var Supervisors: [SupervisorInfo]?
   var Command: [Data]?
   var Run: String?

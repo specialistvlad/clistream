@@ -13,6 +13,13 @@ final class TerminalDelegate: NSObject, TerminalViewDelegate {
   func send(source: TerminalView, data: ArraySlice<UInt8>) {
     let bytes = Data(data)
     MainActor.assumeIsolated {
+      #if os(macOS)
+        if connection.selected?.Mode == "pipe", bytes == Data([13]),
+          let event = NSApp.currentEvent, event.type == .keyDown, [36, 76].contains(event.keyCode) {
+          connection.send(.bytes(Data([10])))
+          return
+        }
+      #endif
       connection.send(.bytes(bytes))
     }
   }
@@ -22,6 +29,7 @@ final class TerminalDelegate: NSObject, TerminalViewDelegate {
     let valid = 1...Int(UInt16.max)
     guard valid.contains(newCols), valid.contains(newRows) else { return }
     MainActor.assumeIsolated {
+      guard connection.selected?.Mode == "pty" else { return }
       connection.send(.resize(columns: newCols, rows: newRows))
     }
   }
@@ -121,6 +129,7 @@ private func visibleText(in view: TerminalView) -> String {
         // subsequently select its own cursor style with DECSCUSR.
         view.getTerminal().setCursorStyle(.steadyBlock)
       }
+      view.returnByteSequence = connection.selected?.Mode == "pipe" ? [10] : [13]
       view.terminalDelegate = context.coordinator
       view.accessibilityLabel = "Terminal"
       view.accessibilityIdentifier = "session-terminal"

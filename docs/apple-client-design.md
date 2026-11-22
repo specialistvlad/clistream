@@ -4,7 +4,7 @@ CLIStream has a dedicated macOS application and a universal iPhone and iPad appl
 
 ## Where to change the interface
 
-`apple/Desktop` owns AppKit window tabbing and the Finder-style browser. `apple/Mobile` owns compact and split-view navigation. The shared views in `apple/App` display a session, edit commands and forward user actions to a `Connection` scoped to a server and supervisor. Each connection owns its draft, terminal renderer, stream and port forwards. Closing one tab releases only that tab’s resources.
+`apple/Desktop` owns AppKit window tabbing and the Finder-style browser. `apple/Mobile` owns compact and split-view navigation. The shared views in `apple/App` display a session, edit commands and forward user actions to a `Connection` scoped to a server and supervisor. Each connection owns its terminal renderer, stream and port forwards. Closing one tab releases only that tab’s resources.
 
 `Core.swift` translates actions into requests to the Go bridge in `apple/Bridge`. The bridge owns native handles. Supervisor discovery, run output and QUIC attachments live in `internal/client`, where the Go CLI can use them as well. Layout changes belong in Swift and use the same actions as existing controls.
 
@@ -18,13 +18,15 @@ The Servers sidebar separates the broker from the computers running supervisors.
 
 ## Touch-only operation on iPhone and iPad
 
-Choose a session in the sidebar when space permits or navigate from the compact session list. Switching preserves open attachments. Detach closes the selected attachment. In a PTY, open **Keys** for Escape, arrows, Control-letter combinations, and the onscreen keyboard. The selected run stays open across keyboard changes, rotation, iPad resizing, and Duo folding. Use hardware keyboard and pointer input where available.
+Choose a session in the sidebar when space permits or navigate from the compact session list. Switching preserves open attachments. Detach closes the selected attachment. In an attached terminal, open **Keys** for Escape, arrows, Control-letter combinations, and the onscreen keyboard. The selected run stays open across keyboard changes, rotation, iPad resizing, and Duo folding. Use hardware keyboard and pointer input where available.
 
 ## Terminal and session controls
 
-PTY sessions use native SwiftTerm views. The terminal sends input and valid grid sizes to the supervised child. Pipe sessions offer a text field, Send, explicit EOF and separately selectable stdout and stderr. Managed supervisors support stop, start, restart, and editing the executable and its arguments. Each argument has its own editable field so spaces and empty arguments survive the round trip. Adding an argument scrolls it into view. Command fields preserve literal spelling and capitalization. Stopped sessions expose their most recent retained result. A supervisor launched with `--once` allows attachment for the lifetime of its child. Detach leaves that child running. **EOF** closes shared pipe input for every viewer.
+Pipe and PTY sessions both open in SwiftTerm. Keystrokes go straight to the child, including before Return. Pipe sessions display stdout and stderr together in arrival order, send LF on Return, and let the child control echo. PTYs receive terminal resize events. **Send EOF** closes pipe input for every viewer. Detaching leaves the program running; a stopped managed program exposes its most recent retained result.
 
-Only exported TCP and UDP services appear as forwards. Starting a forward displays its local loopback address. Stopping it releases the listener without ending the session.
+On Mac, use the window toolbar for lifecycle actions. On iPhone and iPad, open **Session**. **Restart…** and **Start…** present the current executable and arguments together in a highlighted command field. Use quotes for spaces and `""` for an empty argument. The Go client and native apps use the same parser. Cancel keeps the current run; confirming launches the reviewed command and attaches to its replacement. **Stop…** identifies the affected program before ending it for all viewers. One-shot supervisors offer attachment only.
+
+**Ports** opens a trailing inspector on Mac and wide mobile layouts, or a sheet in compact layouts. Toggle a named TCP or UDP export, then copy its local listening address. Closing the inspector leaves active listeners running. Each tab or window shows the forwards for its selected session.
 
 ## Future file access
 

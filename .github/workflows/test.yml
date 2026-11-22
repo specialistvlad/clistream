@@ -56,6 +56,7 @@ jobs:
       - name: Run app-hosted and UI tests
         env:
           DEVICE: ${{ matrix.device }}
+          TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY: "1"
         run: |
           defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
           if [[ "$DEVICE" == shared ]]; then
@@ -98,6 +99,24 @@ jobs:
             iPad) SIMULATOR_ID="$(simulator 'iPad Pro 13-inch (M5)')" apple/test-native.sh ;;
             Duo) SIMULATOR_ID="$(simulator 'iPhone Duo')" apple/test-native.sh ;;
           esac
+      - name: Collect gallery screenshots
+        if: always() && matrix.device != 'shared'
+        run: |
+          mkdir -p gallery
+          for bundle in apple/build/results-*/native.xcresult; do
+            [[ -f "$bundle/Info.plist" ]] || continue
+            staging=$(mktemp -d "$RUNNER_TEMP/screenshots.XXXXXX")
+            xcrun xcresulttool export attachments --path "$bundle" --output-path "$staging" >/dev/null
+            jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | test("^gallery-[a-z-]+_[0-9]+_[A-Fa-f0-9-]+\\.png$")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0] | ltrimstr("gallery-"))] | @tsv' "$staging/manifest.json" |
+              while IFS=$'\t' read -r file name; do cp "$staging/$file" "gallery/$name.png"; done
+          done
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.device != 'shared'
+        with:
+          name: gallery-${{ matrix.device }}
+          path: gallery/*.png
+          if-no-files-found: ignore
+          retention-days: 3
       - name: Record individual XCTest outcomes
         if: always()
         run: |
