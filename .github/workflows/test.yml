@@ -46,7 +46,7 @@ jobs:
         device: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.device)) || fromJSON('["macOS","iPhone","iPad","Duo","shared"]') }}
     runs-on: xcode-27
     # A cold iOS runtime must finish migrating before the per-case watchdogs start.
-    timeout-minutes: 65
+    timeout-minutes: ${{ matrix.device == 'Duo' && 85 || 65 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -96,12 +96,6 @@ jobs:
               export IPHONE_SIMULATOR_ID IPAD_SIMULATOR_ID
               IPHONE_SIMULATOR_ID=$(simulator 'iPhone 18 Pro')
               IPAD_SIMULATOR_ID=$(simulator 'iPad Pro 11-inch (M5)')
-              # Migrate the second participant before the first uses the runner's memory.
-              apple/boot-simulator.sh "$IPHONE_SIMULATOR_ID"
-              if ! xcrun simctl shutdown "$IPHONE_SIMULATOR_ID"; then
-                xcrun simctl list devices --json | jq -e --arg id "$IPHONE_SIMULATOR_ID" '
-                  any(.devices[][]; .udid == $id and .state == "Shutdown")' >/dev/null
-              fi
               go run ./scripts/apple-ui shared ;;
             iPhone) SIMULATOR_ID="$(simulator 'iPhone 18 Pro')" apple/test-native.sh ;;
             iPad) SIMULATOR_ID="$(simulator 'iPad Pro 13-inch (M5)')" apple/test-native.sh ;;

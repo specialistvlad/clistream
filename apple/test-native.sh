@@ -50,6 +50,7 @@ products="$result/CLIStream.xctestproducts"
 if [[ $platform == iOS ]]; then apple/boot-simulator.sh "$SIMULATOR_ID"; fi
 export GITHUB_ACTIONS=true CLISTREAM_HOSTED_TESTS=1
 go run ./scripts/apple-ui xcodebuild -quiet -testProductsPath "$products" -destination "$destination" \
+  -test-timeouts-enabled YES -default-test-execution-time-allowance 600 -maximum-test-execution-time-allowance 600 \
   -parallel-testing-enabled NO -collect-test-diagnostics never -resultBundlePath "$result/native.xcresult" \
   "${tests[@]}" -skip-testing:"$suite/NativeSessionTests/testConcurrentViewers" test-without-building
 go run ./scripts/apple-report "$result/native.xcresult" | tee "$result/cases.json"

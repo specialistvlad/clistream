@@ -47,17 +47,23 @@ func prepareViewers(root string) (string, error) {
 		return "", err
 	}
 	app := filepath.Join(filepath.Dir(mobilePlan), "Debug-iphonesimulator", "CLIStream.app")
-	for _, device := range []string{"IPAD_SIMULATOR_ID", "IPHONE_SIMULATOR_ID"} {
+	// Migrate and install each simulator while it has the runner to itself.
+	// Leave the iPad up for pairing and start the prepared phone only after that.
+	for _, device := range []string{"IPHONE_SIMULATOR_ID", "IPAD_SIMULATOR_ID"} {
 		id := os.Getenv(device)
 		fmt.Println("Preparing", device)
 		for _, cmd := range []*exec.Cmd{
 			exec.Command("apple/boot-simulator.sh", id),
 			exec.Command("xcrun", "simctl", "install", id, app),
-			exec.Command("xcrun", "simctl", "launch", id, "com.vlk.clistream.acceptance.shared"),
 		} {
 			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 			if err := cmd.Run(); err != nil {
 				return "", err
+			}
+		}
+		if device == "IPHONE_SIMULATOR_ID" {
+			if err := exec.Command("xcrun", "simctl", "shutdown", id).Run(); err != nil {
+				return "", fmt.Errorf("shut down the prepared phone: %w", err)
 			}
 		}
 	}
@@ -78,6 +84,13 @@ func shared(macPlan string, arrivals <-chan string, url, pipeID, pipeRun, termin
 	for _, device := range []struct{ name, id string }{
 		{"pad", os.Getenv("IPAD_SIMULATOR_ID")}, {"phone", os.Getenv("IPHONE_SIMULATOR_ID")},
 	} {
+		if device.name == "phone" {
+			boot := exec.CommandContext(ctx, "xcrun", "simctl", "bootstatus", device.id, "-b")
+			boot.Stdout, boot.Stderr = os.Stdout, os.Stderr
+			if err := boot.Run(); err != nil {
+				return fmt.Errorf("boot the prepared iPhone: %w", err)
+			}
+		}
 		fmt.Println("Pairing shared viewer:", device.name)
 		participants.Go(func() {
 			results <- mobileViewer(ctx, device.name, device.id, url, pipeID, func() ([]byte, error) {
