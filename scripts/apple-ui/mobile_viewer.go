@@ -111,12 +111,32 @@ func mobileViewer(ctx context.Context, name, udid, fixture, pipeID string, invit
 		return nil
 	}
 
-	// Use the in-app pairing form so SpringBoard never has to confirm a custom URL.
-	if err := exec.CommandContext(ctx, "xcrun", "simctl", "launch", udid, "com.vlk.clistream.acceptance.shared").Run(); err != nil {
-		return fmt.Errorf("bring the app to the foreground: %w", err)
+	// An acknowledged simctl launch can precede SpringBoard's accessibility service.
+	// Recover only during first launch, before the app has an invitation or a session.
+	var launchErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		if attempt > 0 {
+			fmt.Println("Restarting the simulator before pairing:", name)
+			if err := exec.CommandContext(ctx, "xcrun", "simctl", "shutdown", udid).Run(); err != nil {
+				return fmt.Errorf("restart unresponsive simulator: %w", err)
+			}
+			if err := exec.CommandContext(ctx, "xcrun", "simctl", "bootstatus", udid, "-b").Run(); err != nil {
+				return fmt.Errorf("wait for simulator restart: %w", err)
+			}
+		}
+		if launchErr = exec.CommandContext(ctx, "xcrun", "simctl", "launch", udid, "com.vlk.clistream.acceptance.shared").Run(); launchErr != nil {
+			continue
+		}
+		if launchErr = waitForText("Add Server", "the Add Server toolbar button", 90*time.Second); launchErr != nil {
+			continue
+		}
+		launchErr = tap("workspace-add-server", "Add Server", "pairing-link")
+		if launchErr == nil {
+			break
+		}
 	}
-	if err := tap("workspace-add-server", "Add Server", "pairing-link"); err != nil {
-		return fmt.Errorf("open Add Server: %w", err)
+	if launchErr != nil {
+		return fmt.Errorf("open the pairing form on the prepared simulator: %w", launchErr)
 	}
 	if err := tap("pairing-link", "Pairing link", ""); err != nil {
 		return fmt.Errorf("focus invitation field: %w", err)
