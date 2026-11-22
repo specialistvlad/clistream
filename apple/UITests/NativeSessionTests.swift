@@ -79,7 +79,7 @@ final class NativeSessionTests: XCTestCase {
       activate(app.descendants(matching: .any)["workspace-view-options"].firstMatch)
       app.menuItems["Rename Server…"].firstMatch.hover()
       activate(app.menuItems[endpoint].firstMatch)
-      let name = app.textFields["Name"].firstMatch
+      let name = app.sheets.textFields.firstMatch
       let alias = "Build server " + UUID().uuidString.prefix(8)
       activate(name)
       name.typeKey("a", modifierFlags: .command)
@@ -154,7 +154,7 @@ final class NativeSessionTests: XCTestCase {
     let output = app.descendants(matching: .any).matching(
       NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", text, text)
     ).firstMatch
-    XCTAssertTrue(output.waitForExistence(timeout: 15))
+    XCTAssertTrue(output.waitForExistence(timeout: 35), "The replacement did not display its literal arguments")
     activate(app.buttons["Restart"].firstMatch)
     activate(app.buttons["Restart Session"].firstMatch)
     let field = app.textFields["session-input"].firstMatch

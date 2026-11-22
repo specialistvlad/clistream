@@ -54,9 +54,11 @@ final class SessionTests: XCTestCase {
   @MainActor func testTerminalInput() async throws {
     #if os(iOS)
       let initialOrientation = XCUIDevice.shared.orientation
-      XCUIDevice.shared.orientation = .portrait
+      let duo = !(ProcessInfo.processInfo.environment["CLISTREAM_DUO_NAME"] ?? "").isEmpty
       defer {
-        if initialOrientation != .unknown { XCUIDevice.shared.orientation = initialOrientation }
+        if !duo && initialOrientation != .unknown && XCUIDevice.shared.orientation != initialOrientation {
+          XCUIDevice.shared.orientation = initialOrientation
+        }
       }
     #endif
     _ = try await fixtureResponse("RESET")
@@ -94,7 +96,6 @@ final class SessionTests: XCTestCase {
       XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
       let portrait = view.frame.size
       let firstGrid = try await fixtureResponse("GRID")
-      let duo = !(ProcessInfo.processInfo.environment["CLISTREAM_DUO_NAME"] ?? "").isEmpty
       if duo {
         let opened = try await fixtureResponse("pose/Open")
         XCTAssertEqual(opened, "applied")
@@ -313,14 +314,14 @@ final class SessionTests: XCTestCase {
         "UICTContentSizeCategoryAccessibilityL",
       ]
     }
-    #if os(iOS)
-      XCUIDevice.shared.orientation = .portrait
-    #endif
     #if os(macOS)
       app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]
       if app.state != .notRunning { app.terminate() }
     #else
       app.launch()
+      if (env["CLISTREAM_DUO_NAME"] ?? "").isEmpty && XCUIDevice.shared.orientation != .portrait {
+        XCUIDevice.shared.orientation = .portrait
+      }
     #endif
     let invitation = try await fixtureResponse("QR")
     app.open(try XCTUnwrap(URL(string: invitation)))

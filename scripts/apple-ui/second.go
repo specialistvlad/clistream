@@ -31,7 +31,7 @@ func secondServer(root, bin string, mux *http.ServeMux, path string, launch func
 	var once sync.Once
 	stopBroker := func() { once.Do(stop) }
 	var invite []byte
-	for deadline := time.Now().Add(8 * time.Second); time.Now().Before(deadline); {
+	for deadline := time.Now().Add(time.Minute); time.Now().Before(deadline); {
 		invite, err = cmd("clistreamd", "invite").Output()
 		if err == nil {
 			break
@@ -40,7 +40,7 @@ func secondServer(root, bin string, mux *http.ServeMux, path string, launch func
 	}
 	if err != nil {
 		stopBroker()
-		return nil, err
+		return nil, fmt.Errorf("secondary broker did not issue an invitation: %w", err)
 	}
 	child, err := launch(cmd("clistreams", "--io-mode", "pipe", string(bytes.TrimSpace(invite)), "/bin/sh", "-c", `while IFS= read -r line; do echo "second:$line"; done`))
 	if err != nil {

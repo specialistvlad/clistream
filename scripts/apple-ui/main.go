@@ -78,7 +78,7 @@ func run(args []string) error {
 	}
 	defer cleanup()
 	var link []byte
-	for deadline := time.Now().Add(8 * time.Second); time.Now().Before(deadline); {
+	for deadline := time.Now().Add(time.Minute); time.Now().Before(deadline); {
 		link, err = command("clistreamd", "invite").Output()
 		if err == nil {
 			break
@@ -86,7 +86,7 @@ func run(args []string) error {
 		time.Sleep(80 * time.Millisecond)
 	}
 	if err != nil {
-		return err
+		return fmt.Errorf("primary broker did not issue an invitation: %w", err)
 	}
 	exports, closeServices, err := reverseServices()
 	if err != nil {
@@ -101,7 +101,7 @@ func run(args []string) error {
 		if err != nil {
 			return registration{}, nil, err
 		}
-		for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
+		for deadline := time.Now().Add(time.Minute); time.Now().Before(deadline); {
 			data, err := command("clistream", "list").Output()
 			var rows []registration
 			if err == nil && json.Unmarshal(data, &rows) == nil {

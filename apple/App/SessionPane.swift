@@ -119,6 +119,7 @@ struct SessionPane: View {
         ScrollView {
           Text(String(decoding: data, as: UTF8.self)).font(.system(.body, design: .monospaced))
             .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(title).accessibilityValue(String(decoding: data, as: UTF8.self))
             .accessibilityIdentifier("pipe-" + title)
         }
       #endif

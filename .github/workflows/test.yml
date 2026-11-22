@@ -64,20 +64,36 @@ jobs:
                | select(any(.value[]; .name == "iPhone 18 Pro") and any(.value[]; .name == "iPad Pro 11-inch (M5)"))
                | .key] | sort_by(split("-") | last | tonumber) | last // error("missing shared iOS runtime")')
           fi
+          boot_simulator() {
+            if ! xcrun simctl bootstatus "$1" -b; then
+              # These are disposable Actions devices. Recover from a failed first-boot migration.
+              xcrun simctl shutdown "$1" || true
+              xcrun simctl erase "$1" || return 1
+              xcrun simctl bootstatus "$1" -b
+            fi
+          }
           simulator() {
             local id
             id=$(xcrun simctl list devices available --json | jq -er --arg device "$1" --arg runtime "${shared_runtime:-}" '
               [.devices | to_entries[] | select(.key | contains("iOS-27-"))
-               | select($runtime == "" or .key == $runtime) | .value[] | select(.name == $device)][-1].udid // error("missing simulator")')
-            xcrun simctl rename "$id" "CLIStream CI $1"
-            if [[ "$DEVICE" != shared ]]; then xcrun simctl bootstatus "$id" -b >&2; fi
+               | select($runtime == "" or .key == $runtime) | .value[] | select(.name == $device)][-1].udid // error("missing simulator")') || return 1
+            xcrun simctl rename "$id" "CLIStream CI $1" || return 1
+            if [[ "$DEVICE" != shared ]]; then boot_simulator "$id" >&2 || return 1; fi
             echo "$id"
           }
           case "$DEVICE" in
             macOS) apple/test-native.sh macOS ;;
             shared)
               make build
-              IPHONE_SIMULATOR_ID="$(simulator 'iPhone 18 Pro')" IPAD_SIMULATOR_ID="$(simulator 'iPad Pro 11-inch (M5)')" go run ./scripts/apple-ui shared ;;
+              export IPHONE_SIMULATOR_ID IPAD_SIMULATOR_ID
+              IPHONE_SIMULATOR_ID=$(simulator 'iPhone 18 Pro')
+              IPAD_SIMULATOR_ID=$(simulator 'iPad Pro 11-inch (M5)')
+              # Migrate one device at a time before booting both for the four-client exchange.
+              for id in "$IPHONE_SIMULATOR_ID" "$IPAD_SIMULATOR_ID"; do
+                boot_simulator "$id"
+                xcrun simctl shutdown "$id"
+              done
+              go run ./scripts/apple-ui shared ;;
             iPhone) SIMULATOR_ID="$(simulator 'iPhone 18 Pro')" apple/test-native.sh ;;
             iPad) SIMULATOR_ID="$(simulator 'iPad Pro 13-inch (M5)')" apple/test-native.sh ;;
             Duo) SIMULATOR_ID="$(simulator 'iPhone Duo')" apple/test-native.sh ;;
