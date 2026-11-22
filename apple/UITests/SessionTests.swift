@@ -34,8 +34,8 @@ final class SessionTests: XCTestCase {
       app.open(url)
       XCTAssertTrue(app.staticTexts[address].waitForExistence(timeout: 10))
       tap(app.buttons["Cancel"])
-      tap(app.buttons["Add Server"])
-      let field = app.secureTextFields["Pairing link"]
+      tap(app.buttons["workspace-add-server"])
+      let field = app.secureTextFields["pairing-link"]
       XCTAssertTrue(field.waitForExistence(timeout: 10))
       captureCurrent("add-server", app)
       field.tap()
@@ -85,6 +85,13 @@ final class SessionTests: XCTestCase {
         let result = try await fixtureResponse("HID")
         XCTAssertEqual(result, "delivered")
       }
+      // On the closed Duo the software keyboard leaves only a few rows for a menu.
+      // Dismiss it before browsing all the arrow commands.
+      if app.keyboards.firstMatch.exists {
+        openTerminalKeys(in: app)
+        tap(app.buttons["Hide Keyboard"])
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
+      }
       for name in ["Up Arrow", "Down Arrow", "Right Arrow", "Left Arrow", "Escape"] {
         openTerminalKeys(in: app)
         tap(app.buttons[name])
@@ -100,6 +107,10 @@ final class SessionTests: XCTestCase {
       let portrait = view.frame.size
       let firstGrid = try await fixtureResponse("GRID")
       if duo {
+        addTeardownBlock {
+          let restored = try await fixtureResponse("pose/Closed")
+          XCTAssertEqual(restored, "applied")
+        }
         let opened = try await fixtureResponse("pose/Open")
         XCTAssertEqual(opened, "applied")
       } else {
@@ -121,10 +132,6 @@ final class SessionTests: XCTestCase {
       if UIDevice.current.userInterfaceIdiom == .pad {
         try await verifyPointer { rotated.click() }
       }
-      if duo {
-        let closed = try await fixtureResponse("pose/Closed")
-        XCTAssertEqual(closed, "applied")
-      }
     #endif
     #if os(macOS)
       app.typeKey("w", modifierFlags: .command)
@@ -140,16 +147,25 @@ final class SessionTests: XCTestCase {
       @MainActor func testVoiceOverSessionControls() async throws {
         let voice = XCUIDevice.shared.voiceOverService
         let initiallyEnabled = voice.isEnabled
-        addTeardownBlock { @MainActor in
-          if initiallyEnabled && !voice.isEnabled { try voice.enable() }
-          if !initiallyEnabled && voice.isEnabled { try voice.disable() }
+        func setVoiceOver(_ enabled: Bool, line: UInt = #line) async {
+          var lastError: NSError?
+          for _ in 0..<3 {
+            if voice.isEnabled == enabled { return }
+            do {
+              if enabled { try voice.enable() } else { try voice.disable() }
+            } catch { lastError = error as NSError }
+            if voice.isEnabled == enabled { return }
+            try? await Task.sleep(for: .seconds(1))
+          }
+          XCTFail("VoiceOver state change failed (code \(lastError?.code ?? 0))", line: line)
         }
-        if initiallyEnabled { try voice.disable() }
+        addTeardownBlock { @MainActor in await setVoiceOver(initiallyEnabled) }
+        await setVoiceOver(false)
         let app = try await pairedApp(session: "CLISTREAM_SESSION")
         openTerminalKeys(in: app)
         tap(app.buttons["Hide Keyboard"])
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
-        try voice.enable()
+        await setVoiceOver(true)
         XCTAssertTrue(voice.isEnabled)
         // Explore a control by touch, then navigate away and back with the VoiceOver cursor.
         // This exercises both toolbar layouts without assuming which side the terminal occupies.
@@ -165,9 +181,9 @@ final class SessionTests: XCTestCase {
             do {
               let output = try forward ? voice.moveForward() : voice.moveBackward()
               readings.append(output.utterance)
-            } catch let error as NSError
-              where error.domain == "AXVoiceOverAutomationErrorDomain" && error.code == 3
-            {
+            } catch {
+              // On a short toolbar a move can hit the edge of its container. Continue
+              // with the opposite direction and still require spoken output.
               try await Task.sleep(for: .milliseconds(500))
             }
             if readings.contains(where: { $0.localizedCaseInsensitiveContains(label) }) {

@@ -148,6 +148,7 @@ struct WorkspaceSidebar: View {
   }
   @ViewBuilder private var sidebarControls: some View {
     Button("Add Server", systemImage: "plus") { pairing = Pairing() }.keyboardShortcut("k")
+      .accessibilityIdentifier("workspace-add-server")
     Menu("View", systemImage: "line.3.horizontal.decrease") {
       Menu("Rename Server…") {
         ForEach(workspace.profiles) { server in

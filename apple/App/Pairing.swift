@@ -67,6 +67,7 @@ struct PairingPresentation: ViewModifier {
             Text(address)
           } else {
             SecureField("Pairing link", text: $invitation).textFieldStyle(.roundedBorder)
+              .accessibilityIdentifier("pairing-link")
               .focused($invitationFocused).onAppear { invitationFocused = true }
               .onChange(of: invitation) { _, text in
                 let link = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -108,7 +109,7 @@ struct WorkspaceSheet<Fields: View>: View {
           ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: cancel) }
           ToolbarItem(placement: .confirmationAction) {
             Button(confirmation, action: confirm).disabled(!enabled)
-              .keyboardShortcut(.defaultAction)
+              .accessibilityIdentifier("workspace-confirm").keyboardShortcut(.defaultAction)
           }
         }
     }

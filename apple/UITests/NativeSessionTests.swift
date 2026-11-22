@@ -195,16 +195,28 @@ final class NativeSessionTests: XCTestCase {
     try await capture("restart-confirmation",app)
     activate(app.buttons["Restart"].firstMatch)
     let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
-    expectOutput("args=2 first=<two words> second=<>", in: terminal)
+    expectOutput("args=2", in: terminal)
+    expectOutput("first=<two words>", in: terminal)
+    expectOutput("second=<>", in: terminal)
     activate(terminal)
     terminal.typeText("after-restart\n")
     expectOutput("out:after-restart", in: terminal)
     try await capture("pipe-session",app)
   }
 
-  @MainActor private func expectOutput(_ value: String, in terminal: XCUIElement) {
-    let shown = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS %@", value), object: terminal)
-    XCTAssertEqual(XCTWaiter.wait(for: [shown], timeout: 20), .completed)
+  @MainActor private func expectOutput(
+    _ value: String, in terminal: XCUIElement, file: StaticString = #filePath, line: UInt = #line
+  ) {
+    let shown = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value CONTAINS %@", value), object: terminal)
+    if XCTWaiter.wait(for: [shown], timeout: 20) != .completed {
+      let app = XCUIApplication()
+      let attachment = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+      attachment.name = "terminal-output-window"
+      attachment.lifetime = .keepAlways
+      add(attachment)
+      XCTFail("The terminal did not display " + value, file: file, line: line)
+    }
   }
 
   @MainActor private func action(_ title: String, _ app: XCUIApplication) {
@@ -502,7 +514,9 @@ final class NativeSessionTests: XCTestCase {
   private func invitation() async throws -> String { try await fixtureResponse("QR") }
   #if os(macOS)
     @MainActor private func clickConfirmation(_ button: XCUIElement, in app: XCUIApplication) {
-      let anchor = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+      if app.state != .runningForeground { app.activate() }
+      // The app remains accessible while a sheet dismisses or the terminal changes to its exit view.
+      let anchor = app.coordinate(withNormalizedOffset: .zero)
       let point = button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).screenPoint
       let offset = CGVector(dx: point.x - anchor.screenPoint.x, dy: point.y - anchor.screenPoint.y)
       anchor.withOffset(offset).click()
@@ -515,7 +529,7 @@ final class NativeSessionTests: XCTestCase {
     XCTAssertTrue(element.waitForExistence(timeout: 15), file: file, line: line)
     #if os(macOS)
       if element.elementType == .button || element.elementType == .textField {
-        // A sheet can close on mouse-down. Complete the click at the resolved window coordinate.
+        // A sheet can close on mouse-down. Complete the click at the resolved screen coordinate.
         clickConfirmation(element, in: XCUIApplication())
       } else {
         element.click()

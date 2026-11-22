@@ -2,7 +2,10 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -139,28 +142,65 @@ func interactionRoutes(mux *http.ServeMux, path, root string, link []byte) error
 	return nil
 }
 
+// Read the settled screen and physical hinge angle before a capture or recovery.
+func duoDisplay(ctx context.Context, udid string) (uint32, float64, error) {
+	data, err := exec.CommandContext(ctx, "axe", "--output", "json", "displays", "--udid", udid).Output()
+	if err != nil {
+		return 0, 0, err
+	}
+	var response struct {
+		Data struct {
+			Result struct {
+				ActiveScreen struct{ ID uint32 }
+				Hinge        *struct{ Degrees float64 }
+			}
+		}
+	}
+	if err := json.Unmarshal(data, &response); err != nil {
+		return 0, 0, err
+	}
+	display := response.Data.Result
+	if display.Hinge == nil || display.ActiveScreen.ID == 0 {
+		return 0, 0, fmt.Errorf("missing hinge or active display")
+	}
+	return display.ActiveScreen.ID, display.Hinge.Degrees, nil
+}
+
 func poseRoute(mux *http.ServeMux, path, udid string) {
-	poses := map[string]string{"Closed": "closed", "Partially Open": "tabletop", "Open": "open"}
+	poses := map[string]int{"Closed": 0, "Partially Open": 90, "Open": 180}
 	mux.HandleFunc(path+"pose/", func(w http.ResponseWriter, r *http.Request) {
-		pose, ok := poses[strings.TrimPrefix(r.URL.Path, path+"pose/")]
+		degrees, ok := poses[strings.TrimPrefix(r.URL.Path, path+"pose/")]
 		if !ok {
 			http.NotFound(w, r)
 			return
 		}
-		cmd := exec.CommandContext(r.Context(), "axe", "hinge", "set", pose, "--udid", udid, "--timeout", "15")
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		if err := cmd.Run(); err != nil {
-			http.Error(w, "simulator hinge did not settle", http.StatusServiceUnavailable)
-			return
+		for attempt := 0; attempt < 2; attempt++ {
+			cmd := exec.CommandContext(r.Context(), "axe", "hinge", "set", strconv.Itoa(degrees), "--udid", udid, "--timeout", "15")
+			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+			if err := cmd.Run(); err == nil {
+				fmt.Fprint(w, "applied")
+				return
+			}
+			// AXe can lose its input receipt during a panel transition. Read the actual
+			// angle before deciding whether a second movement is necessary.
+			_, angle, err := duoDisplay(r.Context(), udid)
+			if err != nil {
+				break
+			}
+			if math.Abs(angle-float64(degrees)) <= 0.5 {
+				fmt.Fprint(w, "applied")
+				return
+			}
 		}
-		fmt.Fprint(w, "applied")
+		http.Error(w, "simulator hinge did not settle", http.StatusServiceUnavailable)
 	})
 	if os.Getenv("TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY") != "1" {
 		return
 	}
 	mux.HandleFunc(path+"pose-screenshot/", func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, path+"pose-screenshot/")
-		if _, ok := poses[name]; !ok {
+		degrees, ok := poses[name]
+		if !ok {
 			http.NotFound(w, r)
 			return
 		}
@@ -169,12 +209,18 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 			return
 		}
 		filename := "duo-" + strings.ToLower(strings.ReplaceAll(name, " ", "-")) + ".png"
-		cmd := exec.CommandContext(r.Context(), "axe", "screenshot", "--udid", udid, "--output", filepath.Join("gallery", filename))
+		id, angle, err := duoDisplay(r.Context(), udid)
+		if err != nil || math.Abs(float64(degrees)-angle) > 0.5 {
+			http.Error(w, "requested display is not active", http.StatusConflict)
+			return
+		}
+		cmd := exec.CommandContext(r.Context(), "xcrun", "simctl", "io", udid, "screenshot", fmt.Sprintf("--display=%d", id), filepath.Join("gallery", filename))
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
 			http.Error(w, "active display capture failed", http.StatusServiceUnavailable)
 			return
 		}
+		fmt.Printf("Captured %s at %.1f degrees on display %d\n", filename, angle, id)
 		fmt.Fprint(w, "captured")
 	})
 }

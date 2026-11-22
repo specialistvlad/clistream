@@ -17,6 +17,10 @@
       row.tap()
       let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
       XCTAssertTrue(terminal.waitForExistence(timeout: 15))
+      addTeardownBlock {
+        let restored = try await fixtureResponse("pose/Closed")
+        XCTAssertEqual(restored, "applied")
+      }
       var widths: [CGFloat] = []
       for (pose, key, marker) in [
         ("Closed", "A", "[01]"), ("Partially Open", "B", "[02]"),
@@ -34,6 +38,11 @@
           }, object: terminal)
         XCTAssertEqual(XCTWaiter.wait(for: [layout], timeout: 15), .completed)
         widths.append(terminal.frame.width)
+        if app.keyboards.firstMatch.exists {
+          openTerminalKeys(in: app)
+          app.buttons["Hide Keyboard"].tap()
+          XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
+        }
         openTerminalKeys(in: app)
         app.buttons["Control Key"].tap()
         app.buttons["Control-" + key].tap()

@@ -79,11 +79,11 @@ func shared(macPlan string, arrivals <-chan string, url, pipeID, pipeRun, termin
 		{"pad", os.Getenv("IPAD_SIMULATOR_ID")}, {"phone", os.Getenv("IPHONE_SIMULATOR_ID")},
 	} {
 		fmt.Println("Pairing shared viewer:", device.name)
-		invite, err := command("clistreamd", "invite").Output()
-		if err != nil {
-			return err
-		}
-		participants.Go(func() { results <- mobileViewer(ctx, device.name, device.id, url, pipeID, invite) })
+		participants.Go(func() {
+			results <- mobileViewer(ctx, device.name, device.id, url, pipeID, func() ([]byte, error) {
+				return command("clistreamd", "invite").Output()
+			})
+		})
 		select {
 		case <-arrivals:
 		case err := <-results:

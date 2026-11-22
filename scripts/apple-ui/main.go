@@ -113,7 +113,7 @@ func run(args []string) error {
 	}
 	const echoScript = `echo "copyword selection"
 echo preview-ready
-printf "args=%s first=<%s> second=<%s>\n" "$#" "$1" "$2"
+printf "args=%s\nfirst=<%s>\nsecond=<%s>\n" "$#" "$1" "$2"
 while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 `
 	if err := os.WriteFile(filepath.Join(root, "echo.sh"), []byte(echoScript), 0600); err != nil {
