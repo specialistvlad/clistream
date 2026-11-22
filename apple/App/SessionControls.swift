@@ -167,7 +167,27 @@ private struct PortsInspector: View {
   let session: SessionInfo
   let close: () -> Void
   @State private var changing = Set<String>()
+  #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+  #endif
+
   var body: some View {
+    #if os(iOS)
+      if sizeClass == .compact {
+        NavigationStack {
+          portList.navigationTitle("Ports").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done", action: close) } }
+        }
+        .presentationDetents([.medium, .large])
+      } else {
+        column
+      }
+    #else
+      column
+    #endif
+  }
+
+  private var column: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack {
         Text("Ports").font(.headline).accessibilityAddTraits(.isHeader)
@@ -175,42 +195,46 @@ private struct PortsInspector: View {
         Button("Done", action: close)
       }.padding()
       Divider()
-      List {
-        ForEach((session.Ports ?? [:]).keys.sorted(), id: \.self) { name in
-          VStack(alignment: .leading) {
-            Toggle(
-              isOn: Binding(
-                get: { connection.forwarding[name] != nil },
-                set: { _ in
-                  guard changing.insert(name).inserted else { return }
-                  Task {
-                    await connection.forward(name, item: session)
-                    changing.remove(name)
-                  }
-                })
-            ) {
-              Text(name)
-              Text((session.Ports?[name] ?? "").uppercased()).font(.caption)
-            }.disabled(!connection.attached || changing.contains(name))
-              .accessibilityIdentifier("forward-" + name)
-            if let address = connection.forwarding[name] {
-              Text(address).textSelection(.enabled).accessibilityIdentifier(
-                "forward-address-" + name)
-              Button("Copy Address") {
-                #if os(macOS)
-                  NSPasteboard.general.clearContents()
-                  NSPasteboard.general.setString(address, forType: .string)
-                #else
-                  UIPasteboard.general.string = address
-                #endif
-              }
-            }
+      portList
+    }
+  }
+
+  private var portList: some View {
+    List {
+      ForEach((session.Ports ?? [:]).keys.sorted(), id: \.self) { name in
+        VStack(alignment: .leading) {
+          Toggle(
+            isOn: Binding(
+              get: { connection.forwarding[name] != nil },
+              set: { _ in
+                guard changing.insert(name).inserted else { return }
+                Task {
+                  await connection.forward(name, item: session)
+                  changing.remove(name)
+                }
+              })
+          ) {
+            Text(name)
+            Text((session.Ports?[name] ?? "").uppercased()).font(.caption)
+          }.disabled(!connection.attached || changing.contains(name))
+            .accessibilityIdentifier("forward-" + name)
+          if let address = connection.forwarding[name] {
+            Text(address).textSelection(.enabled).accessibilityIdentifier(
+              "forward-address-" + name)
+            Button("Copy Address") {
+              #if os(macOS)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(address, forType: .string)
+              #else
+                UIPasteboard.general.string = address
+              #endif
+            }.buttonStyle(.borderless)
           }
         }
-      }.overlay {
-        if session.Ports?.isEmpty != false {
-          Text("This session has no shared ports.").foregroundStyle(.secondary)
-        }
+      }
+    }.overlay {
+      if session.Ports?.isEmpty != false {
+        Text("This session has no shared ports.").foregroundStyle(.secondary)
       }
     }
   }

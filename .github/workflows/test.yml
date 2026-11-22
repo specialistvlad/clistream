@@ -34,7 +34,7 @@ jobs:
         device: [macOS, iPhone, iPad, Duo, shared]
     runs-on: xcode-27
     # A cold iOS runtime must finish migrating before the per-case watchdogs start.
-    timeout-minutes: ${{ matrix.device == 'shared' && 65 || 50 }}
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -116,8 +116,8 @@ jobs:
             staging=$(mktemp -d "$RUNNER_TEMP/screenshots.XXXXXX")
             xcrun xcresulttool export attachments --path "$bundle" --output-path "$staging" >/dev/null
             jq -r '.[] | .attachments[].suggestedHumanReadableName | select(test("^audit-[0-9]+-[0-9]+-[a-z-]+_")) | split("_")[0]' "$staging/manifest.json"
-            jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | startswith("command-review-window_")) | .exportedFileName' "$staging/manifest.json" |
-              while read -r file; do cp "$staging/$file" results/command-review-window.png; done
+            jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | test("^(command-review|ports-inspector)-window_")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0])] | @tsv' "$staging/manifest.json" |
+              while IFS=$'\t' read -r file name; do cp "$staging/$file" "results/$name.png"; done
             jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | test("^gallery-[a-z-]+_[0-9]+_[A-Fa-f0-9-]+\\.png$")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0] | ltrimstr("gallery-"))] | @tsv' "$staging/manifest.json" |
               while IFS=$'\t' read -r file name; do cp "$staging/$file" "gallery/$name.png"; done
           done

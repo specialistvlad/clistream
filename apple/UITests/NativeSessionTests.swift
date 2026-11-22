@@ -12,8 +12,15 @@ final class NativeSessionTests: XCTestCase {
       #else
         activate(toggle)
       #endif
-      let address = app.staticTexts["forward-address-" + proto].firstMatch
-      XCTAssertTrue(address.waitForExistence(timeout: 12))
+      let address = app.descendants(matching: .any)["forward-address-" + proto].firstMatch
+      guard address.waitForExistence(timeout: 15) else {
+        let attachment = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        attachment.name = "ports-inspector-window"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        XCTFail("Missing local listener address after toggling " + proto)
+        return
+      }
       #if os(macOS)
         let endpoint = (address.value as? String) ?? address.label
       #else
@@ -166,12 +173,14 @@ final class NativeSessionTests: XCTestCase {
     }
     activate(field)
     let saved = try XCTUnwrap(field.value as? String)
+    XCTAssertFalse(saved.isEmpty)
     try await capture("edit-command", app)
-    field.typeKey("a", modifierFlags: .command)
-    field.typeText("'")
+    field.typeKey(.rightArrow, modifierFlags: .command)
+    field.typeText(" '")
     XCTAssertFalse(app.buttons["Restart"].firstMatch.isEnabled)
-    field.typeKey("a", modifierFlags: .command)
-    field.typeText(saved + " placeholder 'two words' \"\"")
+    field.typeKey(.delete, modifierFlags: [])
+    field.typeText("placeholder 'two words' \"\"")
+    XCTAssertEqual(field.value as? String, saved + " placeholder 'two words' \"\"")
     try await capture("restart-confirmation",app)
     activate(app.buttons["Restart"].firstMatch)
     let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
