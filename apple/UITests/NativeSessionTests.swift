@@ -391,8 +391,10 @@ final class NativeSessionTests: XCTestCase {
     activate(input)
     let ready = try await fixtureResponse("ready/" + participant)
     XCTAssertEqual(ready, "ready")
-    input.typeText("shared-" + participant + "\n")
+    // All viewers stay attached. Wait for each writer's echo before the next one types
+    // so keystrokes from separate keyboards cannot interleave within a marker.
     for peer in ["cli", "mac", "phone", "pad"] {
+      if peer == participant { input.typeText("shared-" + participant + "\n") }
       let text = "out:shared-" + peer
       let match = app.descendants(matching: .any).matching(
         NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", text, text)
