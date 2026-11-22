@@ -86,15 +86,15 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(result, "delivered")
       }
       for name in ["Up Arrow", "Down Arrow", "Right Arrow", "Left Arrow", "Escape"] {
-        tap(app.buttons["Keys"])
+        openTerminalKeys(in: app)
         tap(app.buttons[name])
       }
-      tap(app.buttons["Keys"])
+      openTerminalKeys(in: app)
       tap(app.buttons["Control Key"])
       tap(app.buttons["Control-C"])
       // A windowed iPad can keep its horizontal size class through rotation.
       // Start with the software keyboard up and measure both grid dimensions.
-      tap(app.buttons["Keys"])
+      openTerminalKeys(in: app)
       tap(app.buttons["Show Keyboard"])
       XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
       let portrait = view.frame.size
@@ -105,7 +105,7 @@ final class SessionTests: XCTestCase {
       } else {
         XCUIDevice.shared.orientation = .landscapeLeft
       }
-      tap(app.buttons["Keys"])
+      openTerminalKeys(in: app)
       tap(app.buttons["Hide Keyboard"])
       XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
       let resized = XCTNSPredicateExpectation(
@@ -146,7 +146,7 @@ final class SessionTests: XCTestCase {
         }
         if initiallyEnabled { try voice.disable() }
         let app = try await pairedApp(session: "CLISTREAM_SESSION")
-        tap(app.buttons["Keys"])
+        openTerminalKeys(in: app)
         tap(app.buttons["Hide Keyboard"])
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
         try voice.enable()
@@ -202,7 +202,7 @@ final class SessionTests: XCTestCase {
       let app = try await pairedApp(session: "CLISTREAM_UI_PTY", scrollList: true)
       let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
       assertText("scroll-ready", in: terminal)
-      tap(app.buttons["Keys"])
+      openTerminalKeys(in: app)
       tap(app.buttons["Hide Keyboard"])
       XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 12))
       let started = try await fixtureResponse("HISTORY")
@@ -221,7 +221,7 @@ final class SessionTests: XCTestCase {
         XCTWaiter.wait(
           for: [XCTNSPredicateExpectation(predicate: history, object: terminal)],
           timeout: 15), .completed, "A downward drag did not expose earlier terminal lines")
-      tap(app.buttons["Keys"])
+      openTerminalKeys(in: app)
       tap(app.buttons["Show Keyboard"])
       XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 6))
       tap(app.buttons["Session"])
@@ -241,7 +241,7 @@ final class SessionTests: XCTestCase {
       tap(app.descendants(matching: .any)["Paste"].firstMatch)
       terminal.typeText("\n")
       assertText("out:copyword", in: terminal)
-      tap(app.buttons["Keys"])
+      openTerminalKeys(in: app)
       tap(app.buttons["Hide Keyboard"])
       XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
       try app.performAccessibilityAudit(for: [.sufficientElementDescription, .contrast, .dynamicType]) { issue in

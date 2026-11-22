@@ -33,7 +33,7 @@
           }, object: terminal)
         XCTAssertEqual(XCTWaiter.wait(for: [layout], timeout: 15), .completed)
         widths.append(terminal.frame.width)
-        app.buttons["Keys"].tap()
+        openTerminalKeys(in: app)
         app.buttons["Control Key"].tap()
         app.buttons["Control-" + key].tap()
         let echoed = XCTNSPredicateExpectation(

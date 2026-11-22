@@ -19,6 +19,7 @@ struct SessionActions: ViewModifier {
       #else
         ToolbarItem {
           Menu("Session", systemImage: "ellipsis.circle") {
+            if connection.attached { terminalKeys }
             actions
             if let detach {
               Divider()
@@ -33,10 +34,7 @@ struct SessionActions: ViewModifier {
           .help("Show or hide port forwarding")
       }
     }
-    .inspector(isPresented: $ports) {
-      PortsInspector(connection: connection, session: session, close: { ports = false })
-        .inspectorColumnWidth(min: 230, ideal: 280, max: 400)
-    }
+    .modifier(PortsPresentation(connection: connection, session: session, presented: $ports))
     .sheet(item: $editor) { draft in
       CommandSheet(draft: draft) { argv in
         editor = nil
@@ -67,6 +65,27 @@ struct SessionActions: ViewModifier {
       Text(error ?? "")
     }
   }
+
+  #if os(iOS)
+    private var terminalKeys: some View {
+      Menu("Keys") {
+        Button("Show Keyboard") { connection.focusTerminal() }
+        Button("Hide Keyboard") { _ = connection.terminal?.resignFirstResponder() }
+        Button("Escape") { connection.send(.bytes(Data([0x1b]))) }
+        Menu("Control Key") {
+          ForEach(Array(65...90), id: \.self) { letter in
+            Button("Control-" + String(UnicodeScalar(letter)!)) {
+              connection.send(.bytes(Data([UInt8(letter - 64)])))
+            }
+          }
+        }
+        ForEach([("Up", "A"), ("Down", "B"), ("Right", "C"), ("Left", "D")], id: \.0) {
+          label, suffix in
+          Button(label + " Arrow") { connection.sendArrow(suffix) }
+        }
+      }
+    }
+  #endif
 
   @ViewBuilder private var actions: some View {
     if session.running && !connection.attached {
@@ -162,48 +181,62 @@ private struct CommandSheet: View {
   }
 }
 
-private struct PortsInspector: View {
+private struct PortsPresentation: ViewModifier {
   @ObservedObject var connection: Connection
   let session: SessionInfo
-  let close: () -> Void
-  @State private var changing = Set<String>()
+  @Binding var presented: Bool
   #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
   #endif
 
-  var body: some View {
+  func body(content: Content) -> some View {
     #if os(iOS)
       if sizeClass == .compact {
-        NavigationStack {
-          portList.navigationTitle("Ports").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { done } }
+        content.sheet(isPresented: $presented) {
+          NavigationStack {
+            portList.navigationTitle("Ports").navigationBarTitleDisplayMode(.inline)
+              .toolbar { ToolbarItem(placement: .confirmationAction) { done } }
+          }
+          .presentationDetents([.medium, .large])
         }
-        .presentationDetents([.medium, .large])
       } else {
-        column
+        column(content)
       }
     #else
-      column
+      column(content)
     #endif
   }
 
-  private var column: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      HStack {
-        Text("Ports").font(.headline).accessibilityAddTraits(.isHeader)
-        Spacer()
-        done
-      }.padding()
-      Divider()
-      portList
+  private func column(_ content: Content) -> some View {
+    content.inspector(isPresented: $presented) {
+      VStack(alignment: .leading, spacing: 0) {
+        HStack {
+          Text("Ports").font(.headline).accessibilityAddTraits(.isHeader)
+          Spacer()
+          done
+        }.padding()
+        Divider()
+        portList
+      }
+      .inspectorColumnWidth(min: 230, ideal: 280, max: 400)
     }
   }
 
   private var done: some View {
-    Button("Done", action: close).accessibilityIdentifier("dismiss-ports")
+    Button("Done") { presented = false }.accessibilityIdentifier("dismiss-ports")
   }
 
   private var portList: some View {
+    PortList(connection: connection, session: session)
+  }
+}
+
+private struct PortList: View {
+  @ObservedObject var connection: Connection
+  let session: SessionInfo
+  @State private var changing = Set<String>()
+
+  var body: some View {
     List {
       ForEach((session.Ports ?? [:]).keys.sorted(), id: \.self) { name in
         VStack(alignment: .leading) {

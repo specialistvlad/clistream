@@ -18,6 +18,7 @@ final class NativeSessionTests: XCTestCase {
       activate(done)
       XCTAssertTrue(done.waitForNonExistence(timeout: 10))
     }
+    XCTAssertFalse(done.exists && done.isHittable, "The closed inspector displayed its Done button in the terminal")
     for proto in ["tcp", "udp"] {
       activate(app.buttons["session-ports"].firstMatch)
       togglePort(proto)
@@ -242,7 +243,7 @@ final class NativeSessionTests: XCTestCase {
     try await capture("terminal", app)
     XCTAssertFalse(app.buttons["Restart"].exists)
     #if os(iOS)
-      activate(app.buttons["Keys"])
+      openTerminalKeys(in: app)
       captureCurrent("terminal-keys", app)
       activate(app.buttons["Control Key"])
       captureCurrent("control-keys", app)
@@ -280,6 +281,7 @@ final class NativeSessionTests: XCTestCase {
         let menu = app.descendants(matching: .any)["workspace-view-options"].firstMatch
         activate(menu)
         let option = app.menuItems[title].firstMatch
+        if title == "List" && option.waitForExistence(timeout: 5) { captureCurrent("view-options", app) }
         activate(option)
         XCTAssertTrue(option.waitForNonExistence(timeout: 5))
       }
@@ -318,7 +320,9 @@ final class NativeSessionTests: XCTestCase {
       let pty = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PTY_ID"])
       let other = app.descendants(matching: .any)["session-" + pty].firstMatch
       other.rightClick()
-      activate(app.menuItems["Open in New Tab"])
+      let newTab = app.menuItems["Open in New Tab"]
+      if newTab.waitForExistence(timeout: 5) { captureCurrent("open-session-menu", app) }
+      activate(newTab)
       XCTAssertTrue(
         app.descendants(matching: .any)["session-terminal"].firstMatch.waitForExistence(timeout: 12)
       )
@@ -520,6 +524,17 @@ final class NativeSessionTests: XCTestCase {
 }
 
 extension XCTestCase {
+  #if os(iOS)
+    @MainActor func openTerminalKeys(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+      let menu = app.buttons["Session"].firstMatch
+      XCTAssertTrue(menu.waitForExistence(timeout: 12), file: file, line: line)
+      menu.tap()
+      let keys = app.buttons["Keys"].firstMatch
+      XCTAssertTrue(keys.waitForExistence(timeout: 12), file: file, line: line)
+      keys.tap()
+    }
+  #endif
+
   @MainActor func captureCurrent(_ name: String, _ app: XCUIApplication) {
     guard ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1" else { return }
     #if os(macOS)
