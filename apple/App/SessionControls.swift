@@ -176,7 +176,7 @@ private struct PortsInspector: View {
       if sizeClass == .compact {
         NavigationStack {
           portList.navigationTitle("Ports").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done", action: close) } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { done } }
         }
         .presentationDetents([.medium, .large])
       } else {
@@ -192,11 +192,15 @@ private struct PortsInspector: View {
       HStack {
         Text("Ports").font(.headline).accessibilityAddTraits(.isHeader)
         Spacer()
-        Button("Done", action: close)
+        done
       }.padding()
       Divider()
       portList
     }
+  }
+
+  private var done: some View {
+    Button("Done", action: close).accessibilityIdentifier("dismiss-ports")
   }
 
   private var portList: some View {

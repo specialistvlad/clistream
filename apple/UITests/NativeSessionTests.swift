@@ -3,15 +3,24 @@ import XCTest
 final class NativeSessionTests: XCTestCase {
   @MainActor func testPairPreviewAndSend() async throws {
     let app = try await openPipe()
+    let done = app.buttons["dismiss-ports"].firstMatch
+    func togglePort(_ name: String) {
+      let row = app.descendants(matching: .any)["forward-" + name].firstMatch
+      XCTAssertTrue(row.waitForExistence(timeout: 15))
+      #if os(iOS)
+        let control = row.switches.firstMatch
+        activate(control.exists ? control : row)
+      #else
+        activate(row)
+      #endif
+    }
+    func closePorts() {
+      activate(done)
+      XCTAssertTrue(done.waitForNonExistence(timeout: 10))
+    }
     for proto in ["tcp", "udp"] {
       activate(app.buttons["session-ports"].firstMatch)
-      let toggle = app.descendants(matching: .any)["forward-" + proto].firstMatch
-      #if os(iOS)
-        let control = toggle.switches.firstMatch
-        activate(control.exists ? control : toggle)
-      #else
-        activate(toggle)
-      #endif
+      togglePort(proto)
       let address = app.descendants(matching: .any)["forward-address-" + proto].firstMatch
       guard address.waitForExistence(timeout: 15) else {
         let attachment = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
@@ -28,16 +37,12 @@ final class NativeSessionTests: XCTestCase {
       #endif
       let port = try XCTUnwrap(endpoint.split(separator: ":").last.flatMap { UInt16($0) })
       try await capture("port-forwards", app)
-      activate(app.buttons["Done"].firstMatch)
+      closePorts()
       try exchange(port: port, datagram: proto == "udp")
       activate(app.buttons["session-ports"].firstMatch)
-      #if os(iOS)
-        activate(control.exists ? control : toggle)
-      #else
-        activate(toggle)
-      #endif
+      togglePort(proto)
       XCTAssertTrue(address.waitForNonExistence(timeout: 5))
-      activate(app.buttons["Done"].firstMatch)
+      closePorts()
     }
     let field = app.descendants(matching: .any)["session-terminal"].firstMatch
     activate(field)
@@ -76,6 +81,7 @@ final class NativeSessionTests: XCTestCase {
       }
       showServerList(for: id)
     #endif
+    captureCurrent("multiple-servers", app)
     activate(app.descendants(matching: .any)["session-" + id].firstMatch)
     activate(field)
     field.typeText("second-server-marker\n")
@@ -93,6 +99,9 @@ final class NativeSessionTests: XCTestCase {
     #if os(iOS)
       showServerList(for: pipe)
     #endif
+    if app.staticTexts["Offline"].firstMatch.waitForExistence(timeout: 5) {
+      captureCurrent("server-offline", app)
+    }
     activate(app.descendants(matching: .any)["session-" + pipe].firstMatch)
     activate(field)
     field.typeText("still-connected\n")
@@ -175,12 +184,13 @@ final class NativeSessionTests: XCTestCase {
     let saved = try XCTUnwrap(field.value as? String)
     XCTAssertFalse(saved.isEmpty)
     try await capture("edit-command", app)
-    field.typeKey(.rightArrow, modifierFlags: .command)
-    field.typeText(" '")
+    field.typeKey("a", modifierFlags: .command)
+    field.typeText("'")
     XCTAssertFalse(app.buttons["Restart"].firstMatch.isEnabled)
-    field.typeKey(.delete, modifierFlags: [])
-    field.typeText("placeholder 'two words' \"\"")
-    XCTAssertEqual(field.value as? String, saved + " placeholder 'two words' \"\"")
+    field.typeKey("a", modifierFlags: .command)
+    field.typeText(saved + " 'two words' ")
+    field.typeText("\"\"")
+    XCTAssertEqual(field.value as? String, saved + " 'two words' \"\"")
     try await capture("restart-confirmation",app)
     activate(app.buttons["Restart"].firstMatch)
     let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
@@ -211,19 +221,14 @@ final class NativeSessionTests: XCTestCase {
     for dark in [false, true] {
       #if os(macOS)
         device.appearance = dark ? .dark : .light
-        let screenshot = app.windows.firstMatch.screenshot()
       #else
         let mode = dark ? "dark" : "light"
         let applied = try await fixtureResponse("appearance/" + mode)
         XCTAssertEqual(applied, mode)
         // SpringBoard updates the application, keyboard and system sheets on separate frames.
         try await Task.sleep(for: .seconds(1))
-        let screenshot = XCUIScreen.main.screenshot()
       #endif
-      let attachment = XCTAttachment(screenshot: screenshot)
-      attachment.name = "gallery-" + name + (dark ? "-dark" : "")
-      attachment.lifetime = .keepAlways
-      add(attachment)
+      captureCurrent(name + (dark ? "-dark" : ""), app)
     }
   }
 
@@ -238,7 +243,9 @@ final class NativeSessionTests: XCTestCase {
     XCTAssertFalse(app.buttons["Restart"].exists)
     #if os(iOS)
       activate(app.buttons["Keys"])
+      captureCurrent("terminal-keys", app)
       activate(app.buttons["Control Key"])
+      captureCurrent("control-keys", app)
       activate(app.buttons["Control-C"])
     #else
       view.click()
@@ -278,10 +285,15 @@ final class NativeSessionTests: XCTestCase {
       }
       for layout in ["List", "Tree"] {
         choose(layout)
-        for group in ["Host", "CLI Name", "Server"] {
+        for (group, screenshot) in [("Host", "group-by-host"), ("CLI Name", "group-by-cli"), ("Server", "servers-list")] {
           choose(group)
           XCTAssertTrue(row.waitForExistence(timeout: 10))
           expectOutput("out:layout draft", in: field)
+          if layout == "List" {
+            captureCurrent(screenshot, app)
+          } else if group == "Server" {
+            captureCurrent("servers-tree", app)
+          }
         }
       }
       app.typeText("focus-check\n")
@@ -310,8 +322,10 @@ final class NativeSessionTests: XCTestCase {
       XCTAssertTrue(
         app.descendants(matching: .any)["session-terminal"].firstMatch.waitForExistence(timeout: 12)
       )
+      captureCurrent("native-tabs", app)
       other.rightClick()
       activate(app.menuItems["Open in New Window"])
+      captureCurrent("separate-window", app)
       activate(row)
       XCTAssertTrue(input.waitForExistence(timeout: 10))
       expectOutput("out:kept draft", in: input)
@@ -356,6 +370,7 @@ final class NativeSessionTests: XCTestCase {
       NSPredicate(format: "label CONTAINS[c] %@ OR value CONTAINS[c] %@", "revoked", "revoked")
     ).firstMatch
     XCTAssertTrue(denied.waitForExistence(timeout: 15))
+    captureCurrent("disconnected", app)
     let recovered = try await openPipe()
     let input = recovered.descendants(matching: .any)["session-terminal"].firstMatch
     activate(input)
@@ -499,5 +514,20 @@ final class NativeSessionTests: XCTestCase {
     #else
       element.tap()
     #endif
+  }
+}
+
+extension XCTestCase {
+  @MainActor func captureCurrent(_ name: String, _ app: XCUIApplication) {
+    guard ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1" else { return }
+    #if os(macOS)
+      let screenshot = app.windows.firstMatch.screenshot()
+    #else
+      let screenshot = XCUIScreen.main.screenshot()
+    #endif
+    let attachment = XCTAttachment(screenshot: screenshot)
+    attachment.name = "gallery-" + name
+    attachment.lifetime = .keepAlways
+    add(attachment)
   }
 }

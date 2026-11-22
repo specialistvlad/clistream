@@ -89,14 +89,12 @@ jobs:
               export IPHONE_SIMULATOR_ID IPAD_SIMULATOR_ID
               IPHONE_SIMULATOR_ID=$(simulator 'iPhone 18 Pro')
               IPAD_SIMULATOR_ID=$(simulator 'iPad Pro 11-inch (M5)')
-              # Migrate one device at a time before booting both for the four-client exchange.
-              for id in "$IPHONE_SIMULATOR_ID" "$IPAD_SIMULATOR_ID"; do
-                boot_simulator "$id"
-                if ! xcrun simctl shutdown "$id"; then
-                  xcrun simctl list devices --json | jq -e --arg id "$id" '
-                    any(.devices[][]; .udid == $id and .state == "Shutdown")' >/dev/null
-                fi
-              done
+              # Migrate the second participant before the first uses the runner's memory.
+              boot_simulator "$IPHONE_SIMULATOR_ID"
+              if ! xcrun simctl shutdown "$IPHONE_SIMULATOR_ID"; then
+                xcrun simctl list devices --json | jq -e --arg id "$IPHONE_SIMULATOR_ID" '
+                  any(.devices[][]; .udid == $id and .state == "Shutdown")' >/dev/null
+              fi
               go run ./scripts/apple-ui shared ;;
             iPhone) SIMULATOR_ID="$(simulator 'iPhone 18 Pro')" apple/test-native.sh ;;
             iPad) SIMULATOR_ID="$(simulator 'iPad Pro 13-inch (M5)')" apple/test-native.sh ;;

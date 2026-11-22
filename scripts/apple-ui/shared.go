@@ -33,6 +33,12 @@ func buildTestPlan(root, platform, destination string) (string, error) {
 type viewerPlans struct{ mac, mobile string }
 
 func prepareViewers(root string) (viewerPlans, error) {
+	for _, key := range []string{"IPHONE_SIMULATOR_ID", "IPAD_SIMULATOR_ID"} {
+		if os.Getenv(key) == "" {
+			return viewerPlans{}, fmt.Errorf("%s required", key)
+		}
+	}
+	fmt.Println("Building the Mac and mobile test plans")
 	macPlan, err := buildTestPlan(root, "macOS", "generic/platform=macOS")
 	if err != nil {
 		return viewerPlans{}, err
@@ -41,18 +47,17 @@ func prepareViewers(root string) (viewerPlans, error) {
 	if err != nil {
 		return viewerPlans{}, err
 	}
-	for _, key := range []string{"IPHONE_SIMULATOR_ID", "IPAD_SIMULATOR_ID"} {
-		id := os.Getenv(key)
-		if id == "" {
-			return viewerPlans{}, fmt.Errorf("%s required", key)
-		}
-		boot := exec.Command("xcrun", "simctl", "bootstatus", id, "-b")
-		boot.Stdout, boot.Stderr = os.Stdout, os.Stderr
-		if err := boot.Run(); err != nil {
-			return viewerPlans{}, err
-		}
+	if err := bootViewer(context.Background(), "IPAD_SIMULATOR_ID"); err != nil {
+		return viewerPlans{}, err
 	}
 	return viewerPlans{macPlan, mobilePlan}, nil
+}
+
+func bootViewer(ctx context.Context, key string) error {
+	fmt.Println("Booting", key)
+	cmd := exec.CommandContext(ctx, "xcrun", "simctl", "bootstatus", os.Getenv(key), "-b")
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	return cmd.Run()
 }
 
 // Run each UI runner against the same broker. The independent CLI joins via
@@ -96,6 +101,12 @@ func shared(plans viewerPlans, arrivals <-chan string, url, pipeID, pipeRun, ter
 		results <- fmt.Errorf("CLI stream ended before the final marker; observed participants %v (read error %v)", seen, scanner.Err())
 	}()
 	for _, name := range []string{"pad", "phone", "mac"} {
+		if name == "phone" {
+			if err := bootViewer(ctx, "IPHONE_SIMULATOR_ID"); err != nil {
+				return err
+			}
+		}
+		fmt.Println("Launching shared viewer:", name)
 		dest := "platform=macOS"
 		plan := plans.mac
 		suite := "CLIStream-MacUITests"

@@ -117,9 +117,16 @@ private func highlighted(_ line: String) -> NSAttributedString {
         let text = view.text ?? ""
         field.line = text
         guard view.markedTextRange == nil else { return }
-        let selection = view.selectedTextRange
+        let offsets = view.selectedTextRange.map { range in
+          (view.offset(from: view.beginningOfDocument, to: range.start),
+           view.offset(from: view.beginningOfDocument, to: range.end))
+        }
         view.attributedText = highlighted(text)
-        view.selectedTextRange = selection
+        if let (start, end) = offsets,
+          let first = view.position(from: view.beginningOfDocument, offset: start),
+          let last = view.position(from: view.beginningOfDocument, offset: end) {
+          view.selectedTextRange = view.textRange(from: first, to: last)
+        }
       }
       func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         field.submit()

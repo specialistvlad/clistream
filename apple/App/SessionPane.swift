@@ -28,7 +28,7 @@ struct SessionPane: View {
   }
   #if os(iOS)
     private var terminalKeys: some View {
-      Menu("Keys") {
+      Menu("Keys", systemImage: "keyboard") {
         Button("Show Keyboard") { connection.focusTerminal() }
         Button("Hide Keyboard") { _ = connection.terminal?.resignFirstResponder() }
         Button("Escape") { connection.send(.bytes(Data([0x1b]))) }
@@ -43,7 +43,7 @@ struct SessionPane: View {
           label, suffix in
           Button(label + " Arrow") { connection.sendArrow(suffix) }
         }
-      }
+      }.accessibilityLabel("Keys")
     }
   #endif
 

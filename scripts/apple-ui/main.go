@@ -117,7 +117,15 @@ func run(args []string) error {
 		stop()
 		return registration{}, nil, errors.New("supervised child did not register")
 	}
-	pipe, stop, err := startSupervisor(append(exports, "--io-mode", "pipe", string(bytes.TrimSpace(link)), "/bin/sh", "-c", `echo "copyword selection"; echo preview-ready; printf "args=%s first=<%s> second=<%s>\n" "$#" "$1" "$2"; while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done`)...)
+	const echoScript = `echo "copyword selection"
+echo preview-ready
+printf "args=%s first=<%s> second=<%s>\n" "$#" "$1" "$2"
+while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
+`
+	if err := os.WriteFile(filepath.Join(root, "echo.sh"), []byte(echoScript), 0600); err != nil {
+		return err
+	}
+	pipe, stop, err := startSupervisor(append(exports, "--io-mode", "pipe", string(bytes.TrimSpace(link)), "/bin/sh", "echo.sh")...)
 	if err != nil {
 		return err
 	}
@@ -135,7 +143,7 @@ func run(args []string) error {
 	if os.Getenv("SIMULATOR_ID") != "" && args[0] != "shared" {
 		// Keep the selectable paragraph stable while UIKit moves the selection handles.
 		touch, stop, err = startSupervisor("--once", "--io-mode", "pipe", "--", "/bin/sh", "-c",
-			`printf "copyword selection"; while IFS= read -r line; do case "$line" in "copyword selection") printf "\nout:%s\n" "$line";; *) printf "out:%s\n" "$line" >&2;; esac; done`)
+			`printf "copyword selection\n"; while IFS= read -r line; do printf "out:%s\n" "$line" >&2; done`)
 		if err != nil {
 			return err
 		}

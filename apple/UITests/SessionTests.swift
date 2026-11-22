@@ -36,6 +36,8 @@ final class SessionTests: XCTestCase {
       tap(app.buttons["Cancel"])
       tap(app.buttons["Add Server"])
       let field = app.secureTextFields["Pairing link"]
+      XCTAssertTrue(field.waitForExistence(timeout: 10))
+      captureCurrent("add-server", app)
       field.tap()
       field.typeText(invitation)
       XCTAssertTrue(app.staticTexts[address].waitForExistence(timeout: 10))
@@ -43,6 +45,7 @@ final class SessionTests: XCTestCase {
       XCTAssertTrue(
         app.descendants(matching: .any)["session-" + session].firstMatch.waitForExistence(
           timeout: 12))
+      captureCurrent("servers-tree", app)
       app.open(url)
       tap(app.buttons["Pair device"])
       XCTAssertTrue(
@@ -236,12 +239,7 @@ final class SessionTests: XCTestCase {
       let word = terminal.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 16, dy: 8))
       word.press(forDuration: 1)
       tap(app.descendants(matching: .any)["Select"].firstMatch)
-      if ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1" {
-        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        attachment.name = "gallery-text-selection"
-        attachment.lifetime = .keepAlways
-        add(attachment)
-      }
+      captureCurrent("text-selection", app)
       tap(app.descendants(matching: .any)["Copy"].firstMatch)
       word.press(forDuration: 1)
       tap(app.descendants(matching: .any)["Paste"].firstMatch)
