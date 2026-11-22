@@ -77,18 +77,14 @@ jobs:
           TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY: ${{ (github.event_name != 'workflow_dispatch' || inputs.screenshots) && '1' || '0' }}
         run: |
           defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
-          if [[ "$DEVICE" == shared ]]; then
-            [[ -z "$CLISTREAM_TEST_CASES" ]] || { echo "The shared session runs all four clients together."; exit 2; }
-            shared_runtime=$(xcrun simctl list devices available --json | jq -er '
-              [.devices | to_entries[] | select(.key | contains("iOS-27-"))
-               | select(any(.value[]; .name == "iPhone 18 Pro") and any(.value[]; .name == "iPad Pro 11-inch (M5)"))
-               | .key] | sort_by(capture("iOS-(?<version>[0-9]+(?:-[0-9]+)*)").version | split("-") | map(tonumber)) | last // error("missing shared iOS runtime")')
+          if [[ "$DEVICE" == shared && -n "$CLISTREAM_TEST_CASES" ]]; then
+            echo "The shared session runs all four clients together."
+            exit 2
           fi
           simulator() {
             local id
-            id=$(xcrun simctl list devices available --json | jq -er --arg device "$1" --arg runtime "${shared_runtime:-}" '
-              [.devices | to_entries[] | select(.key | contains("iOS-27-"))
-               | select($runtime == "" or .key == $runtime)]
+            id=$(xcrun simctl list devices available --json | jq -er --arg device "$1" '
+              [.devices | to_entries[] | select(.key | contains("iOS-27-"))]
               | sort_by(.key | capture("iOS-(?<version>[0-9]+(?:-[0-9]+)*)").version | split("-") | map(tonumber))
               | [.[].value[] | select(.name == $device)][-1].udid // error("missing simulator")') || return 1
             xcrun simctl rename "$id" "CLIStream CI $1" || return 1
@@ -100,7 +96,7 @@ jobs:
               make build
               export IPHONE_SIMULATOR_ID IPAD_SIMULATOR_ID
               IPHONE_SIMULATOR_ID=$(simulator 'iPhone 18 Pro')
-              IPAD_SIMULATOR_ID=$(simulator 'iPad Pro 11-inch (M5)')
+              IPAD_SIMULATOR_ID=$(simulator 'iPad Pro 13-inch (M5)')
               go run ./scripts/apple-ui shared ;;
             iPhone) SIMULATOR_ID="$(simulator 'iPhone 18 Pro')" apple/test-native.sh ;;
             iPad) SIMULATOR_ID="$(simulator 'iPad Pro 13-inch (M5)')" apple/test-native.sh ;;
