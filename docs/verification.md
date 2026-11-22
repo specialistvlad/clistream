@@ -244,7 +244,7 @@ apple/test-native.sh macOS
 IPHONE_SIMULATOR_ID="$IPHONE_SIMULATOR_ID" IPAD_SIMULATOR_ID="$IPAD_SIMULATOR_ID" go run ./scripts/apple-ui shared
 ```
 
-When several versions of Xcode are installed, export `DEVELOPER_DIR` for the intended installation before building and testing. A mismatch between the running CoreSimulator service and XCTest can prevent simulator apps from launching. Each device test prints its result bundle path. Open it in Xcode for screenshots and XCTest diagnostics. The Go reporter extracts case names, durations, and results. The shared runner uses the production app UI on three devices with a separate Go CLI viewer. It requires an unlocked, automation-enabled Mac desktop.
+When several versions of Xcode are installed, export `DEVELOPER_DIR` for the intended installation before building and testing. A mismatch between the running CoreSimulator service and XCTest can prevent simulator apps from launching. Each device test prints its result bundle path. Open it in Xcode for screenshots and XCTest diagnostics. The Go reporter extracts case names, durations, and results. The shared runner uses the production app UI on three devices with a separate Go CLI viewer. It builds both test plans and boots the simulators before starting the Go peers. CI selects an iPhone and iPad on the same runtime and retains a separate XCTest report for each Device Hub fold operation. The shared run requires an unlocked, automation-enabled Mac desktop.
 
 ## Distribution
 

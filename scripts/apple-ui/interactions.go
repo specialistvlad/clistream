@@ -97,6 +97,14 @@ func interactionRoutes(mux *http.ServeMux, path, root string, link []byte) error
 		}
 		fmt.Fprint(w, "delivered")
 	}
+	mux.HandleFunc(path+"POINTERS", func(w http.ResponseWriter, r *http.Request) {
+		data, err := os.ReadFile(filepath.Join(root, "keys"))
+		if err != nil {
+			http.Error(w, "pointer log unavailable", 503)
+			return
+		}
+		fmt.Fprint(w, len(pointerPress.FindAllIndex(data, -1)))
+	})
 	mux.HandleFunc(path+"WORD", touch)
 	mux.HandleFunc(path+"EXTEND", touch)
 	mux.HandleFunc(path+"HID", func(w http.ResponseWriter, r *http.Request) {
@@ -117,7 +125,7 @@ func interactionRoutes(mux *http.ServeMux, path, root string, link []byte) error
 	return nil
 }
 
-func poseRoute(mux *http.ServeMux, path string, device string) {
+func poseRoute(mux *http.ServeMux, path, device, plan string) {
 	mux.HandleFunc(path+"pose/", func(w http.ResponseWriter, r *http.Request) {
 		pose := strings.TrimPrefix(r.URL.Path, path+"pose/")
 		if pose != "Closed" && pose != "Open" && pose != "Partially Open" {
@@ -129,8 +137,13 @@ func poseRoute(mux *http.ServeMux, path string, device string) {
 			http.Error(w, "Xcode developer directory unavailable", 503)
 			return
 		}
+		resultDir, err := os.MkdirTemp("apple/build", "results-DuoPose-")
+		if err != nil {
+			http.Error(w, "Device Hub result directory unavailable", 503)
+			return
+		}
 		hub := filepath.Join(strings.TrimSpace(string(developer)), "..", "Applications", "DeviceHub.app")
-		cmd := exec.CommandContext(r.Context(), "xcodebuild", "-quiet", "-project", "apple/CLIStream.xcodeproj", "-scheme", "CLIStream-macOS", "-derivedDataPath", "apple/build/accept-mac", "-destination", "platform=macOS", "-collect-test-diagnostics", "never", "CLISTREAM_APP_ID=com.vlk.clistream.acceptance", "-parallel-testing-enabled", "NO", "-only-testing:CLIStream-MacUITests/DuoPoseTests/testSetDevicePose", "test")
+		cmd := exec.CommandContext(r.Context(), "xcodebuild", "-quiet", "-xctestrun", plan, "-destination", "platform=macOS", "-resultBundlePath", filepath.Join(resultDir, "pose.xcresult"), "-collect-test-diagnostics", "never", "-parallel-testing-enabled", "NO", "-only-testing:CLIStream-MacUITests/DuoPoseTests/testSetDevicePose", "test-without-building")
 		cmd.Env = append(os.Environ(), "TEST_RUNNER_CLISTREAM_DEVICE_HUB="+hub, "TEST_RUNNER_CLISTREAM_DUO_POSE="+pose, "TEST_RUNNER_CLISTREAM_DUO_NAME="+device)
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {

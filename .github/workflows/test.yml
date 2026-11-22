@@ -58,11 +58,17 @@ jobs:
           DEVICE: ${{ matrix.device }}
         run: |
           defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
+          if [[ "$DEVICE" == shared ]]; then
+            shared_runtime=$(xcrun simctl list devices available --json | jq -er '
+              [.devices | to_entries[] | select(.key | contains("iOS-27-"))
+               | select(any(.value[]; .name == "iPhone 18 Pro") and any(.value[]; .name == "iPad Pro 11-inch (M5)"))
+               | .key] | sort_by(split("-") | last | tonumber) | last // error("missing shared iOS runtime")')
+          fi
           simulator() {
             local id
-            id=$(xcrun simctl list devices available --json | jq -er --arg device "$1" '
+            id=$(xcrun simctl list devices available --json | jq -er --arg device "$1" --arg runtime "${shared_runtime:-}" '
               [.devices | to_entries[] | select(.key | contains("iOS-27-"))
-               | .value[] | select(.name == $device)][-1].udid // error("missing simulator")')
+               | select($runtime == "" or .key == $runtime) | .value[] | select(.name == $device)][-1].udid // error("missing simulator")')
             xcrun simctl rename "$id" "CLIStream CI $1"
             if [[ "$DEVICE" != shared ]]; then xcrun simctl bootstatus "$id" -b >&2; fi
             echo "$id"
@@ -71,7 +77,7 @@ jobs:
             macOS) apple/test-native.sh macOS ;;
             shared)
               make build
-              IPHONE_SIMULATOR_ID="$(simulator 'iPhone 18 Pro')" IPAD_SIMULATOR_ID="$(simulator 'iPad mini (A17 Pro)')" go run ./scripts/apple-ui shared ;;
+              IPHONE_SIMULATOR_ID="$(simulator 'iPhone 18 Pro')" IPAD_SIMULATOR_ID="$(simulator 'iPad Pro 11-inch (M5)')" go run ./scripts/apple-ui shared ;;
             iPhone) SIMULATOR_ID="$(simulator 'iPhone 18 Pro')" apple/test-native.sh ;;
             iPad) SIMULATOR_ID="$(simulator 'iPad Pro 13-inch (M5)')" apple/test-native.sh ;;
             Duo) SIMULATOR_ID="$(simulator 'iPhone Duo')" apple/test-native.sh ;;
@@ -85,7 +91,9 @@ jobs:
           done
           for bundle in apple/build/results-*/*.xcresult apple/build/shared-*.xcresult; do
             [[ -f "$bundle/Info.plist" ]] || continue
-            report="results/$(basename "$bundle" .xcresult).json"
+            name=$(basename "$bundle" .xcresult)
+            if [[ $name == pose ]]; then name=$(basename "$(dirname "$bundle")"); fi
+            report="results/$name.json"
             go run ./scripts/apple-report "$bundle" > "$report"
             cat "$report"
           done

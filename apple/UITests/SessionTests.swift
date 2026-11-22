@@ -75,8 +75,7 @@ final class SessionTests: XCTestCase {
       corner.click(forDuration: 0.1, thenDragTo: corner.withOffset(CGVector(dx: -96, dy: -48)))
       view.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 4, dy: 4)).click()
     #else
-      cell.tap()
-      assertText("pointer-1", in: view)
+      try await verifyPointer { cell.tap() }
       if UIDevice.current.userInterfaceIdiom == .pad {
         let result = try await fixtureResponse("HID")
         XCTAssertEqual(result, "delivered")
@@ -114,11 +113,9 @@ final class SessionTests: XCTestCase {
       let resizedGrid = try await fixtureResponse("RESIZED")
       XCTAssertNotEqual(firstGrid, resizedGrid, "The child PTY kept its original grid")
       let rotated = view.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
-      rotated.tap()
-      assertText("pointer-2", in: view)
+      try await verifyPointer { rotated.tap() }
       if UIDevice.current.userInterfaceIdiom == .pad {
-        rotated.click()
-        assertText("pointer-3", in: view)
+        try await verifyPointer { rotated.click() }
       }
       if duo {
         let closed = try await fixtureResponse("pose/Closed")
@@ -181,7 +178,21 @@ final class SessionTests: XCTestCase {
       }
     #endif
 
+    @MainActor private func verifyPointer(_ gesture: () -> Void) async throws {
+      let initial = try await fixtureResponse("POINTERS")
+      gesture()
+      // Read the real child's input. Its echo may already be above the viewport
+      // after a software keyboard or rotation changes the terminal height.
+      for _ in 0..<40 {
+        let observed = try await fixtureResponse("POINTERS")
+        if let count = Int(observed), let previous = Int(initial), count > previous { return }
+        try await Task.sleep(for: .milliseconds(250))
+      }
+      XCTFail("The child did not receive a terminal pointer press")
+    }
+
     @MainActor func testScrollSessionsAndTerminalHistory() async throws {
+      _ = try await fixtureResponse("RESET")
       let app = try await pairedApp(session: "CLISTREAM_UI_PTY", scrollList: true)
       let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
       assertText("scroll-ready", in: terminal)

@@ -12,6 +12,8 @@ import (
 	"golang.org/x/term"
 )
 
+var pointerPress = regexp.MustCompile(`\x1b\[<0;[0-9]+;[0-9]+M`)
+
 // terminalChild reports the grid observed by the child and the exact bytes
 // written by the terminal. It runs under the real supervisor PTY.
 func terminalChild() error {
@@ -56,7 +58,7 @@ func terminalChild() error {
 				return
 			case <-time.After(100 * time.Millisecond):
 				if err := os.Remove("reset-terminal"); err == nil {
-					fmt.Print("\x1b[2J\x1b[HCOPYME terminal selection test\r\nTerminal ready\r\n\x1b[?1000h\x1b[?1006h")
+					fmt.Print("\x1b[2J\x1b[HCOPYME terminal selection test\r\nscroll-ready\r\nTerminal ready\r\n\x1b[?1000h\x1b[?1006h")
 				}
 				if err := os.Remove("history"); err == nil {
 					fmt.Print("\x1b[?1000l\x1b[?1006l")
@@ -75,7 +77,6 @@ func terminalChild() error {
 	defer file.Close()
 	var clicks int
 	var tail []byte
-	press := regexp.MustCompile(`\x1b\[<0;[0-9]+;[0-9]+M`)
 	fmt.Print("COPYME terminal selection test\r\nscroll-ready\r\nTerminal ready\r\n\x1b[?1000h\x1b[?1006h")
 	var buf [128]byte
 	for {
@@ -85,7 +86,7 @@ func terminalChild() error {
 		}
 		file.Write(buf[:n])
 		data := append(tail, buf[:n]...)
-		for _, match := range press.FindAllIndex(data, -1) {
+		for _, match := range pointerPress.FindAllIndex(data, -1) {
 			if match[1] > len(tail) {
 				clicks++
 				fmt.Printf("\r\npointer-%d\r\n", clicks)

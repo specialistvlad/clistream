@@ -43,6 +43,19 @@ func run(args []string) error {
 		return err
 	}
 	defer os.RemoveAll(root)
+	var plans viewerPlans
+	var posePlan string
+	if args[0] == "shared" {
+		plans, err = prepareViewers(root)
+		if err != nil {
+			return err
+		}
+	} else if os.Getenv("CLISTREAM_DUO_NAME") != "" {
+		posePlan, err = buildTestPlan(root, "macOS", "generic/platform=macOS")
+		if err != nil {
+			return err
+		}
+	}
 	command := func(tool string, args ...string) *exec.Cmd {
 		cmd := exec.Command(filepath.Join(bin, tool), args...)
 		cmd.Env = append(os.Environ(), "HOME="+root, "XDG_CONFIG_HOME="+root)
@@ -194,7 +207,7 @@ func run(args []string) error {
 		fmt.Fprint(w, "revoked")
 	})
 	if device := os.Getenv("CLISTREAM_DUO_NAME"); device != "" {
-		poseRoute(mux, path, device)
+		poseRoute(mux, path, device, posePlan)
 	}
 	if err := interactionRoutes(mux, path, root, link); err != nil {
 		return err
@@ -242,7 +255,7 @@ func run(args []string) error {
 	defer server.Close()
 	url := fmt.Sprintf("http://127.0.0.1:%d%s", listener.Addr().(*net.TCPAddr).Port, path)
 	if args[0] == "shared" {
-		return shared(root, url, pipe.ID, pipe.Run, terminal.ID, command)
+		return shared(plans, url, pipe.ID, pipe.Run, terminal.ID, command)
 	}
 	test := exec.Command(args[0], args[1:]...)
 	test.Stdout = os.Stdout

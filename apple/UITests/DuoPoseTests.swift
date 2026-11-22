@@ -17,15 +17,15 @@
       let window = hub.windows.containing(NSPredicate(format: "title CONTAINS %@", device))
         .firstMatch
       if !window.exists {
-        XCTAssertTrue(row.waitForExistence(timeout: 15), "Duo simulator missing from Device Hub")
+        XCTAssertTrue(row.waitForExistence(timeout: 60), "Duo simulator missing from Device Hub")
         row.click()
         let screen = hub.buttons["View Screen"].firstMatch
-        if screen.exists { screen.click() }
+        if !window.exists && screen.waitForExistence(timeout: 10) { screen.click() }
       }
       let button = hub.buttons.matching(
         NSPredicate(format: "label == %@ OR title == %@ OR identifier == %@", pose, pose, pose)
       ).firstMatch
-      guard button.waitForExistence(timeout: 8) else {
+      guard button.waitForExistence(timeout: 30) else {
         XCTContext.runActivity(named: "Device Hub controls") { activity in
           activity.add(XCTAttachment(string: hub.debugDescription))
         }

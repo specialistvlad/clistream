@@ -71,9 +71,12 @@ struct WorkspaceSidebar: View {
           group(server.name, symbol: "server.rack", path: [server.id]) {
             if let error = workspace.errors[server.id], !error.isEmpty {
               HStack {
-                Text("Offline").foregroundStyle(.secondary)
-                Button("Retry") { workspace.retry(server) }
-              }.font(.caption).help(error)
+                Text("Offline").font(.body).foregroundStyle(.secondary)
+                  .fixedSize(horizontal: false, vertical: true)
+                Button { workspace.retry(server) } label: {
+                  Text("Retry").font(.body).fixedSize(horizontal: false, vertical: true)
+                }
+              }.help(error)
             }
             if flat {
               ForEach(rows) { leaf($0, title: $0.item.Name, detail: $0.item.Host) }
