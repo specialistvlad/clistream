@@ -85,8 +85,14 @@ struct WorkspaceSidebar: View {
                 Text("Offline").font(.body).foregroundStyle(.secondary)
                   .fixedSize(horizontal: false, vertical: true)
                 Button { workspace.retry(server) } label: {
-                  Text("Retry").font(.body).fixedSize(horizontal: false, vertical: true)
+                  #if os(iOS)
+                    Label("Retry", systemImage: "arrow.clockwise")
+                      .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
+                  #else
+                    Text("Retry")
+                  #endif
                 }
+                .accessibilityLabel("Retry").accessibilityIdentifier("retry-server")
               }.help(error)
             }
             if flat {
