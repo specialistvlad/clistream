@@ -49,13 +49,22 @@ struct SessionControls: View {
     .sheet(isPresented: $editing) {
       VStack {
         Text("Edit Command").font(.headline)
-        ScrollView {
-          ForEach(arguments.indices, id: \.self) { i in
-            HStack {
-              TextField(i == 0 ? "Executable" : "Argument", text: $arguments[i])
-                .accessibilityIdentifier("argument-" + String(i))
-              if i > 0 { Button("Remove") { arguments.remove(at: i) } }
+        ScrollViewReader { scroll in
+          ScrollView {
+            ForEach(arguments.indices, id: \.self) { i in
+              HStack {
+                TextField(i == 0 ? "Executable" : "Argument", text: $arguments[i])
+                  .autocorrectionDisabled()
+                  #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                  #endif
+                  .accessibilityIdentifier("argument-" + String(i))
+                if i > 0 { Button("Remove") { arguments.remove(at: i) } }
+              }.id(i)
             }
+          }
+          .onChange(of: arguments.count) { oldCount, newCount in
+            if newCount > oldCount { scroll.scrollTo(newCount - 1, anchor: .bottom) }
           }
         }
         HStack {

@@ -57,13 +57,14 @@ jobs:
         env:
           DEVICE: ${{ matrix.device }}
         run: |
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
           simulator() {
             local id
             id=$(xcrun simctl list devices available --json | jq -er --arg device "$1" '
               [.devices | to_entries[] | select(.key | contains("iOS-27-"))
                | .value[] | select(.name == $device)][-1].udid // error("missing simulator")')
             xcrun simctl rename "$id" "CLIStream CI $1"
-            xcrun simctl bootstatus "$id" -b >&2
+            if [[ "$DEVICE" != shared ]]; then xcrun simctl bootstatus "$id" -b >&2; fi
             echo "$id"
           }
           case "$DEVICE" in

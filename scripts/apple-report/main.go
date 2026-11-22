@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 type testNode struct {
@@ -14,11 +15,16 @@ type testNode struct {
 	Result         string
 	Duration       string
 	Children       []testNode
+	SourceLocation *struct {
+		FilePath   string
+		LineNumber int
+	}
 }
 type outcome struct {
-	Test     string `json:"test"`
-	Result   string `json:"result"`
-	Duration string `json:"duration,omitempty"`
+	Test             string   `json:"test"`
+	Result           string   `json:"result"`
+	Duration         string   `json:"duration,omitempty"`
+	FailureLocations []string `json:"failureLocations,omitempty"`
 }
 
 func main() {
@@ -47,7 +53,13 @@ func report(bundle string) error {
 	var visit func(testNode)
 	visit = func(node testNode) {
 		if node.NodeType == "Test Case" {
-			cases = append(cases, outcome{node.NodeIdentifier, node.Result, node.Duration})
+			item := outcome{Test: node.NodeIdentifier, Result: node.Result, Duration: node.Duration}
+			for _, child := range node.Children {
+				if loc := child.SourceLocation; child.NodeType == "Failure Message" && loc != nil {
+					item.FailureLocations = append(item.FailureLocations, fmt.Sprintf("%s:%d", filepath.Base(loc.FilePath), loc.LineNumber))
+				}
+			}
+			cases = append(cases, item)
 		}
 		for _, child := range node.Children {
 			visit(child)

@@ -10,10 +10,49 @@ import (
 	"time"
 )
 
+// Build each SDK once before starting the simultaneous interaction watchdog.
+func buildViewerTests(root, platform, destination string) (string, error) {
+	dir := filepath.Join(root, "build-"+platform)
+	cmd := exec.Command("xcodebuild", "-quiet", "-project", "apple/CLIStream.xcodeproj",
+		"-scheme", "CLIStream-"+platform, "-derivedDataPath", dir, "-destination", destination,
+		"-jobs", "3", "CLISTREAM_APP_ID=com.vlk.clistream.acceptance.shared", "build-for-testing")
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+	plans, err := filepath.Glob(filepath.Join(dir, "Build", "Products", "*.xctestrun"))
+	if err != nil {
+		return "", err
+	}
+	if len(plans) != 1 {
+		return "", fmt.Errorf("expected one %s test plan, found %d", platform, len(plans))
+	}
+	return plans[0], nil
+}
+
 // Run each UI runner against the same broker. The independent CLI joins via
 // its normal attach command. A unique marker from each writer is retained in
 // the child's history so simulator launch order does not affect the assertion.
 func shared(root, url, pipeID, pipeRun, terminalID string, command func(string, ...string) *exec.Cmd) error {
+	macPlan, err := buildViewerTests(root, "macOS", "generic/platform=macOS")
+	if err != nil {
+		return err
+	}
+	mobilePlan, err := buildViewerTests(root, "iOS", "generic/platform=iOS Simulator")
+	if err != nil {
+		return err
+	}
+	for _, key := range []string{"IPHONE_SIMULATOR_ID", "IPAD_SIMULATOR_ID"} {
+		id := os.Getenv(key)
+		if id == "" {
+			return fmt.Errorf("%s required", key)
+		}
+		boot := exec.Command("xcrun", "simctl", "bootstatus", id, "-b")
+		boot.Stdout, boot.Stderr = os.Stdout, os.Stderr
+		if err := boot.Run(); err != nil {
+			return err
+		}
+	}
 	cli := command("clistream", "attach", pipeRun)
 	in, err := cli.StdinPipe()
 	if err != nil {
@@ -51,18 +90,15 @@ func shared(root, url, pipeID, pipeRun, terminalID string, command func(string, 
 	}()
 	for _, name := range []string{"mac", "phone", "pad"} {
 		dest := "platform=macOS"
-		scheme := "macOS"
+		plan := macPlan
 		suite := "CLIStream-MacUITests"
 		if name != "mac" {
 			key := map[string]string{"phone": "IPHONE_SIMULATOR_ID", "pad": "IPAD_SIMULATOR_ID"}[name]
-			if os.Getenv(key) == "" {
-				return fmt.Errorf("%s required", key)
-			}
 			dest = "platform=iOS Simulator,id=" + os.Getenv(key)
-			scheme = "iOS"
+			plan = mobilePlan
 			suite = "CLIStream-UITests"
 		}
-		test := exec.CommandContext(ctx, "xcodebuild", "-quiet", "-project", "apple/CLIStream.xcodeproj", "-scheme", "CLIStream-"+scheme, "-derivedDataPath", filepath.Join(root, "build-"+name), "-destination", dest, "CLISTREAM_APP_ID=com.vlk.clistream.acceptance.shared", "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never", "-resultBundlePath", filepath.Join("apple/build", fmt.Sprintf("shared-%d-%s.xcresult", time.Now().Unix(), name)), "-only-testing:"+suite+"/NativeSessionTests/testConcurrentViewers", "test")
+		test := exec.CommandContext(ctx, "xcodebuild", "-quiet", "-xctestrun", plan, "-destination", dest, "-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never", "-resultBundlePath", filepath.Join("apple/build", fmt.Sprintf("shared-%d-%s.xcresult", time.Now().Unix(), name)), "-only-testing:"+suite+"/NativeSessionTests/testConcurrentViewers", "test-without-building")
 		test.Env = append(os.Environ(), "TEST_RUNNER_CLISTREAM_FIXTURE="+url, "TEST_RUNNER_CLISTREAM_PARTICIPANT="+name, "TEST_RUNNER_CLISTREAM_PIPE_ID="+pipeID, "TEST_RUNNER_CLISTREAM_PTY_ID="+terminalID)
 		test.Stdout = os.Stdout
 		test.Stderr = os.Stderr

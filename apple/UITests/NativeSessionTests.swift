@@ -141,11 +141,14 @@ final class NativeSessionTests: XCTestCase {
     let add = app.buttons["Add Argument"]
     // sh -c assigns the first extra operand to $0.
     activate(add)
+    XCTAssertTrue(app.textFields["argument-3"].waitForExistence(timeout: 5))
     activate(add)
     let argument = app.textFields["argument-4"]
     activate(argument)
     argument.typeText("two words")
+    XCTAssertEqual(argument.value as? String, "two words")
     activate(add)
+    XCTAssertTrue(app.textFields["argument-5"].waitForExistence(timeout: 5))
     activate(app.buttons["Launch"])
     let text = "args=2 first=<two words> second=<>"
     let output = app.descendants(matching: .any).matching(
@@ -198,11 +201,11 @@ final class NativeSessionTests: XCTestCase {
       let row = app.descendants(matching: .any)["session-" + id].firstMatch
       let field = app.textFields["session-input"].firstMatch
       activate(field)
-      field.typeText("layout")
+      field.typeText("layout draft")
       let originalAppearance = XCUIDevice.shared.appearance
       defer { XCUIDevice.shared.appearance = originalAppearance }
       XCUIDevice.shared.appearance = .dark
-      app.typeText(" draft")
+      XCTAssertEqual(field.value as? String, "layout draft")
       XCUIDevice.shared.appearance = .light
       XCTAssertEqual(field.value as? String, "layout draft")
       func choose(_ title: String) {
@@ -416,8 +419,10 @@ final class NativeSessionTests: XCTestCase {
     }
   #endif
 
-  @MainActor private func activate(_ element: XCUIElement) {
-    XCTAssertTrue(element.waitForExistence(timeout: 15))
+  @MainActor private func activate(
+    _ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line
+  ) {
+    XCTAssertTrue(element.waitForExistence(timeout: 15), file: file, line: line)
     #if os(macOS)
       element.click()
     #else

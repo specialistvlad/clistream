@@ -10,6 +10,8 @@ Ubuntu 26.04 reproduced the privacy fixture failure when its multicall `cat` rej
 
 The packaged-client run exposed a race while switching pipe sessions. The client now cancels the other streams on the first receive error and waits for their callbacks before returning. The multi-host deployment fixture runs its containers as the owner of the bind-mounted workspaces with all capabilities dropped.
 
+The shared-viewer harness builds one test plan per SDK before starting the simulators and timing the four-client exchange. A local run passed on all four participants. The result reporter includes source filenames and line numbers for XCTest failures so a hosted failure can be traced without publishing invitations or console contents.
+
 ## Multi-server workspace · November 21, 2026
 
 On macOS and Debian Linux arm64, race-enabled Go tests, vet and end-to-end tests passed. The Mac UI paired two separate brokers publishing the same program, entered markers into each terminal, stopped the second broker and exchanged more input with the first child. The Mac UI and app-hosted suites also verified adoption and re-pairing of an existing enrollment with the original key, all six tree/list grouping combinations, live Light/Dark changes, native tabs and windows, draft retention and connection latency. A desktop rerun verified renaming a server, relaunching, and reconnecting to the correct child. One overlapping run timed out while XCTest synthesized typing on the Mac during the Duo’s Device Hub automation. The isolated rerun passed.

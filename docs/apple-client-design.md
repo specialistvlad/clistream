@@ -22,7 +22,7 @@ Choose a session in the sidebar when space permits or navigate from the compact 
 
 ## Terminal and session controls
 
-PTY sessions use native SwiftTerm views. The terminal sends input and valid grid sizes to the supervised child. Pipe sessions offer a text field, Send, explicit EOF and separately selectable stdout and stderr. Managed supervisors support stop, start, restart, and editing the executable and its arguments. Each argument has its own editable field so spaces and empty arguments survive the round trip. Stopped sessions expose their most recent retained result. Attach-only sessions expose terminal interaction and detach.
+PTY sessions use native SwiftTerm views. The terminal sends input and valid grid sizes to the supervised child. Pipe sessions offer a text field, Send, explicit EOF and separately selectable stdout and stderr. Managed supervisors support stop, start, restart, and editing the executable and its arguments. Each argument has its own editable field so spaces and empty arguments survive the round trip. Adding an argument scrolls it into view. Command fields preserve literal spelling and capitalization. Stopped sessions expose their most recent retained result. Attach-only sessions expose terminal interaction and detach.
 
 Only exported TCP and UDP services appear as forwards. Starting a forward displays its local loopback address. Stopping it releases the listener without ending the session.
 
