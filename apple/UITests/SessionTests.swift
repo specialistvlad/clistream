@@ -287,10 +287,15 @@ final class SessionTests: XCTestCase {
     let id = try XCTUnwrap(env[session])
     let app = XCUIApplication()
     if largeText {
-      app.launchArguments += [
-        "-AppleInterfaceStyle", "Dark", "-UIPreferredContentSizeCategoryName",
-        "UICTContentSizeCategoryAccessibilityL",
-      ]
+      // Use the user's system setting so the subsequent audit can exercise other sizes.
+      let original = try await fixtureResponse("content-size/current")
+      addTeardownBlock {
+        let restored = try await fixtureResponse("content-size/" + original)
+        XCTAssertEqual(restored, original)
+      }
+      let applied = try await fixtureResponse("content-size/accessibility-large")
+      XCTAssertEqual(applied, "accessibility-large")
+      app.launchArguments += ["-AppleInterfaceStyle", "Dark"]
     }
     #if os(macOS)
       app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]

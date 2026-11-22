@@ -75,6 +75,29 @@ func interactionRoutes(mux *http.ServeMux, path, root string, link []byte) error
 	if udid == "" {
 		return nil
 	}
+	mux.HandleFunc(path+"content-size/", func(w http.ResponseWriter, r *http.Request) {
+		size := strings.TrimPrefix(r.URL.Path, path+"content-size/")
+		args := []string{"simctl", "ui", udid, "content_size"}
+		switch size {
+		case "current":
+		case "extra-small", "small", "medium", "large", "extra-large", "extra-extra-large",
+			"extra-extra-extra-large", "accessibility-medium", "accessibility-large",
+			"accessibility-extra-large", "accessibility-extra-extra-large", "accessibility-extra-extra-extra-large":
+			if err := exec.CommandContext(r.Context(), "xcrun", append(args, size)...).Run(); err != nil {
+				http.Error(w, "unable to change simulator text size", http.StatusServiceUnavailable)
+				return
+			}
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		value, err := exec.CommandContext(r.Context(), "xcrun", args...).Output()
+		if err != nil {
+			http.Error(w, "unable to read simulator text size", http.StatusServiceUnavailable)
+			return
+		}
+		w.Write(bytes.TrimSpace(value))
+	})
 	if os.Getenv("TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY") == "1" {
 		mux.HandleFunc(path+"appearance/", func(w http.ResponseWriter, r *http.Request) {
 			mode := strings.TrimPrefix(r.URL.Path, path+"appearance/")

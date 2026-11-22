@@ -1,5 +1,42 @@
 import SwiftUI
 
+#if os(iOS)
+  private struct OfflineServerButton: UIViewRepresentable {
+    var retry: () -> Void
+
+    final class Coordinator: NSObject {
+      var retry: () -> Void
+      init(_ retry: @escaping () -> Void) { self.retry = retry }
+      @objc func pressed() { retry() }
+    }
+    func makeCoordinator() -> Coordinator { Coordinator(retry) }
+    func makeUIView(context: Context) -> UIButton {
+      let button = UIButton(type: .system)
+      var config = UIButton.Configuration.plain()
+      config.title = "Offline"
+      config.image = UIImage(systemName: "arrow.clockwise")
+      config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .body)
+      config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+        var styled = attributes
+        styled.font = .preferredFont(forTextStyle: .body)
+        return styled
+      }
+      config.imagePadding = 6
+      config.contentInsets = .zero
+      button.configuration = config
+      button.titleLabel?.adjustsFontForContentSizeCategory = true
+      button.contentHorizontalAlignment = .leading
+      button.accessibilityLabel = "Retry"
+      button.accessibilityValue = "Offline"
+      button.accessibilityHint = "Reconnect to this server"
+      button.accessibilityIdentifier = "retry-server"
+      button.addTarget(context.coordinator, action: #selector(Coordinator.pressed), for: .primaryActionTriggered)
+      return button
+    }
+    func updateUIView(_ button: UIButton, context: Context) { context.coordinator.retry = retry }
+  }
+#endif
+
 struct WorkspaceSidebar: View {
   @ObservedObject var workspace: Workspace
   let selected: String?
@@ -82,14 +119,8 @@ struct WorkspaceSidebar: View {
           group(server.name, symbol: "server.rack", path: [server.id]) {
             if let error = workspace.errors[server.id], !error.isEmpty {
               #if os(iOS)
-                Button { workspace.retry(server) } label: {
-                  Label("Offline", systemImage: "arrow.clockwise")
-                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Retry").accessibilityValue("Offline")
-                .accessibilityHint("Reconnect to this server")
-                .accessibilityIdentifier("retry-server").help(error)
+                OfflineServerButton { workspace.retry(server) }
+                  .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).help(error)
               #else
                 HStack {
                   Text("Offline").foregroundStyle(.secondary)
