@@ -113,6 +113,7 @@ final class NativeSessionTests: XCTestCase {
   @MainActor func testManagedLifecycle() async throws {
     let app = try await openPipe()
     action("Stop…", app)
+    XCTAssertTrue(app.buttons["Stop"].firstMatch.waitForExistence(timeout: 10))
     capture("stop-confirmation", app)
     activate(app.buttons["Stop"].firstMatch)
     action("Start…", app)
@@ -150,6 +151,7 @@ final class NativeSessionTests: XCTestCase {
     let field = app.textFields["command-line"].firstMatch
     activate(field)
     let saved = try XCTUnwrap(field.value as? String)
+    capture("edit-command", app)
     field.typeKey("a", modifierFlags: .command)
     field.typeText("'")
     XCTAssertFalse(app.buttons["Restart"].firstMatch.isEnabled)
@@ -179,15 +181,21 @@ final class NativeSessionTests: XCTestCase {
 
   @MainActor private func capture(_ name: String, _ app: XCUIApplication) {
     guard ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1" else { return }
-    #if os(macOS)
-      let screenshot = app.windows.firstMatch.screenshot()
-    #else
-      let screenshot = XCUIScreen.main.screenshot()
-    #endif
-    let attachment = XCTAttachment(screenshot: screenshot)
-    attachment.name = "gallery-" + name
-    attachment.lifetime = .keepAlways
-    add(attachment)
+    let device = XCUIDevice.shared
+    let original = device.appearance
+    defer { device.appearance = original }
+    for dark in [false, true] {
+      device.appearance = dark ? .dark : .light
+      #if os(macOS)
+        let screenshot = app.windows.firstMatch.screenshot()
+      #else
+        let screenshot = XCUIScreen.main.screenshot()
+      #endif
+      let attachment = XCTAttachment(screenshot: screenshot)
+      attachment.name = "gallery-" + name + (dark ? "-dark" : "")
+      attachment.lifetime = .keepAlways
+      add(attachment)
+    }
   }
 
   @MainActor func testTerminalKeysAndAttachOnly() async throws {

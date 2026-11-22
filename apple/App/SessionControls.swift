@@ -14,6 +14,7 @@ struct SessionActions: ViewModifier {
     content.toolbar {
       #if os(macOS)
         ToolbarItemGroup { actions }
+        ToolbarSpacer(.fixed)
       #else
         ToolbarItem {
           Menu("Session", systemImage: "ellipsis.circle") { actions }

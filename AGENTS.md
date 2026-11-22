@@ -14,4 +14,4 @@ Run Apple UI automation exclusively on isolated CI runners, including simulator,
 
 # Delivery
 
-Commit and push requested changes to the current branch's upstream as soon as verification passes. Keep unrelated working-tree changes out of the commit.
+Work directly on `main` and push requested changes to `origin/main` as soon as verification passes. Run the hosted UI matrix on pushes to `main`. Keep unrelated working-tree changes out of the commit.
