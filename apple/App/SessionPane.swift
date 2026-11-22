@@ -3,6 +3,7 @@ import SwiftUI
 struct SessionPane: View {
   @ObservedObject var connection: Connection
   let session: SessionInfo
+  let detach: (() -> Void)?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -23,7 +24,7 @@ struct SessionPane: View {
         if connection.attached { ToolbarItem { terminalKeys } }
       #endif
     }
-    .modifier(SessionActions(connection: connection, session: session))
+    .modifier(SessionActions(connection: connection, session: session, detach: detach))
   }
   #if os(iOS)
     private var terminalKeys: some View {

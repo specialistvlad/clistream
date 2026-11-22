@@ -83,6 +83,42 @@ private func visibleText(in view: TerminalView) -> String {
   }
 #else
   private final class TouchTerminal: TerminalView {
+    override func didMoveToWindow() {
+      super.didMoveToWindow()
+      guard window != nil else { return }
+      applyPalette()
+      applyTextSize()
+    }
+
+    override init(frame: CGRect) {
+      super.init(frame: frame)
+      registerForTraitChanges(UITraitCollection.systemTraitsAffectingColorAppearance) {
+        (view: TouchTerminal, _) in view.applyPalette()
+      }
+      registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) {
+        (view: TouchTerminal, _) in view.applyTextSize()
+      }
+    }
+
+    required init?(coder: NSCoder) { super.init(coder: coder) }
+
+    private func applyPalette() {
+      let foreground = UIColor.label.resolvedColor(with: traitCollection)
+      let background = UIColor.systemBackground.resolvedColor(with: traitCollection)
+      nativeForegroundColor = foreground
+      nativeBackgroundColor = background
+      backgroundColor = background
+      caretColor = foreground
+      caretTextColor = background
+      setNeedsDisplay()
+    }
+
+    private func applyTextSize() {
+      let base = UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+      let scaled = UIFontMetrics(forTextStyle: .body).scaledFont(for: base, compatibleWith: traitCollection)
+      if font != scaled { font = scaled }
+    }
+
     private lazy var controlLetters: [UIKeyCommand] = (97...122).map { code in
       let command = UIKeyCommand(
         input: String(UnicodeScalar(code)!), modifierFlags: .control,

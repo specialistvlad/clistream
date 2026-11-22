@@ -212,10 +212,11 @@ func run(args []string) error {
 	if err := interactionRoutes(mux, path, root, link); err != nil {
 		return err
 	}
+	var arrivals <-chan string
 	if args[0] == "shared" {
-		for _, phase := range []string{"ready", "switch", "return"} {
-			rendezvous(mux, path+phase+"/")
-		}
+		arrivals = rendezvous(mux, path+"ready/")
+		rendezvous(mux, path+"switch/")
+		rendezvous(mux, path+"return/")
 	}
 	issue := func(w http.ResponseWriter, r *http.Request) {
 		data, err := command("clistreamd", "invite").Output()
@@ -255,7 +256,7 @@ func run(args []string) error {
 	defer server.Close()
 	url := fmt.Sprintf("http://127.0.0.1:%d%s", listener.Addr().(*net.TCPAddr).Port, path)
 	if args[0] == "shared" {
-		return shared(plans, url, pipe.ID, pipe.Run, terminal.ID, command)
+		return shared(plans, arrivals, url, pipe.ID, pipe.Run, terminal.ID, command)
 	}
 	test := exec.Command(args[0], args[1:]...)
 	test.Stdout = os.Stdout

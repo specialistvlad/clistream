@@ -20,17 +20,12 @@ struct BrowserView: View {
         }, pairing: $pairing)
     } detail: {
       if let row = selected {
-        WorkspaceTerminal(connection: workspace.terminal(row), workspace: workspace, row: row).id(
-          row.id
-        )
+        WorkspaceTerminal(connection: workspace.terminal(row), workspace: workspace, row: row) {
+          workspace.detach(row.id)
+          selected = nil
+          column = .sidebar
+        }.id(row.id)
         .navigationTitle(row.item.Name)
-        .toolbar {
-          Button("Detach", systemImage: "rectangle.portrait.and.arrow.right") {
-            workspace.detach(row.id)
-            selected = nil
-            column = .sidebar
-          }
-        }
       } else {
         Text("Select a CLI")
       }

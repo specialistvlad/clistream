@@ -6,7 +6,7 @@ The audit maps requirements to existing checks and identifies pending coverage. 
 
 ## Local screenshot gallery
 
-Open `docs/screenshots/index.html` in the checkout used for capture. The gallery groups full-resolution PNGs by the native Mac app, iPhone, iPad, iPhone Duo, and the Go terminal client on macOS and Linux. Apple captures use the running desktop app and mobile simulators. The terminal captures use output from the compiled Go programs connected to a pseudo-terminal. Git ignores the entire gallery, so a fresh clone contains only the published README animation.
+Open `docs/screenshots/index.html` in the checkout used for capture. The gallery groups full-resolution PNGs by the native Mac app, iPhone, iPad, iPhone Duo, and the Go terminal client on macOS and Linux. The hosted Apple matrix exports named PNGs from the running apps. Gallery artifacts are available for three days. The terminal captures use output from the compiled Go programs connected to a pseudo-terminal. Git ignores the entire gallery, so a fresh clone contains only the published README animation.
 
 ## TestFlight 0.1.0 (2611220152)
 
@@ -256,7 +256,7 @@ apple/test-native.sh macOS
 IPHONE_SIMULATOR_ID="$IPHONE_SIMULATOR_ID" IPAD_SIMULATOR_ID="$IPAD_SIMULATOR_ID" go run ./scripts/apple-ui shared
 ```
 
-When several versions of Xcode are installed, export `DEVELOPER_DIR` for the intended installation before building and testing. A mismatch between the running CoreSimulator service and XCTest can prevent simulator apps from launching. Each device test prints its result bundle path. Open it in Xcode for screenshots and XCTest diagnostics. The Go reporter extracts case names, durations, and results. The shared runner uses the production app UI on three devices with a separate Go CLI viewer. It builds both test plans and boots the simulators before starting the Go peers. CI selects an iPhone and iPad on the same runtime, completes first-boot migration on each separately, and retains a separate XCTest report for each Device Hub fold operation. The shared run requires an unlocked, automation-enabled Mac desktop.
+When several versions of Xcode are installed, export `DEVELOPER_DIR` for the intended installation before building and testing. A mismatch between the running CoreSimulator service and XCTest can prevent simulator apps from launching. Each device test prints its result bundle path. Open it in Xcode for screenshots and XCTest diagnostics. The Go reporter extracts case names, durations, and results. The shared runner uses the production app UI on three devices with a separate Go CLI viewer. It builds both test plans and boots the simulators before starting the Go peers. Each mobile test attaches before the next viewer launches. All four clients stay connected during the exchange. CI selects an iPhone and iPad on the same runtime, completes first-boot migration on each separately, and retains a separate XCTest report for each Device Hub fold operation. The shared run requires an unlocked, automation-enabled Mac desktop.
 
 ## Distribution
 

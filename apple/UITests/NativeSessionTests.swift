@@ -20,7 +20,7 @@ final class NativeSessionTests: XCTestCase {
         let endpoint = address.label
       #endif
       let port = try XCTUnwrap(endpoint.split(separator: ":").last.flatMap { UInt16($0) })
-      capture("port-forwards", app)
+      try await capture("port-forwards", app)
       activate(app.buttons["Done"].firstMatch)
       try exchange(port: port, datagram: proto == "udp")
       activate(app.buttons["session-ports"].firstMatch)
@@ -52,7 +52,7 @@ final class NativeSessionTests: XCTestCase {
     app.open(try XCTUnwrap(URL(string: invitation)))
     let confirm = app.buttons["Pair device"].firstMatch
     XCTAssertTrue(confirm.waitForExistence(timeout: 12))
-    capture("confirm-server", app)
+    try await capture("confirm-server", app)
     activate(confirm)
     #if os(iOS)
       func showServerList(for id: String) {
@@ -100,7 +100,7 @@ final class NativeSessionTests: XCTestCase {
       let name = app.textFields["server-name-field"].firstMatch
       let alias = "Build server " + UUID().uuidString.prefix(8)
       activate(name)
-      capture("rename-server", app)
+      try await capture("rename-server", app)
       name.typeKey("a", modifierFlags: .command)
       name.typeText(alias)
       activate(app.buttons["Save"].firstMatch)
@@ -117,11 +117,11 @@ final class NativeSessionTests: XCTestCase {
     let app = try await openPipe()
     action("Stop…", app)
     XCTAssertTrue(app.buttons["Stop"].firstMatch.waitForExistence(timeout: 10))
-    capture("stop-confirmation", app)
+    try await capture("stop-confirmation", app)
     activate(app.buttons["Stop"].firstMatch)
     action("Start…", app)
     XCTAssertTrue(app.buttons["Start"].firstMatch.waitForExistence(timeout: 12))
-    capture("start-command", app)
+    try await capture("start-command", app)
     activate(app.buttons["Start"].firstMatch)
     let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
     activate(terminal)
@@ -146,7 +146,7 @@ final class NativeSessionTests: XCTestCase {
       format: "value CONTAINS %@ OR label CONTAINS %@", "finished-child","finished-child"
     )).firstMatch
     XCTAssertTrue(result.waitForExistence(timeout: 15))
-    capture("completed-session",app)
+    try await capture("completed-session",app)
     action("Start…", app)
     activate(app.buttons["Start"].firstMatch)
     XCTAssertTrue(terminal.waitForExistence(timeout: 15))
@@ -156,22 +156,30 @@ final class NativeSessionTests: XCTestCase {
     let app = try await openPipe()
     action("Restart…", app)
     let field = app.textFields["command-line"].firstMatch
+    if !field.waitForExistence(timeout: 12) {
+      let attachment = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+      attachment.name = "command-review-window"
+      attachment.lifetime = .keepAlways
+      add(attachment)
+      XCTFail("Command editor did not appear")
+      return
+    }
     activate(field)
     let saved = try XCTUnwrap(field.value as? String)
-    capture("edit-command", app)
+    try await capture("edit-command", app)
     field.typeKey("a", modifierFlags: .command)
     field.typeText("'")
     XCTAssertFalse(app.buttons["Restart"].firstMatch.isEnabled)
     field.typeKey("a", modifierFlags: .command)
     field.typeText(saved + " placeholder 'two words' \"\"")
-    capture("restart-confirmation",app)
+    try await capture("restart-confirmation",app)
     activate(app.buttons["Restart"].firstMatch)
     let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
     expectOutput("args=2 first=<two words> second=<>", in: terminal)
     activate(terminal)
     terminal.typeText("after-restart\n")
     expectOutput("out:after-restart", in: terminal)
-    capture("pipe-session",app)
+    try await capture("pipe-session",app)
   }
 
   @MainActor private func expectOutput(_ value: String, in terminal: XCUIElement) {
@@ -186,16 +194,21 @@ final class NativeSessionTests: XCTestCase {
     activate(app.buttons[title].firstMatch)
   }
 
-  @MainActor private func capture(_ name: String, _ app: XCUIApplication) {
+  @MainActor private func capture(_ name: String, _ app: XCUIApplication) async throws {
     guard ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1" else { return }
     let device = XCUIDevice.shared
     let original = device.appearance
     defer { device.appearance = original }
     for dark in [false, true] {
-      device.appearance = dark ? .dark : .light
       #if os(macOS)
+        device.appearance = dark ? .dark : .light
         let screenshot = app.windows.firstMatch.screenshot()
       #else
+        let mode = dark ? "dark" : "light"
+        let applied = try await fixtureResponse("appearance/" + mode)
+        XCTAssertEqual(applied, mode)
+        // SpringBoard updates the application, keyboard and system sheets on separate frames.
+        try await Task.sleep(for: .seconds(1))
         let screenshot = XCUIScreen.main.screenshot()
       #endif
       let attachment = XCTAttachment(screenshot: screenshot)
@@ -207,11 +220,12 @@ final class NativeSessionTests: XCTestCase {
 
   @MainActor func testTerminalKeysAndAttachOnly() async throws {
     let app = try await openPipe(terminal: true)
+    _ = try await fixtureResponse("RESET")
     let view = app.descendants(matching: .any)["session-terminal"].firstMatch
     let ready = XCTNSPredicateExpectation(
       predicate: NSPredicate(format: "value CONTAINS %@", "Terminal ready"), object: view)
     XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
-    capture("terminal", app)
+    try await capture("terminal", app)
     XCTAssertFalse(app.buttons["Restart"].exists)
     #if os(iOS)
       activate(app.buttons["Keys"])
@@ -273,7 +287,7 @@ final class NativeSessionTests: XCTestCase {
       XCTAssertTrue(
         app.staticTexts["desktop-session-status"].firstMatch.waitForExistence(timeout: 10))
       activate(app.buttons["Hide Sidebar"].firstMatch)
-      capture("sidebar-hidden", app)
+      try await capture("sidebar-hidden", app)
       activate(app.buttons["Show Sidebar"].firstMatch)
       let input = app.descendants(matching: .any)["session-terminal"].firstMatch
       activate(input)
@@ -430,7 +444,7 @@ final class NativeSessionTests: XCTestCase {
         app.typeKey("k", modifierFlags: .command)
         let field = app.secureTextFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 12))
-        capture("add-server", app)
+        try await capture("add-server", app)
         field.typeText(link)
       } else {
         app.open(try XCTUnwrap(URL(string: link)))

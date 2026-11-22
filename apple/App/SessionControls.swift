@@ -4,6 +4,7 @@ import SwiftUI
 struct SessionActions: ViewModifier {
   @ObservedObject var connection: Connection
   let session: SessionInfo
+  let detach: (() -> Void)?
   @State private var confirmation: SessionInfo?
   @State private var confirmingRestart = false
   @State private var editor: CommandDraft?
@@ -17,12 +18,19 @@ struct SessionActions: ViewModifier {
         ToolbarSpacer(.fixed)
       #else
         ToolbarItem {
-          Menu("Session", systemImage: "ellipsis.circle") { actions }
+          Menu("Session", systemImage: "ellipsis.circle") {
+            actions
+            if let detach {
+              Divider()
+              Button("Detach", systemImage: "rectangle.portrait.and.arrow.right", action: detach)
+            }
+          }
         }
       #endif
       ToolbarItem {
         Button("Ports", systemImage: "sidebar.right") { ports.toggle() }
-          .accessibilityIdentifier("session-ports").help("Show or hide port forwarding")
+          .accessibilityLabel("Ports").accessibilityIdentifier("session-ports")
+          .help("Show or hide port forwarding")
       }
     }
     .inspector(isPresented: $ports) {

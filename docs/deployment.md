@@ -96,7 +96,7 @@ Use `ARCHIVE_ONLY=1` to create a signed local archive. The native Mac app is ins
 
 ### Native client parity checks
 
-The redesigned targets require macOS 27 or iOS/iPadOS 27. Build with Xcode 27.1 or later to exercise iPhone Duo. Run `make apple`, then `apple/test-native.sh macOS` for the desktop UI or `SIMULATOR_ID="$SIMULATOR_ID" apple/test-native.sh` for a mobile simulator. The Go fixture creates an isolated broker and supervisor, serves fresh invitations to the XCTest runner, and writes an XCTest result bundle under `apple/build/results-*`.
+The redesigned targets require macOS 27 or iOS/iPadOS 27. Build with Xcode 27.1 or later to exercise iPhone Duo. On an isolated CI runner, run `make apple`, then `apple/test-native.sh macOS` for the desktop UI or `SIMULATOR_ID="$SIMULATOR_ID" apple/test-native.sh` for a mobile simulator. The Go fixture creates an isolated broker and supervisor, serves fresh invitations to the XCTest runner, and writes an XCTest result bundle under `apple/build/results-*`.
 
 For mobile UI tests, install AXe 2.1.1 on the Mac and put its executable on `PATH`. Select the same Xcode for building, simulator input and Device Hub with `DEVELOPER_DIR`. The Duo suite uses the host desktop to operate Device Hub, so run it separately from the native Mac UI suite. To exercise a Linux supervisor, run `SIMULATOR_ID="$SIMULATOR_ID" apple/test-linux-host.sh` with Docker running. [Acceptance commands](verification.md)
 

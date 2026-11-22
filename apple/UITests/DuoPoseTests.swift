@@ -8,23 +8,24 @@
       let env = ProcessInfo.processInfo.environment
       let pose = try XCTUnwrap(env["CLISTREAM_DUO_POSE"])
       let device = try XCTUnwrap(env["CLISTREAM_DUO_NAME"])
+      let id = try XCTUnwrap(env["CLISTREAM_DUO_ID"])
       let hubPath = try XCTUnwrap(env["CLISTREAM_DEVICE_HUB"])
       let hub = XCUIApplication(url: URL(fileURLWithPath: hubPath))
       hub.activate()
-      let row = hub.descendants(matching: .any).matching(
-        NSPredicate(format: "label == %@ OR value == %@ OR title == %@", device, device, device)
-      ).firstMatch
-      let window = hub.windows.containing(NSPredicate(format: "title CONTAINS %@", device))
-        .firstMatch
-      if !window.exists {
+      let button = hub.buttons[pose].firstMatch
+      let window = hub.windows.matching(NSPredicate(format: "title CONTAINS %@", device)).firstMatch
+      if !window.exists || !button.exists {
+        let sidebar = hub.buttons["Show Sidebar"].firstMatch
+        if sidebar.exists && sidebar.isHittable { sidebar.click() }
+        let row = hub.descendants(matching: .any).matching(
+          NSPredicate(format: "identifier == %@ OR label == %@ OR value == %@",
+                      "TableRow.Device." + id, device, device)
+        ).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 60), "Duo simulator missing from Device Hub")
         row.click()
         let screen = hub.buttons["View Screen"].firstMatch
-        if !window.exists && screen.waitForExistence(timeout: 10) { screen.click() }
+        if !button.exists && screen.waitForExistence(timeout: 10) { screen.click() }
       }
-      let button = hub.buttons.matching(
-        NSPredicate(format: "label == %@ OR title == %@ OR identifier == %@", pose, pose, pose)
-      ).firstMatch
       guard button.waitForExistence(timeout: 30) else {
         XCTContext.runActivity(named: "Device Hub controls") { activity in
           activity.add(XCTAttachment(string: hub.debugDescription))

@@ -126,6 +126,7 @@ final class SessionTests: XCTestCase {
     #if os(macOS)
       app.typeKey("w", modifierFlags: .command)
     #else
+      tap(app.buttons["Session"])
       tap(app.buttons["Detach"])
     #endif
   }
@@ -142,9 +143,14 @@ final class SessionTests: XCTestCase {
         }
         if initiallyEnabled { try voice.disable() }
         let app = try await pairedApp(session: "CLISTREAM_SESSION")
+        tap(app.buttons["Keys"])
+        tap(app.buttons["Hide Keyboard"])
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
         try voice.enable()
         XCTAssertTrue(voice.isEnabled)
-        app.descendants(matching: .any)["session-terminal"].firstMatch.tap()
+        // Start in the toolbar and read forward into the session, as a VoiceOver user would.
+        // A single exploratory touch moves VoiceOver focus without activating the button.
+        app.buttons["session-ports"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         var readings = [String]()
         let focus = XCTNSPredicateExpectation(
           predicate: NSPredicate { _, _ in
@@ -219,6 +225,7 @@ final class SessionTests: XCTestCase {
       tap(app.buttons["Keys"])
       tap(app.buttons["Show Keyboard"])
       XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 6))
+      tap(app.buttons["Session"])
       tap(app.buttons["Detach"])
     }
 
@@ -229,6 +236,12 @@ final class SessionTests: XCTestCase {
       let word = terminal.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 16, dy: 8))
       word.press(forDuration: 1)
       tap(app.descendants(matching: .any)["Select"].firstMatch)
+      if ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1" {
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = "gallery-text-selection"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+      }
       tap(app.descendants(matching: .any)["Copy"].firstMatch)
       word.press(forDuration: 1)
       tap(app.descendants(matching: .any)["Paste"].firstMatch)
@@ -236,9 +249,18 @@ final class SessionTests: XCTestCase {
       assertText("out:copyword", in: terminal)
       tap(app.buttons["Keys"])
       tap(app.buttons["Hide Keyboard"])
-      try app.performAccessibilityAudit(for: [
-        .sufficientElementDescription, .contrast, .dynamicType,
-      ])
+      XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
+      try app.performAccessibilityAudit(for: [.sufficientElementDescription, .contrast, .dynamicType]) { issue in
+        let element = issue.element
+        let identifiers = ["session-terminal", "session-ports", "desktop-session-status"]
+        let identifier = identifiers.first { $0 == element?.identifier } ?? "unidentified"
+        let role = element?.elementType.rawValue ?? 0
+        let detail = XCTAttachment(string: issue.compactDescription)
+        detail.name = "audit-\(issue.auditType.rawValue)-\(role)-\(identifier)"
+        detail.lifetime = .keepAlways
+        self.add(detail)
+        return false
+      }
     }
   #endif
 

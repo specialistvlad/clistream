@@ -72,6 +72,20 @@ func interactionRoutes(mux *http.ServeMux, path, root string, link []byte) error
 	if udid == "" {
 		return nil
 	}
+	if os.Getenv("TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY") == "1" {
+		mux.HandleFunc(path+"appearance/", func(w http.ResponseWriter, r *http.Request) {
+			mode := strings.TrimPrefix(r.URL.Path, path+"appearance/")
+			if mode != "light" && mode != "dark" {
+				http.NotFound(w, r)
+				return
+			}
+			if err := exec.CommandContext(r.Context(), "xcrun", "simctl", "ui", udid, "appearance", mode).Run(); err != nil {
+				http.Error(w, "unable to set simulator appearance", http.StatusServiceUnavailable)
+				return
+			}
+			fmt.Fprint(w, mode)
+		})
+	}
 	touch := func(w http.ResponseWriter, r *http.Request) {
 		keys := []string{"x", "y"}
 		extend := r.URL.Path == path+"EXTEND"
@@ -144,7 +158,7 @@ func poseRoute(mux *http.ServeMux, path, device, plan string) {
 		}
 		hub := filepath.Join(strings.TrimSpace(string(developer)), "..", "Applications", "DeviceHub.app")
 		cmd := exec.CommandContext(r.Context(), "xcodebuild", "-quiet", "-xctestrun", plan, "-destination", "platform=macOS", "-resultBundlePath", filepath.Join(resultDir, "pose.xcresult"), "-collect-test-diagnostics", "never", "-parallel-testing-enabled", "NO", "-only-testing:CLIStream-MacUITests/DuoPoseTests/testSetDevicePose", "test-without-building")
-		cmd.Env = append(os.Environ(), "TEST_RUNNER_CLISTREAM_DEVICE_HUB="+hub, "TEST_RUNNER_CLISTREAM_DUO_POSE="+pose, "TEST_RUNNER_CLISTREAM_DUO_NAME="+device)
+		cmd.Env = append(os.Environ(), "TEST_RUNNER_CLISTREAM_DEVICE_HUB="+hub, "TEST_RUNNER_CLISTREAM_DUO_POSE="+pose, "TEST_RUNNER_CLISTREAM_DUO_NAME="+device, "TEST_RUNNER_CLISTREAM_DUO_ID="+os.Getenv("SIMULATOR_ID"))
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
 			http.Error(w, "Device Hub pose change failed", 503)

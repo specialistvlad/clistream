@@ -169,10 +169,11 @@ struct WorkspaceTerminal: View {
   @ObservedObject var connection: Connection
   @ObservedObject var workspace: Workspace
   let row: WorkspaceSession
+  var detach: (() -> Void)? = nil
   var body: some View {
     VStack(spacing: 0) {
       if let session = connection.selected {
-        SessionPane(connection: connection, session: session)
+        SessionPane(connection: connection, session: session, detach: detach)
       } else {
         ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
       }

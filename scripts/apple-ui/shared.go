@@ -58,7 +58,7 @@ func prepareViewers(root string) (viewerPlans, error) {
 // Run each UI runner against the same broker. The independent CLI joins via
 // its normal attach command. A unique marker from each writer is retained in
 // the child's history so simulator launch order does not affect the assertion.
-func shared(plans viewerPlans, url, pipeID, pipeRun, terminalID string, command func(string, ...string) *exec.Cmd) error {
+func shared(plans viewerPlans, arrivals <-chan string, url, pipeID, pipeRun, terminalID string, command func(string, ...string) *exec.Cmd) error {
 	cli := command("clistream", "attach", pipeRun)
 	cli.Stderr = os.Stderr
 	in, err := cli.StdinPipe()
@@ -76,7 +76,7 @@ func shared(plans viewerPlans, url, pipeID, pipeRun, terminalID string, command 
 	if _, err := fmt.Fprintln(in, "shared-cli"); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	results := make(chan error, 4)
 	go func() {
@@ -95,7 +95,7 @@ func shared(plans viewerPlans, url, pipeID, pipeRun, terminalID string, command 
 		}
 		results <- fmt.Errorf("CLI stream ended before the final marker; observed participants %v (read error %v)", seen, scanner.Err())
 	}()
-	for _, name := range []string{"mac", "phone", "pad"} {
+	for _, name := range []string{"pad", "phone", "mac"} {
 		dest := "platform=macOS"
 		plan := plans.mac
 		suite := "CLIStream-MacUITests"
@@ -116,6 +116,17 @@ func shared(plans viewerPlans, url, pipeID, pipeRun, terminalID string, command 
 				results <- nil
 			}
 		}()
+		// Install and launch one simulator test runner at a time. Each stays
+		// attached at the barrier while the next participant joins.
+		if name != "mac" {
+			select {
+			case <-arrivals:
+			case err := <-results:
+				return fmt.Errorf("%s stopped before the shared session was ready: %v", name, err)
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
 	}
 	for range 4 {
 		select {

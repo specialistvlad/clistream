@@ -18,7 +18,7 @@ The Servers sidebar separates the broker from the computers running supervisors.
 
 ## Touch-only operation on iPhone and iPad
 
-Choose a session in the sidebar when space permits or navigate from the compact session list. Switching preserves open attachments. Detach closes the selected attachment. In an attached terminal, open **Keys** for Escape, arrows, Control-letter combinations, and the onscreen keyboard. The selected run stays open across keyboard changes, rotation, iPad resizing, and Duo folding. Use hardware keyboard and pointer input where available.
+Choose a session in the sidebar when space permits or navigate from the compact session list. Switching preserves open attachments. Choose **Session → Detach** to close the selected attachment. The terminal follows the system appearance and scales its monospaced text with Dynamic Type. In an attached terminal, open **Keys** for Escape, arrows, Control-letter combinations, and the onscreen keyboard. The selected run stays open across keyboard changes, rotation, iPad resizing, and Duo folding. Use hardware keyboard and pointer input where available.
 
 ## Terminal and session controls
 

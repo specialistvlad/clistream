@@ -99,7 +99,7 @@ struct WorkspaceSheet<Fields: View>: View {
           Button("Cancel", action: cancel).keyboardShortcut(.cancelAction)
           Button(confirmation, action: confirm).disabled(!enabled).keyboardShortcut(.defaultAction)
         }.padding(.top, 4)
-      }.padding(24).frame(minWidth: 440, idealWidth: 510)
+      }.padding(24).frame(width: 510)
     #else
     NavigationStack {
       Form { fields() }.formStyle(.grouped)
