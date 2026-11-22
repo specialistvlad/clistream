@@ -44,14 +44,8 @@ func run(args []string) error {
 	}
 	defer os.RemoveAll(root)
 	var plans viewerPlans
-	var posePlan string
 	if args[0] == "shared" {
 		plans, err = prepareViewers(root)
-		if err != nil {
-			return err
-		}
-	} else if os.Getenv("CLISTREAM_DUO_NAME") != "" {
-		posePlan, err = buildTestPlan(root, "macOS", "generic/platform=macOS")
 		if err != nil {
 			return err
 		}
@@ -214,8 +208,8 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 		}
 		fmt.Fprint(w, "revoked")
 	})
-	if device := os.Getenv("CLISTREAM_DUO_NAME"); device != "" {
-		poseRoute(mux, path, device, posePlan)
+	if os.Getenv("CLISTREAM_DUO_NAME") != "" {
+		poseRoute(mux, path, os.Getenv("SIMULATOR_ID"))
 	}
 	if err := interactionRoutes(mux, path, root, link); err != nil {
 		return err

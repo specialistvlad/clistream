@@ -1,43 +1,3 @@
-#if os(macOS)
-  import XCTest
-
-  /// Drives Device Hub's real device-pose controls while the mobile XCTest stays attached.
-  final class DuoPoseTests: XCTestCase {
-    @MainActor func testSetDevicePose() throws {
-      continueAfterFailure = false
-      let env = ProcessInfo.processInfo.environment
-      let pose = try XCTUnwrap(env["CLISTREAM_DUO_POSE"])
-      let device = try XCTUnwrap(env["CLISTREAM_DUO_NAME"])
-      let id = try XCTUnwrap(env["CLISTREAM_DUO_ID"])
-      let hubPath = try XCTUnwrap(env["CLISTREAM_DEVICE_HUB"])
-      let hub = XCUIApplication(url: URL(fileURLWithPath: hubPath))
-      hub.activate()
-      let button = hub.buttons[pose].firstMatch
-      let window = hub.windows.matching(NSPredicate(format: "title CONTAINS %@", device)).firstMatch
-      if !window.exists || !button.exists {
-        let sidebar = hub.buttons["Show Sidebar"].firstMatch
-        if sidebar.exists && sidebar.isHittable { sidebar.click() }
-        let row = hub.descendants(matching: .any).matching(
-          NSPredicate(format: "identifier == %@ OR label == %@ OR value == %@",
-                      "TableRow.Device." + id, device, device)
-        ).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 60), "Duo simulator missing from Device Hub")
-        row.click()
-        let screen = hub.buttons["View Screen"].firstMatch
-        if !button.exists && screen.waitForExistence(timeout: 10) { screen.click() }
-      }
-      guard button.waitForExistence(timeout: 30) else {
-        XCTContext.runActivity(named: "Device Hub controls") { activity in
-          activity.add(XCTAttachment(string: hub.debugDescription))
-        }
-        XCTFail("Missing Device Hub pose control")
-        return
-      }
-      button.click()
-    }
-  }
-#endif
-
 #if os(iOS)
   import XCTest
 
@@ -79,6 +39,10 @@
         let echoed = XCTNSPredicateExpectation(
           predicate: NSPredicate(format: "value CONTAINS %@", marker), object: terminal)
         XCTAssertEqual(XCTWaiter.wait(for: [echoed], timeout: 10), .completed)
+        if key != "D", ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1" {
+          let captured = try await fixtureResponse("pose-screenshot/" + pose)
+          XCTAssertEqual(captured, "captured")
+        }
       }
       XCTAssertNotEqual(widths.first, widths[2])
       XCTAssertEqual(widths.first, widths.last)

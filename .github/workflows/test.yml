@@ -98,11 +98,7 @@ jobs:
               go run ./scripts/apple-ui shared ;;
             iPhone) SIMULATOR_ID="$(simulator 'iPhone 18 Pro')" apple/test-native.sh ;;
             iPad) SIMULATOR_ID="$(simulator 'iPad Pro 13-inch (M5)')" apple/test-native.sh ;;
-            Duo)
-              export SIMULATOR_ID
-              SIMULATOR_ID=$(simulator 'iPhone Duo')
-              open -a "$(xcode-select -p)/../Applications/DeviceHub.app"
-              apple/test-native.sh ;;
+            Duo) SIMULATOR_ID="$(simulator 'iPhone Duo')" apple/test-native.sh ;;
           esac
       - name: Collect gallery screenshots
         if: always() && matrix.device != 'shared'
@@ -136,7 +132,6 @@ jobs:
           for bundle in apple/build/results-*/*.xcresult apple/build/shared-*.xcresult; do
             [[ -f "$bundle/Info.plist" ]] || continue
             name=$(basename "$bundle" .xcresult)
-            if [[ $name == pose ]]; then name=$(basename "$(dirname "$bundle")"); fi
             report="results/$name.json"
             go run ./scripts/apple-report "$bundle" > "$report"
             cat "$report"

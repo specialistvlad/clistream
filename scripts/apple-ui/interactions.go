@@ -139,31 +139,41 @@ func interactionRoutes(mux *http.ServeMux, path, root string, link []byte) error
 	return nil
 }
 
-func poseRoute(mux *http.ServeMux, path, device, plan string) {
+func poseRoute(mux *http.ServeMux, path, udid string) {
+	poses := map[string]string{"Closed": "closed", "Partially Open": "tabletop", "Open": "open"}
 	mux.HandleFunc(path+"pose/", func(w http.ResponseWriter, r *http.Request) {
-		pose := strings.TrimPrefix(r.URL.Path, path+"pose/")
-		if pose != "Closed" && pose != "Open" && pose != "Partially Open" {
+		pose, ok := poses[strings.TrimPrefix(r.URL.Path, path+"pose/")]
+		if !ok {
 			http.NotFound(w, r)
 			return
 		}
-		developer, err := exec.CommandContext(r.Context(), "xcode-select", "-p").Output()
-		if err != nil {
-			http.Error(w, "Xcode developer directory unavailable", 503)
-			return
-		}
-		resultDir, err := os.MkdirTemp("apple/build", "results-DuoPose-")
-		if err != nil {
-			http.Error(w, "Device Hub result directory unavailable", 503)
-			return
-		}
-		hub := filepath.Join(strings.TrimSpace(string(developer)), "..", "Applications", "DeviceHub.app")
-		cmd := exec.CommandContext(r.Context(), "xcodebuild", "-quiet", "-xctestrun", plan, "-destination", "platform=macOS", "-resultBundlePath", filepath.Join(resultDir, "pose.xcresult"), "-collect-test-diagnostics", "never", "-parallel-testing-enabled", "NO", "-only-testing:CLIStream-MacUITests/DuoPoseTests/testSetDevicePose", "test-without-building")
-		cmd.Env = append(os.Environ(), "TEST_RUNNER_CLISTREAM_DEVICE_HUB="+hub, "TEST_RUNNER_CLISTREAM_DUO_POSE="+pose, "TEST_RUNNER_CLISTREAM_DUO_NAME="+device, "TEST_RUNNER_CLISTREAM_DUO_ID="+os.Getenv("SIMULATOR_ID"))
-		cmd.Stderr = os.Stderr
+		cmd := exec.CommandContext(r.Context(), "axe", "hinge", "set", pose, "--udid", udid, "--timeout", "15")
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err := cmd.Run(); err != nil {
-			http.Error(w, "Device Hub pose change failed", 503)
+			http.Error(w, "simulator hinge did not settle", http.StatusServiceUnavailable)
 			return
 		}
 		fmt.Fprint(w, "applied")
+	})
+	if os.Getenv("TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY") != "1" {
+		return
+	}
+	mux.HandleFunc(path+"pose-screenshot/", func(w http.ResponseWriter, r *http.Request) {
+		pose, ok := poses[strings.TrimPrefix(r.URL.Path, path+"pose-screenshot/")]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		if err := os.MkdirAll("gallery", 0755); err != nil {
+			http.Error(w, "gallery unavailable", http.StatusInternalServerError)
+			return
+		}
+		cmd := exec.CommandContext(r.Context(), "axe", "screenshot", "--udid", udid, "--output", filepath.Join("gallery", "duo-"+pose+".png"))
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			http.Error(w, "active display capture failed", http.StatusServiceUnavailable)
+			return
+		}
+		fmt.Fprint(w, "captured")
 	})
 }

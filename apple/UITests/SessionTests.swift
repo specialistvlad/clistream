@@ -151,40 +151,36 @@ final class SessionTests: XCTestCase {
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
         try voice.enable()
         XCTAssertTrue(voice.isEnabled)
-        // Start in the toolbar and read forward into the session, as a VoiceOver user would.
-        // A single exploratory touch moves VoiceOver focus without activating the button.
-        app.buttons["session-ports"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        var readings = [String]()
-        let focus = XCTNSPredicateExpectation(
-          predicate: NSPredicate { _, _ in
-            guard let speech = try? voice.currentSpeech() else { return false }
-            return !speech.utterance.isEmpty
+        // Explore a control by touch, then navigate away and back with the VoiceOver cursor.
+        // This exercises both toolbar layouts without assuming which side the terminal occupies.
+        func spoken(_ label: String, near element: XCUIElement) async throws -> Bool {
+          guard element.isHittable else { return false }
+          element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+          let focus = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            (try? voice.currentSpeech().utterance.localizedCaseInsensitiveContains(label)) == true
           }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [focus], timeout: 12), .completed)
-        readings.append(try voice.currentSpeech().utterance)
-        var deliveryRetries = 0
-        for _ in 0..<20 {
-          do {
-            readings.append(try voice.moveForward().utterance)
-          } catch let error as NSError
-            where error.domain == "AXVoiceOverAutomationErrorDomain"
-            && error.code == 3 && deliveryRetries < 3
-          {
-            deliveryRetries += 1
-            try await Task.sleep(for: .milliseconds(500))
-            continue
+          let foundByTouch = await XCTWaiter.fulfillment(of: [focus], timeout: 3) == .completed
+          var readings = [String]()
+          for forward in [true, false, false, true] {
+            do {
+              let output = try forward ? voice.moveForward() : voice.moveBackward()
+              readings.append(output.utterance)
+            } catch let error as NSError
+              where error.domain == "AXVoiceOverAutomationErrorDomain" && error.code == 3
+            {
+              try await Task.sleep(for: .milliseconds(500))
+            }
+            if readings.contains(where: { $0.localizedCaseInsensitiveContains(label) }) {
+              return true
+            }
           }
-          if ["Terminal", "Ports"].allSatisfy({ label in
-            readings.contains { $0.localizedCaseInsensitiveContains(label) }
-          }) {
-            break
-          }
+          return foundByTouch && readings.contains(where: { !$0.isEmpty })
         }
-        for label in ["Terminal", "Ports"] {
-          XCTAssertTrue(
-            readings.contains { $0.localizedCaseInsensitiveContains(label) },
-            "Missing \(label) in VoiceOver focus order: \(readings)")
-        }
+        let ports = try await spoken("Ports", near: app.buttons["session-ports"])
+        XCTAssertTrue(ports, "VoiceOver could not reach Ports")
+        let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
+        let content = try await spoken("Terminal", near: terminal)
+        XCTAssertTrue(content, "VoiceOver could not reach the terminal")
       }
     #endif
 
