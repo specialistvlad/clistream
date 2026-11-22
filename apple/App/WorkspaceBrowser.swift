@@ -12,6 +12,7 @@ struct WorkspaceSidebar: View {
   @State private var renameTarget: ServerProfile?
   @State private var name = ""
   @FocusState private var editingName: Bool
+  @Environment(\.dynamicTypeSize) private var typeSize
   private func rename(_ server: ServerProfile) {
     name = server.name
     renameTarget = server
@@ -81,7 +82,10 @@ struct WorkspaceSidebar: View {
           let rows = workspace.sessions.filter { $0.server.id == server.id }
           group(server.name, symbol: "server.rack", path: [server.id]) {
             if let error = workspace.errors[server.id], !error.isEmpty {
-              HStack {
+              let statusLayout = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading))
+                : AnyLayout(HStackLayout())
+              statusLayout {
                 Text("Offline").font(.body).foregroundStyle(.secondary)
                   .fixedSize(horizontal: false, vertical: true)
                 Button { workspace.retry(server) } label: {
