@@ -78,7 +78,11 @@ private func highlighted(_ line: String) -> NSAttributedString {
           }
         }
       }
-      @objc func commit() { field.submit() }
+      func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        guard selector == #selector(NSResponder.insertNewline(_:)), !textView.hasMarkedText() else { return false }
+        field.submit()
+        return true
+      }
     }
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeNSView(context: Context) -> NSTextField {
@@ -86,8 +90,6 @@ private func highlighted(_ line: String) -> NSAttributedString {
       view.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
       view.usesSingleLineMode = true
       view.delegate = context.coordinator
-      view.target = context.coordinator
-      view.action = #selector(Coordinator.commit)
       view.setAccessibilityLabel("Command")
       view.setAccessibilityIdentifier("command-line")
       view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)

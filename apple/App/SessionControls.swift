@@ -133,28 +133,18 @@ private struct CommandSheet: View {
   }
 
   var body: some View {
-    NavigationStack {
-      Form {
-        if draft.session.running { Text("Restarting ends the current run for everyone connected.") }
-        VStack(alignment: .leading) {
-          Text("Command")
-          CommandField(line: $line, submit: launch).frame(minHeight: 32)
-          if let error = validation.Error { Text(error).foregroundStyle(.red) }
-        }
-      }
-      .formStyle(.grouped)
-      .navigationTitle((draft.session.running ? "Restart “" : "Start “") + draft.session.Name + "”")
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-        ToolbarItem(placement: .confirmationAction) {
-          Button(draft.session.running ? "Restart" : "Start", action: launch)
-            .disabled(validation.Command == nil)
-        }
+    WorkspaceSheet(
+      title: (draft.session.running ? "Restart “" : "Start “") + draft.session.Name + "”",
+      confirmation: draft.session.running ? "Restart" : "Start",
+      enabled: validation.Command != nil, cancel: { dismiss() }, confirm: launch
+    ) {
+      if draft.session.running { Text("Restarting ends the current run for everyone connected.") }
+      VStack(alignment: .leading) {
+        Text("Command")
+        CommandField(line: $line, submit: launch).frame(minHeight: 32)
+        if let error = validation.Error { Text(error).foregroundStyle(.red) }
       }
     }
-    #if os(macOS)
-      .frame(minWidth: 460, idealWidth: 540, minHeight: 200)
-    #endif
     .onChange(of: line) { _, value in
       validation = Core.call(["Op": "parse-command", "Line": value])
     }

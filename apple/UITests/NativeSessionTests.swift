@@ -132,8 +132,10 @@ final class NativeSessionTests: XCTestCase {
     let app = try await openPipe(eof: true)
     let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
     activate(terminal)
-    terminal.typeText("finished-child\n")
+    // cat echoes through the remote pipe before Return; a line-buffered input form cannot pass.
+    terminal.typeText("finished-child")
     expectOutput("finished-child", in: terminal)
+    terminal.typeText("\n")
     action("Send EOF",app)
     let result = app.staticTexts.containing(NSPredicate(
       format: "value CONTAINS %@ OR label CONTAINS %@", "finished-child","finished-child"
@@ -457,7 +459,12 @@ final class NativeSessionTests: XCTestCase {
   ) {
     XCTAssertTrue(element.waitForExistence(timeout: 15), file: file, line: line)
     #if os(macOS)
-      element.click()
+      if element.elementType == .button || element.elementType == .textField {
+        // A sheet can close on mouse-down. Complete the click at the resolved window coordinate.
+        clickConfirmation(element, in: XCUIApplication())
+      } else {
+        element.click()
+      }
     #else
       element.tap()
     #endif

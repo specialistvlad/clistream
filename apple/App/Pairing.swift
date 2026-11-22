@@ -90,6 +90,17 @@ struct WorkspaceSheet<Fields: View>: View {
   @ViewBuilder let fields: () -> Fields
 
   var body: some View {
+    #if os(macOS)
+      VStack(alignment: .leading, spacing: 16) {
+        Text(title).font(.headline).accessibilityAddTraits(.isHeader)
+        fields()
+        HStack {
+          Spacer()
+          Button("Cancel", action: cancel).keyboardShortcut(.cancelAction)
+          Button(confirmation, action: confirm).disabled(!enabled).keyboardShortcut(.defaultAction)
+        }.padding(.top, 4)
+      }.padding(24).frame(minWidth: 440, idealWidth: 510)
+    #else
     NavigationStack {
       Form { fields() }.formStyle(.grouped)
         .navigationTitle(title)
@@ -101,9 +112,6 @@ struct WorkspaceSheet<Fields: View>: View {
           }
         }
     }
-    #if os(macOS)
-      .frame(minWidth: 420, idealWidth: 500, minHeight: 170)
-    #else
       .presentationDetents([.medium, .large])
     #endif
   }
