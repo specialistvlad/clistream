@@ -62,7 +62,11 @@ final class NativeSessionTests: XCTestCase {
     field.typeText("first-server-marker\n")
     let invitation = try await fixtureResponse("SECOND")
     let id = try await fixtureResponse("SECOND-ID")
-    app.open(try XCTUnwrap(URL(string: invitation)))
+    #if os(macOS)
+      try await enterInvitation(invitation, in: app)
+    #else
+      app.open(try XCTUnwrap(URL(string: invitation)))
+    #endif
     let confirm = app.buttons["Pair device"].firstMatch
     XCTAssertTrue(confirm.waitForExistence(timeout: 12))
     try await capture("confirm-server", app)
@@ -328,7 +332,7 @@ final class NativeSessionTests: XCTestCase {
       XCTAssertTrue(field.waitForExistence(timeout: 12))
     }
     @MainActor func testOpenAndReuseNativeTab() async throws {
-      let app = try await openPipe(pairInWindow: true)
+      let app = try await openPipe(capturePairing: true)
       XCTAssertTrue(
         app.staticTexts["desktop-session-status"].firstMatch.waitForExistence(timeout: 10))
       activate(app.buttons["Hide Sidebar"].firstMatch)
@@ -440,7 +444,7 @@ final class NativeSessionTests: XCTestCase {
       XCTAssertEqual(XCTWaiter.wait(for: [received], timeout: 12), .completed)
       let invitation = try await fixtureResponse("SECOND")
       let otherSession = try await fixtureResponse("SECOND-ID")
-      app.open(try XCTUnwrap(URL(string: invitation)))
+      try await enterInvitation(invitation, in: app)
       confirmPairing(app.buttons["Pair device"].firstMatch, in: app)
       activate(app.descendants(matching: .any)["session-" + otherSession].firstMatch)
       activate(input)
@@ -479,7 +483,7 @@ final class NativeSessionTests: XCTestCase {
   }
 
   @MainActor private func openPipe(
-    terminal: Bool = false, eof: Bool = false, pairInWindow: Bool = false
+    terminal: Bool = false, eof: Bool = false, capturePairing: Bool = false
   ) async throws
     -> XCUIApplication
   {
@@ -506,16 +510,8 @@ final class NativeSessionTests: XCTestCase {
     captureWelcomeIfEmpty(app)
     let link = try await invitation()
     #if os(macOS)
-      if pairInWindow {
-        app.launch()
-        app.typeKey("k", modifierFlags: .command)
-        let field = app.secureTextFields.firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 12))
-        try await capture("add-server", app)
-        field.typeText(link)
-      } else {
-        app.open(try XCTUnwrap(URL(string: link)))
-      }
+      if app.state == .notRunning { app.launch() }
+      try await enterInvitation(link, in: app, captureEmpty: capturePairing)
     #else
       app.open(try XCTUnwrap(URL(string: link)))
     #endif
@@ -534,7 +530,6 @@ final class NativeSessionTests: XCTestCase {
     XCTAssertTrue(pair.waitForExistence(timeout: 12))
     #if os(macOS)
       app.activate()
-      XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
       XCTAssertTrue(pair.wait(for: \.isHittable, toEqual: true, timeout: 10))
       app.typeKey(.return, modifierFlags: [])
       XCTAssertTrue(pair.waitForNonExistence(timeout: 12))
@@ -543,6 +538,16 @@ final class NativeSessionTests: XCTestCase {
     #endif
   }
   #if os(macOS)
+    @MainActor private func enterInvitation(
+      _ link: String, in app: XCUIApplication, captureEmpty: Bool = false
+    ) async throws {
+      app.typeKey("k", modifierFlags: .command)
+      let field = app.secureTextFields.firstMatch
+      XCTAssertTrue(field.waitForExistence(timeout: 12))
+      if captureEmpty { try await capture("add-server", app) }
+      field.typeText(link)
+    }
+
     @MainActor private func clickConfirmation(_ button: XCUIElement, in app: XCUIApplication) {
       if app.state != .runningForeground { app.activate() }
       let anchor = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
