@@ -262,11 +262,14 @@ final class SessionTests: XCTestCase {
       XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
       try app.performAccessibilityAudit(for: [.sufficientElementDescription, .contrast, .dynamicType]) { issue in
         let element = issue.element
-        let identifiers = ["session-terminal", "session-ports", "desktop-session-status"]
+        let identifiers = ["session-terminal", "session-ports", "desktop-session-status", "retry-server"]
         let identifier = identifiers.first { $0 == element?.identifier } ?? "unidentified"
         let role = element?.elementType.rawValue ?? 0
+        let reason = (issue.compactDescription + " " + issue.detailedDescription).lowercased()
+        let categories = ["clip", "truncat", "scal", "overlap", "small", "font", "contrast"]
+          .filter { reason.contains($0) }.joined(separator: "-")
         let detail = XCTAttachment(string: issue.compactDescription)
-        detail.name = "audit-\(issue.auditType.rawValue)-\(role)-\(identifier)"
+        detail.name = "audit-\(issue.auditType.rawValue)-\(role)-\(identifier)-\(categories)"
         detail.lifetime = .keepAlways
         self.add(detail)
         return false

@@ -12,7 +12,6 @@ struct WorkspaceSidebar: View {
   @State private var renameTarget: ServerProfile?
   @State private var name = ""
   @FocusState private var editingName: Bool
-  @Environment(\.dynamicTypeSize) private var typeSize
   private func rename(_ server: ServerProfile) {
     name = server.name
     renameTarget = server
@@ -82,22 +81,22 @@ struct WorkspaceSidebar: View {
           let rows = workspace.sessions.filter { $0.server.id == server.id }
           group(server.name, symbol: "server.rack", path: [server.id]) {
             if let error = workspace.errors[server.id], !error.isEmpty {
-              let statusLayout = typeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading))
-                : AnyLayout(HStackLayout())
-              statusLayout {
-                Text("Offline").font(.body).foregroundStyle(.secondary)
-                  .fixedSize(horizontal: false, vertical: true)
+              #if os(iOS)
                 Button { workspace.retry(server) } label: {
-                  #if os(iOS)
-                    Label("Retry", systemImage: "arrow.clockwise")
-                      .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44)
-                  #else
-                    Text("Retry")
-                  #endif
+                  Label("Offline", systemImage: "arrow.clockwise")
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
-                .accessibilityLabel("Retry").accessibilityIdentifier("retry-server")
-              }.help(error)
+                .accessibilityLabel("Retry").accessibilityValue("Offline")
+                .accessibilityHint("Reconnect to this server")
+                .accessibilityIdentifier("retry-server").help(error)
+              #else
+                HStack {
+                  Text("Offline").foregroundStyle(.secondary)
+                  Button("Retry") { workspace.retry(server) }
+                    .accessibilityIdentifier("retry-server")
+                }.help(error)
+              #endif
             }
             if flat {
               ForEach(rows) { leaf($0, title: $0.item.Name, detail: $0.item.Host) }
