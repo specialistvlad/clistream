@@ -3,13 +3,21 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: Apple UI suite
+        required: true
+        type: choice
+        options: [macOS, iPhone, iPad, Duo, shared]
 concurrency:
-  group: test-${{ github.workflow }}-${{ github.ref }}
+  group: test-${{ github.workflow }}-${{ github.ref }}-${{ inputs.device || 'matrix' }}
   cancel-in-progress: true
 permissions:
   contents: read
 jobs:
   go:
+    if: github.event_name != 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -31,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        device: [macOS, iPhone, iPad, Duo, shared]
+        device: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.device)) || fromJSON('["macOS","iPhone","iPad","Duo","shared"]') }}
     runs-on: xcode-27
     # A cold iOS runtime must finish migrating before the per-case watchdogs start.
     timeout-minutes: 65

@@ -4,6 +4,8 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+To run one Apple UI suite on an isolated Mac, open **Actions → Test → Run workflow**, choose a device or the shared session, and run it on `main`. A push to `main` runs the full matrix.
+
 ## Local screenshot gallery
 
 Open `docs/screenshots/index.html` in the checkout used for capture. The gallery groups full-resolution PNGs by the native Mac app, iPhone, iPad, iPhone Duo, and the Go terminal client on macOS and Linux. The hosted Apple matrix exports named PNGs from the running apps. Gallery artifacts are available for three days. The terminal captures use output from the compiled Go programs connected to a pseudo-terminal. Git ignores the entire gallery, so a fresh clone contains only the published README animation.

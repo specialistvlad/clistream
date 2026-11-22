@@ -500,7 +500,9 @@ final class NativeSessionTests: XCTestCase {
     let pair = app.buttons["Pair device"].firstMatch
     XCTAssertTrue(pair.waitForExistence(timeout: 12))
     #if os(macOS)
-      clickConfirmation(pair, in: app)
+      app.activate()
+      app.typeKey(.return, modifierFlags: [])
+      XCTAssertTrue(pair.waitForNonExistence(timeout: 12))
     #else
       activate(pair)
     #endif
@@ -515,8 +517,7 @@ final class NativeSessionTests: XCTestCase {
   #if os(macOS)
     @MainActor private func clickConfirmation(_ button: XCUIElement, in app: XCUIApplication) {
       if app.state != .runningForeground { app.activate() }
-      // The app remains accessible while a sheet dismisses or the terminal changes to its exit view.
-      let anchor = app.coordinate(withNormalizedOffset: .zero)
+      let anchor = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
       let point = button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).screenPoint
       let offset = CGVector(dx: point.x - anchor.screenPoint.x, dy: point.y - anchor.screenPoint.y)
       anchor.withOffset(offset).click()
