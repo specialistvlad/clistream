@@ -7,9 +7,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 type testNode struct {
+	Name           string
 	NodeType       string
 	NodeIdentifier string
 	Result         string
@@ -25,6 +27,7 @@ type outcome struct {
 	Result           string   `json:"result"`
 	Duration         string   `json:"duration,omitempty"`
 	FailureLocations []string `json:"failureLocations,omitempty"`
+	FailureKinds     []string `json:"failureKinds,omitempty"`
 }
 
 func main() {
@@ -55,8 +58,25 @@ func report(bundle string) error {
 		if node.NodeType == "Test Case" {
 			item := outcome{Test: node.NodeIdentifier, Result: node.Result, Duration: node.Duration}
 			for _, child := range node.Children {
-				if loc := child.SourceLocation; child.NodeType == "Failure Message" && loc != nil {
+				if child.NodeType != "Failure Message" {
+					continue
+				}
+				if loc := child.SourceLocation; loc != nil {
 					item.FailureLocations = append(item.FailureLocations, fmt.Sprintf("%s:%d", filepath.Base(loc.FilePath), loc.LineNumber))
+				}
+				// XCTest messages can contain pairing links, typed input or terminal data.
+				// Publish only recognized framework diagnostics.
+				reason := strings.ToLower(child.Name)
+				for _, kind := range []string{
+					"failed to get screenshot", "failed to synthesize event",
+					"failed to get matching snapshots", "failed to get snapshot",
+					"not hittable", "not in the foreground", "failed to type",
+					"failed to click", "failed to tap", "failed to install or launch",
+					"invalid device state", "timed out", "xctasserttrue failed", "xctassertequal failed",
+				} {
+					if strings.Contains(reason, kind) {
+						item.FailureKinds = append(item.FailureKinds, kind)
+					}
 				}
 			}
 			cases = append(cases, item)

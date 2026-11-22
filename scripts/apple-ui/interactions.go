@@ -168,6 +168,14 @@ func duoDisplay(ctx context.Context, udid string) (uint32, float64, error) {
 
 func poseRoute(mux *http.ServeMux, path, udid string) {
 	poses := map[string]int{"Closed": 0, "Partially Open": 90, "Open": 180}
+	// The partially open display can settle several degrees away from the
+	// mechanical target. Keep the end stops precise and check the tabletop pose.
+	matchesPose := func(actual float64, target int) bool {
+		if target == 90 {
+			return actual >= 80 && actual <= 100
+		}
+		return math.Abs(actual-float64(target)) <= 0.5
+	}
 	mux.HandleFunc(path+"pose/", func(w http.ResponseWriter, r *http.Request) {
 		degrees, ok := poses[strings.TrimPrefix(r.URL.Path, path+"pose/")]
 		if !ok {
@@ -187,7 +195,7 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 			if err != nil {
 				break
 			}
-			if math.Abs(angle-float64(degrees)) <= 0.5 {
+			if matchesPose(angle, degrees) {
 				fmt.Fprint(w, "applied")
 				return
 			}
@@ -210,7 +218,7 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 		}
 		filename := "duo-" + strings.ToLower(strings.ReplaceAll(name, " ", "-")) + ".png"
 		id, angle, err := duoDisplay(r.Context(), udid)
-		if err != nil || math.Abs(float64(degrees)-angle) > 0.5 {
+		if err != nil || !matchesPose(angle, degrees) {
 			http.Error(w, "requested display is not active", http.StatusConflict)
 			return
 		}

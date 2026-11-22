@@ -24,6 +24,8 @@ func fixtureResponse(_ purpose: String, at point: CGPoint? = nil, to end: CGPoin
     request.timeoutInterval = 17 * 60
   } else if purpose == "EXPIRED" || purpose.hasPrefix("pose/") {
     request.timeoutInterval = 310
+  } else if purpose.hasPrefix("pose-screenshot/") || purpose.hasPrefix("appearance/") {
+    request.timeoutInterval = 120
   } else {
     request.timeoutInterval = 45
   }
