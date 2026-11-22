@@ -63,14 +63,14 @@ jobs:
             shared_runtime=$(xcrun simctl list devices available --json | jq -er '
               [.devices | to_entries[] | select(.key | contains("iOS-27-"))
                | select(any(.value[]; .name == "iPhone 18 Pro") and any(.value[]; .name == "iPad Pro 11-inch (M5)"))
-               | .key] | sort_by(split("-") | last | tonumber) | last // error("missing shared iOS runtime")')
+               | .key] | sort_by(capture("iOS-(?<version>[0-9]+(?:-[0-9]+)*)").version | split("-") | map(tonumber)) | last // error("missing shared iOS runtime")')
           fi
           simulator() {
             local id
             id=$(xcrun simctl list devices available --json | jq -er --arg device "$1" --arg runtime "${shared_runtime:-}" '
               [.devices | to_entries[] | select(.key | contains("iOS-27-"))
                | select($runtime == "" or .key == $runtime)]
-              | sort_by(.key | split("iOS-")[1] | split("-") | map(tonumber))
+              | sort_by(.key | capture("iOS-(?<version>[0-9]+(?:-[0-9]+)*)").version | split("-") | map(tonumber))
               | [.[].value[] | select(.name == $device)][-1].udid // error("missing simulator")') || return 1
             xcrun simctl rename "$id" "CLIStream CI $1" || return 1
             echo "$id"
