@@ -199,6 +199,21 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 		}
 		return math.Abs(actual-float64(target)) <= 0.5
 	}
+	settledDisplay := func(ctx context.Context, target int) (uint32, float64, error) {
+		wait, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+		for {
+			id, angle, err := duoDisplay(wait, udid)
+			if err == nil && matchesPose(angle, target) {
+				return id, angle, nil
+			}
+			select {
+			case <-time.After(time.Second):
+			case <-wait.Done():
+				return 0, 0, fmt.Errorf("active screen did not settle at %d degrees: %w", target, wait.Err())
+			}
+		}
+	}
 	mux.HandleFunc(path+"pose/", func(w http.ResponseWriter, r *http.Request) {
 		degrees, ok := poses[strings.TrimPrefix(r.URL.Path, path+"pose/")]
 		if !ok {
@@ -216,11 +231,7 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 			}
 			// AXe can lose its input receipt during a panel transition. Read the actual
 			// angle before deciding whether a second movement is necessary.
-			_, angle, err := duoDisplay(r.Context(), udid)
-			if err != nil {
-				break
-			}
-			if matchesPose(angle, degrees) {
+			if _, _, err := settledDisplay(r.Context(), degrees); err == nil {
 				fmt.Fprint(w, "applied")
 				return
 			}
@@ -242,8 +253,8 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 			return
 		}
 		filename := "duo-" + strings.ToLower(strings.ReplaceAll(name, " ", "-")) + ".png"
-		id, angle, err := duoDisplay(r.Context(), udid)
-		if err != nil || !matchesPose(angle, degrees) {
+		id, angle, err := settledDisplay(r.Context(), degrees)
+		if err != nil {
 			http.Error(w, "requested display is not active", http.StatusConflict)
 			return
 		}

@@ -14,6 +14,11 @@ on:
         description: Optional comma-separated Class/testMethod names for a single-device run
         required: false
         type: string
+      screenshots:
+        description: Capture the screen gallery during the device tests
+        required: true
+        type: boolean
+        default: true
 concurrency:
   group: test-${{ github.workflow }}-${{ github.ref }}-${{ inputs.device || 'matrix' }}-${{ inputs.cases && github.run_id || 'suite' }}
   cancel-in-progress: true
@@ -69,7 +74,7 @@ jobs:
         env:
           DEVICE: ${{ matrix.device }}
           CLISTREAM_TEST_CASES: ${{ inputs.cases }}
-          TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY: "1"
+          TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY: ${{ (github.event_name != 'workflow_dispatch' || inputs.screenshots) && '1' || '0' }}
         run: |
           defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
           if [[ "$DEVICE" == shared ]]; then
