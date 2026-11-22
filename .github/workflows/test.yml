@@ -92,7 +92,10 @@ jobs:
               # Migrate one device at a time before booting both for the four-client exchange.
               for id in "$IPHONE_SIMULATOR_ID" "$IPAD_SIMULATOR_ID"; do
                 boot_simulator "$id"
-                xcrun simctl shutdown "$id"
+                if ! xcrun simctl shutdown "$id"; then
+                  xcrun simctl list devices --json | jq -e --arg id "$id" '
+                    any(.devices[][]; .udid == $id and .state == "Shutdown")' >/dev/null
+                fi
               done
               go run ./scripts/apple-ui shared ;;
             iPhone) SIMULATOR_ID="$(simulator 'iPhone 18 Pro')" apple/test-native.sh ;;
