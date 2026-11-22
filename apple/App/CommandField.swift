@@ -63,7 +63,12 @@ private func highlighted(_ line: String) -> NSAttributedString {
         paint(control)
       }
       func controlTextDidBeginEditing(_ notification: Notification) {
-        if let control = notification.object as? NSTextField { paint(control) }
+        guard let control = notification.object as? NSTextField,
+          let editor = control.currentEditor() as? NSTextView else { return }
+        editor.isAutomaticQuoteSubstitutionEnabled = false
+        editor.isAutomaticDashSubstitutionEnabled = false
+        editor.isAutomaticTextReplacementEnabled = false
+        paint(control)
       }
       func paint(_ control: NSTextField) {
         guard let editor = control.currentEditor() as? NSTextView, !editor.hasMarkedText(),

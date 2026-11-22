@@ -51,6 +51,8 @@ final class NativeSessionTests: XCTestCase {
     let id = try await fixtureResponse("SECOND-ID")
     app.open(try XCTUnwrap(URL(string: invitation)))
     let confirm = app.buttons["Pair device"].firstMatch
+    XCTAssertTrue(confirm.waitForExistence(timeout: 12))
+    capture("confirm-server", app)
     activate(confirm)
     #if os(iOS)
       func showServerList(for id: String) {
@@ -98,6 +100,7 @@ final class NativeSessionTests: XCTestCase {
       let name = app.textFields["server-name-field"].firstMatch
       let alias = "Build server " + UUID().uuidString.prefix(8)
       activate(name)
+      capture("rename-server", app)
       name.typeKey("a", modifierFlags: .command)
       name.typeText(alias)
       activate(app.buttons["Save"].firstMatch)
@@ -117,6 +120,8 @@ final class NativeSessionTests: XCTestCase {
     capture("stop-confirmation", app)
     activate(app.buttons["Stop"].firstMatch)
     action("Start…", app)
+    XCTAssertTrue(app.buttons["Start"].firstMatch.waitForExistence(timeout: 12))
+    capture("start-command", app)
     activate(app.buttons["Start"].firstMatch)
     let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
     activate(terminal)
@@ -206,6 +211,7 @@ final class NativeSessionTests: XCTestCase {
     let ready = XCTNSPredicateExpectation(
       predicate: NSPredicate(format: "value CONTAINS %@", "Terminal ready"), object: view)
     XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
+    capture("terminal", app)
     XCTAssertFalse(app.buttons["Restart"].exists)
     #if os(iOS)
       activate(app.buttons["Keys"])
@@ -267,6 +273,7 @@ final class NativeSessionTests: XCTestCase {
       XCTAssertTrue(
         app.staticTexts["desktop-session-status"].firstMatch.waitForExistence(timeout: 10))
       activate(app.buttons["Hide Sidebar"].firstMatch)
+      capture("sidebar-hidden", app)
       activate(app.buttons["Show Sidebar"].firstMatch)
       let input = app.descendants(matching: .any)["session-terminal"].firstMatch
       activate(input)
@@ -423,6 +430,7 @@ final class NativeSessionTests: XCTestCase {
         app.typeKey("k", modifierFlags: .command)
         let field = app.secureTextFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 12))
+        capture("add-server", app)
         field.typeText(link)
       } else {
         app.open(try XCTUnwrap(URL(string: link)))
