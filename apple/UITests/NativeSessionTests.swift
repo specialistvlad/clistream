@@ -100,9 +100,10 @@ final class NativeSessionTests: XCTestCase {
     #if os(iOS)
       showServerList(for: pipe)
     #endif
-    if app.staticTexts["Offline"].firstMatch.waitForExistence(timeout: 5) {
-      captureCurrent("server-offline", app)
-    }
+    // Discovery can start its ten-second connection attempt after the next refresh.
+    let retry = app.buttons["retry-server"].firstMatch
+    XCTAssertTrue(retry.waitForExistence(timeout: 25), "The offline server must offer Retry")
+    captureCurrent("server-offline", app)
     activate(app.descendants(matching: .any)["session-" + pipe].firstMatch)
     activate(field)
     field.typeText("still-connected\n")

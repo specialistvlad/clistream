@@ -10,8 +10,12 @@ on:
         required: true
         type: choice
         options: [macOS, iPhone, iPad, Duo, shared]
+      cases:
+        description: Optional comma-separated Class/testMethod names for a single-device run
+        required: false
+        type: string
 concurrency:
-  group: test-${{ github.workflow }}-${{ github.ref }}-${{ inputs.device || 'matrix' }}
+  group: test-${{ github.workflow }}-${{ github.ref }}-${{ inputs.device || 'matrix' }}-${{ inputs.cases && github.run_id || 'suite' }}
   cancel-in-progress: true
 permissions:
   contents: read
@@ -64,10 +68,12 @@ jobs:
       - name: Run app-hosted and UI tests
         env:
           DEVICE: ${{ matrix.device }}
+          CLISTREAM_TEST_CASES: ${{ inputs.cases }}
           TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY: "1"
         run: |
           defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool NO
           if [[ "$DEVICE" == shared ]]; then
+            [[ -z "$CLISTREAM_TEST_CASES" ]] || { echo "The shared session runs all four clients together."; exit 2; }
             shared_runtime=$(xcrun simctl list devices available --json | jq -er '
               [.devices | to_entries[] | select(.key | contains("iOS-27-"))
                | select(any(.value[]; .name == "iPhone 18 Pro") and any(.value[]; .name == "iPad Pro 11-inch (M5)"))

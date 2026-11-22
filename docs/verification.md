@@ -4,7 +4,7 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
-To run one Apple UI suite on an isolated Mac, open **Actions → Test → Run workflow**, choose a device or the shared session, and run it on `main`. A push to `main` runs the full matrix.
+To run one Apple UI suite on an isolated Mac, open **Actions → Test → Run workflow**, choose a device or the shared session, and run it on `main`. To repeat individual cases on a device, enter their XCTest names separated by commas, for example `NativeSessionTests/testEOFAndCompletedOutput,NativeSessionTests/testTwoServersRouteInputIndependently`. Leave the field empty for the full suite. A push to `main` normally runs the full matrix.
 
 ## Local screenshot gallery
 
