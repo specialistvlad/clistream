@@ -43,9 +43,9 @@ func run(args []string) error {
 		return err
 	}
 	defer os.RemoveAll(root)
-	var plans viewerPlans
+	var macPlan string
 	if args[0] == "shared" {
-		plans, err = prepareViewers(root)
+		macPlan, err = prepareViewers(root)
 		if err != nil {
 			return err
 		}
@@ -258,7 +258,7 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 	defer server.Close()
 	url := fmt.Sprintf("http://127.0.0.1:%d%s", listener.Addr().(*net.TCPAddr).Port, path)
 	if args[0] == "shared" {
-		return shared(plans, arrivals, url, pipe.ID, pipe.Run, terminal.ID, command)
+		return shared(macPlan, arrivals, url, pipe.ID, pipe.Run, terminal.ID, command)
 	}
 	test := exec.Command(args[0], args[1:]...)
 	test.Stdout = os.Stdout

@@ -44,7 +44,7 @@ jobs:
         run: sudo xcode-select --switch /Applications/Xcode_27.2.app/Contents/Developer
       - run: command -v xcodegen || brew install xcodegen
       - name: Install the simulator input test tool
-        if: matrix.device != 'macOS' && matrix.device != 'shared'
+        if: matrix.device != 'macOS'
         run: |
           mkdir -p "$RUNNER_TEMP/simulator-hid"
           cd "$RUNNER_TEMP/simulator-hid"
@@ -65,21 +65,14 @@ jobs:
                | select(any(.value[]; .name == "iPhone 18 Pro") and any(.value[]; .name == "iPad Pro 11-inch (M5)"))
                | .key] | sort_by(split("-") | last | tonumber) | last // error("missing shared iOS runtime")')
           fi
-          boot_simulator() {
-            if ! xcrun simctl bootstatus "$1" -b; then
-              # These are disposable Actions devices. Recover from a failed first-boot migration.
-              xcrun simctl shutdown "$1" || true
-              xcrun simctl erase "$1" || return 1
-              xcrun simctl bootstatus "$1" -b
-            fi
-          }
           simulator() {
             local id
             id=$(xcrun simctl list devices available --json | jq -er --arg device "$1" --arg runtime "${shared_runtime:-}" '
               [.devices | to_entries[] | select(.key | contains("iOS-27-"))
-               | select($runtime == "" or .key == $runtime) | .value[] | select(.name == $device)][-1].udid // error("missing simulator")') || return 1
+               | select($runtime == "" or .key == $runtime)]
+              | sort_by(.key | split("iOS-")[1] | split("-") | map(tonumber))
+              | [.[].value[] | select(.name == $device)][-1].udid // error("missing simulator")') || return 1
             xcrun simctl rename "$id" "CLIStream CI $1" || return 1
-            if [[ "$DEVICE" != shared ]]; then boot_simulator "$id" >&2 || return 1; fi
             echo "$id"
           }
           case "$DEVICE" in
@@ -90,7 +83,7 @@ jobs:
               IPHONE_SIMULATOR_ID=$(simulator 'iPhone 18 Pro')
               IPAD_SIMULATOR_ID=$(simulator 'iPad Pro 11-inch (M5)')
               # Migrate the second participant before the first uses the runner's memory.
-              boot_simulator "$IPHONE_SIMULATOR_ID"
+              apple/boot-simulator.sh "$IPHONE_SIMULATOR_ID"
               if ! xcrun simctl shutdown "$IPHONE_SIMULATOR_ID"; then
                 xcrun simctl list devices --json | jq -e --arg id "$IPHONE_SIMULATOR_ID" '
                   any(.devices[][]; .udid == $id and .state == "Shutdown")' >/dev/null
