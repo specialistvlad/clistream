@@ -76,10 +76,11 @@ final class NativeSessionTests: XCTestCase {
     XCTAssertFalse(output("second-server-marker").exists)
     #if os(macOS)
       let endpoint = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_ENDPOINT"])
-      activate(app.descendants(matching: .any)["workspace-view-options"].firstMatch)
-      app.menuItems["Rename Server…"].firstMatch.hover()
-      activate(app.menuItems[endpoint].firstMatch)
-      let name = app.sheets.textFields.firstMatch
+      let server = app.descendants(matching: .any)["Server " + endpoint].firstMatch
+      XCTAssertTrue(server.waitForExistence(timeout: 12))
+      server.rightClick()
+      activate(app.menuItems["Rename…"].firstMatch)
+      let name = app.textFields["server-name-field"].firstMatch
       let alias = "Build server " + UUID().uuidString.prefix(8)
       activate(name)
       name.typeKey("a", modifierFlags: .command)

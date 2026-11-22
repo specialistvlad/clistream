@@ -14,7 +14,7 @@ Open the daemon’s invitation or paste it into Pair. Review the advertised serv
 
 ## Mac windows
 
-The Servers sidebar separates the broker from the computers running supervisors. Select a CLI to work in its terminal. Change the sidebar layout with View or open a CLI in its own tab or window through the row’s context menu. The terminal subtitle identifies its host and server. The status bar shows connection state and measured round-trip latency to the selected broker.
+The Servers sidebar separates the broker from the computers running supervisors. Select a CLI to work in its terminal. Change the sidebar layout with View or open a CLI in its own tab or window through the row’s context menu. Use the server row’s context menu to rename it, or choose a server under View → Rename Server. The terminal subtitle identifies its host and server. The status bar shows connection state and measured round-trip latency to the selected broker.
 
 ## Touch-only operation on iPhone and iPad
 

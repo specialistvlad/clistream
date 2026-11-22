@@ -11,6 +11,11 @@ struct WorkspaceSidebar: View {
   @State private var collapsed = Set<[String]>()
   @State private var renameTarget: ServerProfile?
   @State private var name = ""
+  private func rename(_ server: ServerProfile) {
+    name = server.name
+    renameTarget = server
+  }
+
   private func disclosure<C: View>(
     _ text: String, symbol: String?, path: [String], @ViewBuilder children: @escaping () -> C
   ) -> some View {
@@ -23,7 +28,12 @@ struct WorkspaceSidebar: View {
     ) {
       children()
     } label: {
-      if let symbol {
+      if symbol == "server.rack", let id = path.last,
+        let server = workspace.profiles.first(where: { $0.id == id }) {
+        Label(text, systemImage: "server.rack")
+          .accessibilityLabel("Server " + text)
+          .contextMenu { Button("Rename…") { rename(server) } }
+      } else if let symbol {
         Label(text, systemImage: symbol)
           .accessibilityLabel((symbol == "server.rack" ? "Server " : "Host ") + text)
       } else { Text(text) }
@@ -128,13 +138,22 @@ struct WorkspaceSidebar: View {
       #else
         .toolbar { ToolbarItemGroup(placement: .topBarTrailing) { sidebarControls } }
       #endif
-      .alert(
-        "Rename Server",
-        isPresented: Binding(get: { renameTarget != nil }, set: { if !$0 { renameTarget = nil } })
-      ) {
-        TextField("Name", text: $name)
-        Button("Save") { if let target = renameTarget { workspace.rename(target, to: name) } }
-        Button("Cancel", role: .cancel) {}
+      .sheet(item: $renameTarget) { target in
+        VStack(alignment: .leading, spacing: 12) {
+          Text("Rename Server").font(.headline)
+          TextField("Name", text: $name)
+            .accessibilityIdentifier("server-name-field")
+          HStack {
+            Spacer()
+            Button("Cancel") { renameTarget = nil }.keyboardShortcut(.cancelAction)
+            Button("Save") {
+              workspace.rename(target, to: name)
+              renameTarget = nil
+            }.keyboardShortcut(.defaultAction)
+              .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          }
+        }.padding().frame(minWidth: 280)
+          .presentationDetents([.medium])
       }
   }
   @ViewBuilder private var sidebarControls: some View {
@@ -142,10 +161,7 @@ struct WorkspaceSidebar: View {
     Menu("View", systemImage: "line.3.horizontal.decrease") {
       Menu("Rename Server…") {
         ForEach(workspace.profiles) { server in
-          Button(server.name) {
-            name = server.name
-            renameTarget = server
-          }
+          Button(server.name) { rename(server) }
         }
       }
       Picker("Layout", selection: $flat) {
