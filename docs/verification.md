@@ -4,6 +4,36 @@ The acceptance suites launch the compiled daemon, supervisor and client with tem
 
 The audit maps requirements to existing checks and identifies pending coverage. [Requirements audit](test-results/requirements-audit.md) · [Case-by-case execution evidence](test-results/requirements-audit.json)
 
+## Release review · November 21, 2026
+
+Ubuntu 26.04 reproduced the privacy fixture failure when its multicall `cat` rejected a renamed executable. The fixture now launches a privately named shell wrapper. A regression test uses a long hostname and verifies the terminal still shows the child's exit status. The Apple CI matrix uses GitHub's `xcode-27` runner with Xcode 27.2 and boots the selected simulator before launching XCTest.
+
+The packaged-client run exposed a race while switching pipe sessions. The client now cancels the other streams on the first receive error and waits for their callbacks before returning. The multi-host deployment fixture runs its containers as the owner of the bind-mounted workspaces with all capabilities dropped.
+
+The shared-viewer harness builds one test plan per SDK before starting the simulators and timing the four-client exchange. A local run passed on all four participants. The result reporter includes source filenames and line numbers for XCTest failures so a hosted failure can be traced without publishing invitations or console contents.
+
+## Multi-server workspace · November 21, 2026
+
+On macOS and Debian Linux arm64, race-enabled Go tests, vet and end-to-end tests passed. The Mac UI paired two separate brokers publishing the same program, entered markers into each terminal, stopped the second broker and exchanged more input with the first child. The Mac UI and app-hosted suites also verified adoption and re-pairing of an existing enrollment with the original key, all six tree/list grouping combinations, live Light/Dark changes, native tabs and windows, draft retention and connection latency. A desktop rerun verified renaming a server, relaunching, and reconnecting to the correct child. One overlapping run timed out while XCTest synthesized typing on the Mac during the Duo’s Device Hub automation. The isolated rerun passed.
+
+The iPhone 18 Pro and iPad Pro simulators each passed all 19 required cases in one run, including two-server routing, accessibility, expired invitations, terminal input and scrollback, and TCP and UDP forwarding. The optional external Claude and Codex driver case was skipped on both devices.
+
+The Duo simulator passed 18 required cases in its full run and both remaining cases in focused reruns. Device Hub folded the attached terminal through Closed, Partially Open, Open and back to Closed. The focused checks verified switching back to a live server after a different broker went offline and copying a wrapped two-word selection at large text size by dragging the native selection handle. Physical-device verification and sessions with external Claude and Codex drivers remain outstanding.
+
+A Mac, iPhone, iPad and an independent Go CLI exchanged markers in one pipe. The Mac switched to a PTY and then to a child on a second server. The phone sent input to the original pipe while the Mac was on the second server. The iPad, Go CLI and returning Mac all observed the original child’s reply. A separate Duo UI run paired to a Linux daemon and verified terminal input and both TCP and UDP forwarding.
+
+## Native client parity · November 20, 2026
+
+The race-enabled Go packages, vet and end-to-end suite passed on macOS and Debian Linux arm64. The deployment suite and compatibility checks against both previous releases passed on macOS.
+
+The iPhone 18 Pro and iPad Pro UI suites exercised reusable and expired invitations, real pipe and PTY children, EOF and retained results, command edits with an empty argument, stop/start/restart, and TCP and UDP forwarding. VoiceOver focus navigation passed on both devices. Each full run passed fourteen tests and skipped the optional external model drivers. Both remaining cases passed on each device in focused Xcode 27.2 runs. The fresh iPad simulator captured hardware Control-D, PTY resize and pointer events after rotation. The touch tests copied, expanded and pasted a selection and ran the accessibility audit. A separate iPhone run revoked the enrolled viewer and recovered through a fresh pairing invitation.
+
+The final native macOS suite passed all thirteen required cases in one run, including four app-hosted cases. The optional external model-driver case was skipped. The desktop UI tests verified manual and link pairing, the read-only preview, hiding and showing the sidebar, Return and double-click tab reuse with a retained draft, command editing and restart, stop/start, EOF and retained output, revocation recovery, forwarding and PTY input.
+
+The shared run passed on all three UI runners and the independent Go CLI. All four exchanged markers through one pipe. The Mac then switched to a PTY and sent Control-C while the phone typed into the original pipe. The iPad, Go CLI and returning Mac saw the phone’s output.
+
+The Duo simulator passed individual pairing, lifecycle, forwarding and input checks. A separate Duo run paired to a Linux daemon and supervisor and exchanged pipe input and forwarded TCP and UDP traffic. On a fresh Duo simulator, Device Hub changed the pose from Closed through Partially Open and Open, then back to Closed. The terminal resized and the child echoed a distinct control byte at each pose on the same attachment. Focused Duo UI runs also passed touch selection, paste and accessibility, and verified that opening the device changed the child PTY grid while preserving pointer input. These focused runs cover the three cases that failed in the initial Duo suite. Physical devices have not been verified.
+
 ## README walkthrough and animated demo
 
 On macOS and Debian Linux arm64, `make test e2e` passed. `TestTwoViewersSwitchIndependently` used two Go clients and two supervised CLI apps. Both clients saw `18 passed` and `19 passed`. After one switched back and typed `TODO` into the editor, the other received `20 passed` from the watcher. The cross-host deployment suite also passed.
@@ -130,7 +160,7 @@ The hosted Go jobs passed on Ubuntu and macOS for the same commit. The four Appl
 | iPhone 17 Pro and iPad mini simulators, iOS 26.4.1 | XCTest opened a link decoded from the daemon’s QR code, checked the displayed server address, canceled, pasted the same link and paired. Reusing the link failed. A separate test waited out the full three-minute lifetime before attempting enrollment with an unused link. |
 | Native macOS | App-hosted XCTest exercised the Go bridge and device enrollment against a running daemon. |
 
-Run `make test e2e` for current Go and CLI checks and `make test-deployment` for Linux. To reproduce the v1 mobile checks, check out the v1 pairing revision (`a633846`). For each mobile form factor, run `make apple` and then `SIMULATOR_ID="$DEVICE_ID" CLISTREAM_TEST_SUITES="pairing pairing-expiry" apple/test-device.sh iOS`. Use `CLISTREAM_TEST_SUITES=hosted apple/test-device.sh macOS` for the native Mac checks.
+Run `make test e2e` for current Go and CLI checks and `make test-deployment` for Linux. To reproduce the v1 mobile checks, check out the v1 pairing revision (`a633846`). For each mobile form factor on that revision, run `make apple` and then `SIMULATOR_ID="$DEVICE_ID" CLISTREAM_TEST_SUITES="pairing pairing-expiry" apple/test-device.sh iOS`. Use `CLISTREAM_TEST_SUITES=hosted apple/test-device.sh macOS` for the native Mac checks.
 
 Opening a custom link directly on a simulator exercises the app’s URL handler. Tapping a message containing that link and scanning with a physical camera still require a device with the updated app installed.
 
@@ -169,7 +199,7 @@ All four distribution archives passed SHA-256 verification and contained a byte-
 
 The iPhone 17 Pro and iPad mini (A17 Pro) simulators ran OS 26.4.1. Each passed all six Apple tests. The native macOS 27.2 application also passed all six. All three suites enabled both installed model CLIs. Xcode 27.1 recorded the device, case name, duration and outcome for each run. [Machine-readable test results](test-results/acceptance.json)
 
-In a separate concurrent run, all three Apple apps and a fourth, command-line client attached to one supervised process. The CLI waited for input from all three Apple clients before sending its own line. Each Apple client checked all four lines on both output channels before detaching. The CLI and the supervisor checked the same bytes locally. [Concurrent test suite](../apple/test-shared.py)
+In a separate concurrent run, all three Apple apps and a fourth, command-line client attached to one supervised process. The CLI waited for input from all three Apple clients before sending its own line. Each Apple client checked all four lines on both output channels before detaching. The CLI and the supervisor checked the same bytes locally. Concurrent test suite at that revision
 
 A fresh Go vulnerability scan reported zero reachable known vulnerabilities. The scanner listed eleven advisories in modules in the dependency graph. Earlier interactive startup checks also captured the PTY screens of both supported CLI executables.
 
@@ -201,25 +231,21 @@ make dist test-dist
 
 Set `CLISTREAM_LEGACY_BIN` and `CLISTREAM_MANAGED_V1_BIN` to binary directories built from `bd2d7ab` and `50cbcaa` to run `make test-compatibility`. Run `make test-deployment` with Docker for the four-container test and, on macOS, the native CLI to Linux supervisor check.
 
-For iPhone and iPad UI checks, put AXe 2.1.1 on the test host’s PATH. The fixture taps a document row in the system Files picker and long-presses the rendered output through simulator touch input. CI verifies the release archive hash. The fixture sends USB keyboard usages for left Control and D to the designated simulator. The child must receive byte 0x04. [AXe simulator test tool](https://github.com/cameroncooke/AXe/releases/tag/v2.1.1)
-
-On a Mac with Xcode, XcodeGen, Go and Python 3.10 or later, generate the project, list simulator IDs and run the suites. Setting `CLISTREAM_APP_DRIVERS=1` enables both installed CLI drivers in each Apple app. With that flag unset, the terminal, filesystem, forwarding and UI suites run independently of provider accounts.
+On macOS with Xcode 27.1 or later, XcodeGen and Go installed, build the native apps and run the UI suites against private test peers.
 
 ```sh
 make apple
 xcrun simctl list devices available
-CLISTREAM_APP_DRIVERS=1 SIMULATOR_ID="$IPHONE_SIMULATOR_ID" apple/test-device.sh
-CLISTREAM_APP_DRIVERS=1 SIMULATOR_ID="$IPAD_SIMULATOR_ID" apple/test-device.sh
-CLISTREAM_APP_DRIVERS=1 apple/test-device.sh macOS
-IPHONE_SIMULATOR_ID="$IPHONE_SIMULATOR_ID" IPAD_SIMULATOR_ID="$IPAD_SIMULATOR_ID" python3 apple/test-shared.py
+SIMULATOR_ID="$IPHONE_SIMULATOR_ID" apple/test-native.sh
+SIMULATOR_ID="$IPAD_SIMULATOR_ID" apple/test-native.sh
+SIMULATOR_ID="$DUO_SIMULATOR_ID" apple/test-native.sh
+SIMULATOR_ID="$DUO_SIMULATOR_ID" apple/test-linux-host.sh
+apple/test-native.sh macOS
+IPHONE_SIMULATOR_ID="$IPHONE_SIMULATOR_ID" IPAD_SIMULATOR_ID="$IPAD_SIMULATOR_ID" go run ./scripts/apple-ui shared
 ```
 
-GitHub Actions selects the iPhone 17 Pro and 13-inch iPad Pro (M5) on the iOS 26.4 runtime for the device UI suites. The simultaneous-client job uses the iPhone and iPad mini (A17 Pro) to reduce the graphics memory required by two live simulators.
-
-The terminal fixture reads the grid size from the child PTY before and after a resize. The hosted detach case checks that the child receives the final queued input. The transfer fixture compares files on the supervisor after native picker operations.
-
-The device suite prints its result directory under `apple/build/results-*`. Each scenario has its own XCTest bundle. The simultaneous-client harness launches a test-only build of the app on both simulators. Each mobile app writes to the same session and records the stdout and stderr received by its view model. The harness checks all four writers on both channels and saves one JSON report per mobile device alongside the Mac XCTest bundle under `apple/build/shared-*`. Open the bundle with Xcode or run `xcrun xcresulttool get test-results tests --path PATH.xcresult` for the individual outcomes.
+When several versions of Xcode are installed, export `DEVELOPER_DIR` for the intended installation before building and testing. A mismatch between the running CoreSimulator service and XCTest can prevent simulator apps from launching. Each device test prints its result bundle path. Open it in Xcode for screenshots and XCTest diagnostics. The Go reporter extracts case names, durations, and results. The shared runner uses the production app UI on three devices with a separate Go CLI viewer. It builds both test plans and boots the simulators before starting the Go peers. CI selects an iPhone and iPad on the same runtime, completes first-boot migration on each separately, and retains a separate XCTest report for each Device Hub fold operation. The shared run requires an unlocked, automation-enabled Mac desktop.
 
 ## Distribution
 
-The signed iOS and universal macOS archives for build `2611200557` passed `codesign --verify --deep --strict`. The license resource in each app was byte-for-byte identical to the repository MIT license. The two earlier TestFlight upload attempts reached App Store Connect and returned HTTP 403 with `FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`. TestFlight installation remains unverified. The Account Holder can review pending terms in the Apple Developer account and App Store Connect. [Apple agreement guidance](https://developer.apple.com/help/app-store-connect/manage-agreements/sign-and-update-agreements/)
+The signed iOS and universal macOS archives for build `2611200557` passed `codesign --verify --deep --strict`. The license resource in each app was byte-for-byte identical to the repository MIT license. The two earlier TestFlight upload attempts reached App Store Connect and returned HTTP 403 with `FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`. Subsequent iOS build `2611200610` entered internal beta testing. App Store Connect processed macOS build `2611200642` and requested export compliance information. A tester installation on physical hardware remains unverified. [Apple agreement guidance](https://developer.apple.com/help/app-store-connect/manage-agreements/sign-and-update-agreements/)

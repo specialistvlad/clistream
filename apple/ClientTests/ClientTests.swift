@@ -19,6 +19,20 @@ final class ClientTests: XCTestCase {
     return dir.path
   }
 
+  @MainActor func testAdoptsExistingEnrollment() async throws {
+    let dir = try await profile("PIPE")
+    let workspace = Workspace(directory: dir)
+    let key = URL(fileURLWithPath: dir).appendingPathComponent("key.pem")
+    let original = try Data(contentsOf: key)
+    workspace.load()
+    workspace.load()
+    XCTAssertEqual(workspace.profiles.map(\.directory), [dir])
+    let link = try await fixtureResponse("PIPE")
+    await workspace.enroll(link)
+    XCTAssertEqual(workspace.profiles.map(\.directory), [dir])
+    XCTAssertEqual(try Data(contentsOf: key), original)
+  }
+
   func session(_ key: String = "SESSION") throws -> String {
     try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_" + key])
   }
@@ -31,43 +45,17 @@ final class ClientTests: XCTestCase {
     return reply
   }
 
-  func testWorkspaceTransfers() async throws {
-    let dir = try await profile("FILES")
-    let id = try session()
-    let path = "inbox/apple.bin"
-    let local = URL(fileURLWithPath: dir).appendingPathComponent("source")
-    let download = URL(fileURLWithPath: dir).appendingPathComponent("download")
-    let bytes = Data((0..<240019).map { UInt8(truncatingIfNeeded: $0) })
-    try bytes.write(to: local)
-    let put: [String: Any] = ["ID": id, "Dir": dir, "Path": path, "Local": local.path]
-    _ = try await request("put", put)
-    let duplicate = await Core.request(put.merging(["Op": "put"]) { _, new in new })
-    XCTAssertNotNil(duplicate.Error)
-    let listing = try await request("ls", ["ID": id, "Dir": dir, "Path": "inbox"])
-    XCTAssertEqual(
-      listing.Entries?.first(where: { $0.Name == "apple.bin" })?.Size, Int64(bytes.count))
-    for escaped in ["../outside", "escape/outside"] {
-      let bad = await Core.request([
-        "Op": "get", "ID": id, "Dir": dir, "Path": escaped, "Local": download.path,
-      ])
-      XCTAssertNotNil(bad.Error)
-      XCTAssertFalse(FileManager.default.fileExists(atPath: download.path))
-    }
-    _ = try await request("get", ["ID": id, "Dir": dir, "Path": path, "Local": download.path])
-    XCTAssertEqual(try Data(contentsOf: download), bytes)
-  }
-
   func testCLISpecificDrivers() async throws {
     let env = ProcessInfo.processInfo.environment
     try XCTSkipIf(
       env["CLISTREAM_CLAUDE_SESSION"] == nil,
-      "Run with CLISTREAM_APP_DRIVERS=1 to start both installed model CLIs.")
+      "External Claude and Codex test sessions were not supplied.")
     let dir = try await profile("DRIVERS")
     let list = try await request("list", ["Dir": dir])
     for name in ["claude", "codex"] {
       let id = try session(name.uppercased() + "_SESSION")
       let item = try XCTUnwrap(list.Sessions?.first { $0.id == id })
-      XCTAssertEqual(item.Driver, name)
+      XCTAssertTrue(item.Name.contains(name))
       let open = try await request("attach", ["Dir": dir, "ID": id])
       let key = try XCTUnwrap(open.Handle)
       defer { _ = Core.call(["Op": "close", "Handle": key]) }
@@ -116,7 +104,7 @@ final class ClientTests: XCTestCase {
 
   func testPortForwarding() async throws {
     let dir = try await profile("PORTS")
-    let id = try session()
+    let id = try session("PIPE_RUN")
     let list = try await request("list", ["Dir": dir])
     let item = try XCTUnwrap(list.Sessions?.first { $0.id == id })
     XCTAssertEqual(item.Ports, ["tcp": "tcp", "udp": "udp"])
@@ -129,50 +117,16 @@ final class ClientTests: XCTestCase {
     }
   }
 
-  private func exchange(port: UInt16, datagram: Bool) throws {
-    let sock = Darwin.socket(AF_INET, datagram ? SOCK_DGRAM : SOCK_STREAM, 0)
-    guard sock >= 0 else { throw POSIXError(.ENOTSOCK) }
-    defer { Darwin.close(sock) }
-    var timeout = timeval(tv_sec: 6, tv_usec: 0)
-    for option in [SO_RCVTIMEO, SO_SNDTIMEO] {
-      XCTAssertEqual(
-        setsockopt(
-          sock, SOL_SOCKET, option, &timeout, socklen_t(MemoryLayout.size(ofValue: timeout))), 0)
-    }
-    var address = sockaddr_in()
-    address.sin_family = sa_family_t(AF_INET)
-    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
-    address.sin_addr.s_addr = inet_addr("127.0.0.1")
-    address.sin_port = port.bigEndian
-    let connected = withUnsafePointer(to: &address) { ptr in
-      ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-        Darwin.connect(sock, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
-      }
-    }
-    XCTAssertEqual(connected, 0)
-    let payload = Array((0..<1300).map { UInt8(truncatingIfNeeded: $0) })
-    XCTAssertEqual(
-      payload.withUnsafeBytes { send(sock, $0.baseAddress, $0.count, 0) }, payload.count)
-    if !datagram { XCTAssertEqual(shutdown(sock, SHUT_WR), 0) }
-    var received = [UInt8]()
-    var buffer = [UInt8](repeating: 0, count: 4096)
-    repeat {
-      let n = buffer.withUnsafeMutableBytes { recv(sock, $0.baseAddress, $0.count, 0) }
-      guard n > 0 else { break }
-      received.append(contentsOf: buffer.prefix(n))
-    } while !datagram && received.count < payload.count
-    XCTAssertEqual(received, Array(payload.reversed()))
-  }
-
   func testSharedPipe() async throws {
     let dir = try await profile("PIPE")
-    let r = try await request("attach", ["ID": try session(), "Dir": dir])
+    let r = try await request("attach", ["ID": try session("PIPE_RUN"), "Dir": dir])
     let key = try XCTUnwrap(r.Handle)
     defer { _ = Core.call(["Op": "close", "Handle": key]) }
     let participant = ProcessInfo.processInfo.environment["CLISTREAM_PARTICIPANT"] ?? "apple"
     let names = participant == "apple" ? ["apple"] : ["iphone", "ipad", "mac", "cli"]
     func send(_ line: String) async throws {
-      _ = try await request("input", ["Handle": key, "Data": Data((line + "\n").utf8).base64EncodedString()])
+      _ = try await request(
+        "input", ["Handle": key, "Data": Data((line + "\n").utf8).base64EncodedString()])
     }
     var sent = names.count == 1
     try await send(sent ? "hosted-\(participant)-echo" : "ready-\(participant)")
@@ -192,7 +146,8 @@ final class ClientTests: XCTestCase {
           && channels["stderr"]?.range(of: stderr) != nil
       }
     }
-    if let expected = ProcessInfo.processInfo.environment["CLISTREAM_EXPECT_EXIT"].flatMap(Int.init) {
+    if let expected = ProcessInfo.processInfo.environment["CLISTREAM_EXPECT_EXIT"].flatMap(Int.init)
+    {
       try await send("verified-\(participant)")
       try await consume(key, seconds: 90) { event in
         guard let code = event.Exit else { return false }
@@ -211,9 +166,12 @@ final class ClientTests: XCTestCase {
     let id = try session()
     let item = try XCTUnwrap(model.sessions.first { $0.id == id })
     let reader = Task { await model.attach(item) }
-    defer { model.leave(); reader.cancel() }
+    defer {
+      model.leave()
+      reader.cancel()
+    }
     try await waitUntil { model.selected?.id == id }
-    model.send(["Op": "input", "Data": Data("before-detach\n".utf8).base64EncodedString()])
+    model.send(.bytes(Data("before-detach\n".utf8)))
     model.leave()
     let result = try await fixtureResponse("FLUSHED")
     XCTAssertEqual(result, "received")
@@ -257,7 +215,9 @@ final class ClientTests: XCTestCase {
   }
 
   /// Closing a handle unblocks a pending "next", including on a failed assertion.
-  private func consume(_ key: String, seconds: Int = 12, until complete: (Reply) async throws -> Bool)
+  private func consume(
+    _ key: String, seconds: Int = 12, until complete: (Reply) async throws -> Bool
+  )
     async throws
   {
     let timer = Task {

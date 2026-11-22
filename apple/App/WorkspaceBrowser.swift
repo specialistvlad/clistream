@@ -1,309 +1,225 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
-struct Download: Transferable {
-  let url: URL
-  static var transferRepresentation: some TransferRepresentation {
-    FileRepresentation(exportedContentType: .data) { file in SentTransferredFile(file.url) }
-      .suggestedFileName { $0.url.lastPathComponent }
-  }
-}
-
-struct WorkspaceLocation {
-  var path = [String]()
-  var selections = [String: String]()
-  var folder: String { path.last ?? "." }
-}
-
-struct WorkspaceBrowser: View {
-  @ObservedObject var connection: Connection
-  let session: SessionInfo
-  @Environment(\.dismiss) private var dismiss
-  @Environment(\.colorSchemeContrast) private var contrast
-  @Binding var location: WorkspaceLocation
-  @State private var listings = [String: [WorkspaceEntry]]()
-  private var entries: [WorkspaceEntry] { listings[location.folder] ?? [] }
-  @State private var message = ""
-  @State private var importer = false
-  @State private var exporter = false
-  @State private var download: Download?
-  @State private var active = false
-  private func child(_ name: String) -> String {
-    location.folder == "." ? name : location.folder + "/" + name
+struct WorkspaceSidebar: View {
+  @ObservedObject var workspace: Workspace
+  let selected: String?
+  let activate: (WorkspaceSession) -> Void
+  var openElsewhere: ((WorkspaceSession, Bool) -> Void)?
+  @Binding var pairing: Pairing?
+  @AppStorage("workspace-list") private var flat = false
+  @AppStorage("workspace-group") private var grouping = "Server"
+  @State private var collapsed = Set<[String]>()
+  @State private var renameTarget: ServerProfile?
+  @State private var name = ""
+  private func rename(_ server: ServerProfile) {
+    name = server.name
+    renameTarget = server
   }
 
+  private func disclosure<C: View>(
+    _ text: String, symbol: String?, path: [String], @ViewBuilder children: @escaping () -> C
+  ) -> some View {
+    DisclosureGroup(
+      isExpanded: Binding(
+        get: { !collapsed.contains(path) },
+        set: {
+          if $0 { collapsed.remove(path) } else { collapsed.insert(path) }
+        })
+    ) {
+      children()
+    } label: {
+      if symbol == "server.rack", let id = path.last,
+        let server = workspace.profiles.first(where: { $0.id == id }) {
+        Label(text, systemImage: "server.rack")
+          .accessibilityLabel("Server " + text)
+          .contextMenu { Button("Rename…") { rename(server) } }
+      } else if let symbol {
+        Label(text, systemImage: symbol)
+          .accessibilityLabel((symbol == "server.rack" ? "Server " : "Host ") + text)
+      } else { Text(text) }
+    }
+  }
+  private func leaf(_ row: WorkspaceSession, title: String, detail: String = "") -> some View {
+    let duplicate =
+      workspace.rows[row.server.id]?.filter { $0.Name == row.item.Name && $0.Host == row.item.Host }
+      .count ?? 0
+    return Button {
+      activate(row)
+    } label: {
+      VStack(alignment: .leading) {
+        Text(title + (duplicate > 1 ? " · " + row.item.id.prefix(8) : ""))
+        if !detail.isEmpty { Text(detail).font(.caption).foregroundStyle(.secondary) }
+      }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+    }.buttonStyle(.plain)
+      .accessibilityAddTraits(selected == row.id ? [.isSelected] : [])
+      .accessibilityIdentifier("session-" + row.item.id)
+      .listRowBackground(selected == row.id ? Color.accentColor.opacity(0.23) : Color.clear)
+      .contextMenu {
+        if let openElsewhere {
+          Button("Open in New Tab") { openElsewhere(row, true) }
+          Button("Open in New Window") { openElsewhere(row, false) }
+        }
+      }
+  }
+  @ViewBuilder private func group(
+    _ text: String, symbol: String?, path: [String], @ViewBuilder content: @escaping () -> some View
+  ) -> some View {
+    if flat {
+      Section(text) { content() }
+    } else {
+      disclosure(text, symbol: symbol, path: path, children: content)
+    }
+  }
   var body: some View {
-    observedNavigation
-      #if os(iOS)
-        .sheet(isPresented: $importer) {
-          UploadPicker { source in
-            importer = false
-            if let source {
-              Task {
-                await put(source)
-                // Import mode returns a temporary copy owned by this app.
-                try? FileManager.default.removeItem(at: source)
-              }
-            }
-          }
-        }
-      #else
-        .fileImporter(isPresented: $importer, allowedContentTypes: [.data], onCompletion: imported)
-      #endif
-      .fileExporter(
-        isPresented: $exporter, item: download, contentTypes: [.data],
-        defaultFilename: download?.url.lastPathComponent,
-        onCompletion: exported, onCancellation: cleanDownload)
-  }
-
-  private func imported(_ result: Result<URL, Error>) {
-    switch result {
-    case .success(let url): Task { await put(url) }
-    case .failure(let error as CocoaError) where error.code == .userCancelled: break
-    case .failure(let error): message = error.localizedDescription
-    }
-  }
-
-  private func exported(_ result: Result<URL, Error>) {
-    switch result {
-    case .success(let url): message = "Downloaded " + url.lastPathComponent
-    case .failure(let error): message = error.localizedDescription
-    }
-    cleanDownload()
-  }
-
-  @ViewBuilder private var navigation: some View {
-    #if os(macOS)
-      NavigationStack { contents(folder: location.folder) }.frame(minWidth: 520, minHeight: 340)
-    #else
-      NavigationStack(path: $location.path) {
-        contents(folder: ".").navigationDestination(for: String.self) { folder in
-          contents(folder: folder)
-        }
+    List {
+      if workspace.profiles.isEmpty {
+        Text("Add a server to see its CLI apps.").foregroundStyle(.secondary)
       }
-    #endif
-  }
-
-  private var observedNavigation: some View {
-    navigation
-      .interactiveDismissDisabled(active)
-      .onChange(of: location.path) { old, path in
-        if path.count > old.count, let child = path.last {
-          location.selections[old.last ?? "."] = URL(fileURLWithPath: child).lastPathComponent
-        }
-      }
-      .onChange(of: location.folder) { _, folder in
-        AccessibilityNotification.Announcement(folder == "." ? session.Name + " Files" : folder)
-          .post()
-      }
-      .onChange(of: message) { _, text in
-        if !text.isEmpty { AccessibilityNotification.Announcement(text).post() }
-      }
-      .task(id: location.folder) { await refreshFolder() }
-  }
-
-  private func refreshFolder() async {
-    let folder = location.folder
-    listings = listings.filter { $0.key == "." || location.path.contains($0.key) }
-    message = ""
-    while !Task.isCancelled {
-      let r = await connection.workspace(["Op": "ls", "Path": folder], session: session)
-      guard !Task.isCancelled, location.folder == folder else { return }
-      if let error = r.Error {
-        message = error
-        return
-      }
-      let updated = (r.Entries ?? []).sorted {
-        $0.Name.localizedStandardCompare($1.Name) == .orderedAscending
-      }
-      if listings[folder] != updated { listings[folder] = updated }
-      do { try await Task.sleep(for: .seconds(2)) } catch { return }
-    }
-  }
-
-  private func contents(folder: String) -> some View {
-    let entries = listings[folder] ?? []
-    return VStack(alignment: .leading) {
-      #if os(macOS)
-        Table(
-          entries,
-          selection: Binding(
-            get: { location.selections[folder] },
-            set: { location.selections[folder] = $0 })
-        ) {
-          TableColumn("Name") { entry in
-            Label(entry.Name, systemImage: entry.Directory ? "folder" : "doc")
-          }
-          TableColumn("Size") { entry in
-            if !entry.Directory { Text(entry.Size.formatted(.byteCount(style: .file))) }
-          }
-          TableColumn("Modified") { entry in
-            Text(
-              Date(timeIntervalSince1970: Double(entry.Modified) / 1e9).formatted(
-                date: .abbreviated, time: .shortened))
-          }
-        }
-        .contextMenu(forSelectionType: String.self) { names in
-          if let name = names.first { Button("Open") { open(name) } }
-        } primaryAction: { names in
-          if let name = names.first { open(name) }
-        }
-      #else
-        List(entries) { entry in
-          if entry.Directory {
-            NavigationLink(value: folder == "." ? entry.Name : folder + "/" + entry.Name) {
-              Label(entry.Name, systemImage: "folder")
-            }.accessibilityIdentifier("entry-" + entry.Name)
-              .accessibilityAddTraits(location.selections[folder] == entry.Name ? .isSelected : [])
-          } else {
-            let size = entry.Size.formatted(.byteCount(style: .file))
-            Button {
-              open(entry.Name)
-            } label: {
+      if grouping == "Server" {
+        ForEach(workspace.profiles) { server in
+          let rows = workspace.sessions.filter { $0.server.id == server.id }
+          group(server.name, symbol: "server.rack", path: [server.id]) {
+            if let error = workspace.errors[server.id], !error.isEmpty {
               HStack {
-                Label(entry.Name, systemImage: "doc")
-                Spacer()
-                Text(size)
-                  .foregroundStyle(contrast == .increased ? Color.primary : Color.secondary)
-              }
-              .contentShape(Rectangle())
-              .accessibilityElement(children: .ignore)
-              .accessibilityLabel(Text(entry.Name))
-              .accessibilityValue(Text(size))
+                Text("Offline").font(.body).foregroundStyle(.secondary)
+                  .fixedSize(horizontal: false, vertical: true)
+                Button { workspace.retry(server) } label: {
+                  Text("Retry").font(.body).fixedSize(horizontal: false, vertical: true)
+                }
+              }.help(error)
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("entry-" + entry.Name)
-            .accessibilityAddTraits(location.selections[folder] == entry.Name ? .isSelected : [])
+            if flat {
+              ForEach(rows) { leaf($0, title: $0.item.Name, detail: $0.item.Host) }
+            } else {
+              ForEach(Set(rows.map { $0.item.Host }).sorted(), id: \.self) { host in
+                disclosure(host, symbol: "desktopcomputer", path: [server.id, host]) {
+                  ForEach(rows.filter { $0.item.Host == host }) { leaf($0, title: $0.item.Name) }
+                }
+              }
+            }
           }
-        }.disabled(active)
-      #endif
-      if active { ProgressView("Transferring file") }
-      if !message.isEmpty {
-        Text(message).font(.caption).textSelection(.enabled).padding(.horizontal)
-      }
-      #if os(iOS)
-        // Keep the actions in the active navigation page so VoiceOver can
-        // advance from its last file row to Upload and Done on compact screens.
-        HStack {
-          transferActions
-        }.font(.body).buttonStyle(.plain).foregroundStyle(Color(uiColor: .label))
-          .padding(.horizontal).frame(maxWidth: .infinity)
-          .background(Color(uiColor: .systemBackground))
-          .overlay(alignment: .top) { Divider() }
-      #endif
-    }
-    .navigationTitle(
-      folder == "." ? session.Name + " Files" : URL(fileURLWithPath: folder).lastPathComponent
-    )
-    #if os(iOS)
-      .toolbarBackground(Color(uiColor: .systemBackground), for: .navigationBar)
-      .toolbarBackground(.visible, for: .navigationBar)
-    #endif
-    #if os(macOS)
-      .toolbar {
-        Button("Up") { location.path.removeLast() }.keyboardShortcut(.upArrow, modifiers: .command)
-        .disabled(location.path.isEmpty || active)
-        if let name = location.selections[folder],
-          let entry = entries.first(where: { $0.Name == name })
-        {
-          Button(entry.Directory ? "Open" : "Download") { open(name) }.keyboardShortcut("o")
         }
-        transferActions
+      } else {
+        let byHost = grouping == "Host"
+        let groups = Dictionary(grouping: workspace.sessions) {
+          byHost ? $0.item.Host : $0.item.Name
+        }
+        ForEach(groups.keys.sorted(), id: \.self) { key in
+          let rows = groups[key] ?? []
+          group(key, symbol: byHost ? "desktopcomputer" : nil, path: [grouping, key]) {
+            ForEach(
+              workspace.profiles.filter { profile in rows.contains { $0.server.id == profile.id } }
+            ) { server in
+              let matches = rows.filter { $0.server.id == server.id }
+              if flat {
+                ForEach(matches) {
+                  leaf($0, title: byHost ? $0.item.Name : $0.item.Host, detail: server.name)
+                }
+              } else {
+                disclosure(server.name, symbol: "server.rack", path: [grouping, key, server.id]) {
+                  ForEach(matches) { leaf($0, title: byHost ? $0.item.Name : $0.item.Host) }
+                }
+              }
+            }
+          }
+        }
       }
-    #endif
-  }
-
-  @ViewBuilder private var transferActions: some View {
-    #if os(iOS)
-      Button {
-        importer = true
-      } label: {
-        Text("Upload").padding(.horizontal).frame(minHeight: 44)
+    }.listStyle(.sidebar).navigationTitle("Servers")
+      #if os(macOS)
+        .onChange(of: grouping) { _, _ in workspace.focus(selected) }
+        .onChange(of: flat) { _, _ in workspace.focus(selected) }
+        .safeAreaInset(edge: .top, spacing: 0) {
+          HStack {
+            Text("Servers").font(.headline)
+            Spacer()
+            sidebarControls
+          }.labelStyle(.iconOnly).padding(.horizontal, 12).padding(.vertical, 6)
+        }
+      #else
+        .toolbar { ToolbarItemGroup(placement: .topBarTrailing) { sidebarControls } }
+      #endif
+      .sheet(item: $renameTarget) { target in
+        VStack(alignment: .leading, spacing: 12) {
+          Text("Rename Server").font(.headline)
+          TextField("Name", text: $name)
+            .accessibilityIdentifier("server-name-field")
+          HStack {
+            Spacer()
+            Button("Cancel") { renameTarget = nil }.keyboardShortcut(.cancelAction)
+            Button("Save") {
+              workspace.rename(target, to: name)
+              renameTarget = nil
+            }.keyboardShortcut(.defaultAction)
+              .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          }
+        }.padding().frame(minWidth: 280)
+          .presentationDetents([.medium])
       }
-      .disabled(active)
-      Spacer()
-      Button {
-        dismiss()
-      } label: {
-        Text("Done").padding(.horizontal).frame(minHeight: 44)
+  }
+  @ViewBuilder private var sidebarControls: some View {
+    Button("Add Server", systemImage: "plus") { pairing = Pairing() }.keyboardShortcut("k")
+    Menu("View", systemImage: "line.3.horizontal.decrease") {
+      Menu("Rename Server…") {
+        ForEach(workspace.profiles) { server in
+          Button(server.name) { rename(server) }
+        }
       }
-      .keyboardShortcut(.cancelAction).disabled(active)
-    #else
-      Button("Upload") { importer = true }.disabled(active)
-      Button("Done") { dismiss() }.keyboardShortcut(.cancelAction).disabled(active)
-    #endif
-  }
-
-  private func open(_ name: String) {
-    guard !active, let entry = entries.first(where: { $0.Name == name }) else { return }
-    location.selections[location.folder] = name
-    if entry.Directory { location.path.append(child(name)) } else { Task { await get(entry) } }
-  }
-
-  func cleanDownload() {
-    if let download {
-      try? FileManager.default.removeItem(at: download.url.deletingLastPathComponent())
-    }
-    download = nil
-  }
-
-  func get(_ entry: WorkspaceEntry) async {
-    guard entry.Name == URL(fileURLWithPath: entry.Name).lastPathComponent, entry.Name != ".",
-      entry.Name != ".."
-    else { return }
-    active = true
-    defer { active = false }
-    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    do {
-      try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-      let file = dir.appendingPathComponent(entry.Name)
-      let r = await connection.workspace(
-        ["Op": "get", "Path": child(entry.Name), "Local": file.path], session: session)
-      if let error = r.Error {
-        message = error
-        try? FileManager.default.removeItem(at: dir)
-        return
-      }
-      download = Download(url: file)
-      exporter = true
-    } catch { message = error.localizedDescription }
-  }
-
-  func put(_ url: URL) async {
-    active = true
-    defer { active = false }
-    let destination = child(url.lastPathComponent)
-    let access = url.startAccessingSecurityScopedResource()
-    defer { if access { url.stopAccessingSecurityScopedResource() } }
-    let r = await connection.workspace(
-      ["Op": "put", "Path": destination, "Local": url.path], session: session)
-    message = r.Error ?? "Uploaded \(url.lastPathComponent)"
+      Picker("Layout", selection: $flat) {
+        Text("Tree").tag(false)
+        Text("List").tag(true)
+      }.pickerStyle(.inline)
+      Picker("Group by", selection: $grouping) {
+        ForEach(["Server", "Host", "CLI Name"], id: \.self) { Text($0).tag($0) }
+      }.pickerStyle(.inline)
+    }.accessibilityIdentifier("workspace-view-options")
   }
 }
 
-#if os(iOS)
-  /// Upload an independent copy so providers can finish materializing the document
-  /// before the asynchronous transfer starts.
-  private struct UploadPicker: UIViewControllerRepresentable {
-    let completion: (URL?) -> Void
-
-    func makeCoordinator() -> Coordinator { Coordinator(completion) }
-
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-      let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data], asCopy: true)
-      picker.delegate = context.coordinator
-      return picker
-    }
-
-    func updateUIViewController(_ picker: UIDocumentPickerViewController, context: Context) {}
-
-    final class Coordinator: NSObject, UIDocumentPickerDelegate {
-      let completion: (URL?) -> Void
-      init(_ completion: @escaping (URL?) -> Void) { self.completion = completion }
-      func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-        completion(urls.first)
+struct WorkspaceTerminal: View {
+  @ObservedObject var connection: Connection
+  @ObservedObject var workspace: Workspace
+  let row: WorkspaceSession
+  var body: some View {
+    VStack(spacing: 0) {
+      if let session = connection.selected {
+        SessionPane(connection: connection, session: session)
+      } else {
+        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
       }
-      func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { completion(nil) }
+      Divider()
+      WorkspaceStatusBar(connection: connection, workspace: workspace, row: row)
     }
   }
-#endif
+}
+
+private struct WorkspaceStatusBar: View {
+  @ObservedObject var connection: Connection
+  @ObservedObject var workspace: Workspace
+  let row: WorkspaceSession
+  @State private var sample: Int64?
+  var body: some View {
+    let online =
+      connection.attached
+      || (connection.selected?.running == false && workspace.errors[row.server.id] == "")
+    let us = sample
+    HStack {
+      Circle().fill(online ? Color.green : Color.secondary).frame(width: 8, height: 8)
+      Text(
+        online
+          ? "Connected"
+            + (us.map { $0 < 1000 ? " · <1 ms" : " · \(Int((Double($0)/1000).rounded())) ms" }
+              ?? "") : "Disconnected"
+      )
+      .accessibilityIdentifier("desktop-session-status")
+      Spacer()
+    }.font(.caption).padding(.horizontal, 12).padding(.vertical, 6)
+      .task(id: connection.attached) {
+        sample = nil
+        while !Task.isCancelled {
+          if connection.attached { await connection.measureLatency() }
+          sample = connection.attached ? connection.latency : workspace.samples[row.server.id]
+          try? await Task.sleep(for: .seconds(1))
+        }
+      }
+  }
+}

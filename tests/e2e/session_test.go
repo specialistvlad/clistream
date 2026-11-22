@@ -5,13 +5,69 @@ package e2e
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	remote "github.com/specialistvlad/clistream/internal/client"
 )
+
+func TestReceiveJoinsOutputCallbacks(t *testing.T) {
+	f := setup(t)
+	_, id := f.session([]string{"--io-mode", "pipe"}, "/bin/sh", "-c", "echo output; echo diagnostic >&2; exec cat")
+	conn, err := remote.Connect(filepath.Join(f.config("a"), "device"))
+	check(t, err)
+	defer conn.CloseWithError(0, "")
+	a, err := remote.Attach(conn, id)
+	check(t, err)
+	defer a.Close()
+	started, failed, release := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	markStarted := sync.OnceFunc(func() { close(started) })
+	unblock := sync.OnceFunc(func() { close(release) })
+	defer unblock()
+	failure := errors.New("stop the reader")
+	result := make(chan error, 1)
+	go func() {
+		_, err := a.Receive(func(channel string, _ []byte) error {
+			if channel == "stderr" {
+				select {
+				case <-started:
+				case <-release:
+				}
+				close(failed)
+				return failure
+			}
+			markStarted()
+			<-release
+			return nil
+		})
+		result <- err
+	}()
+	select {
+	case <-failed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("stdout and stderr did not both reach the callback")
+	}
+	select {
+	case <-result:
+		t.Fatal("Receive returned while the stdout callback was still running")
+	case <-time.After(100 * time.Millisecond):
+	}
+	unblock()
+	select {
+	case err := <-result:
+		if !errors.Is(err, failure) {
+			t.Fatalf("Receive returned %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Receive did not finish after the callback returned")
+	}
+}
 
 func TestCLIOptions(t *testing.T) {
 	f := setup(t)

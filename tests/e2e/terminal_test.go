@@ -200,7 +200,7 @@ func TestTwoViewersSwitchIndependently(t *testing.T) {
 
 	mac.send("\x1b[91;5uTODO\r")
 	editor.see("TODO\n")
-	mac.see("TODO")
+	expectClientScreen(t, mac, "TODO")
 	other.send("20\r")
 	other.see("20 passed")
 	mac.send("still editing\r")
