@@ -159,8 +159,8 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 		return
 	}
 	mux.HandleFunc(path+"pose-screenshot/", func(w http.ResponseWriter, r *http.Request) {
-		pose, ok := poses[strings.TrimPrefix(r.URL.Path, path+"pose-screenshot/")]
-		if !ok {
+		name := strings.TrimPrefix(r.URL.Path, path+"pose-screenshot/")
+		if _, ok := poses[name]; !ok {
 			http.NotFound(w, r)
 			return
 		}
@@ -168,7 +168,8 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 			http.Error(w, "gallery unavailable", http.StatusInternalServerError)
 			return
 		}
-		cmd := exec.CommandContext(r.Context(), "axe", "screenshot", "--udid", udid, "--output", filepath.Join("gallery", "duo-"+pose+".png"))
+		filename := "duo-" + strings.ToLower(strings.ReplaceAll(name, " ", "-")) + ".png"
+		cmd := exec.CommandContext(r.Context(), "axe", "screenshot", "--udid", udid, "--output", filepath.Join("gallery", filename))
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
 			http.Error(w, "active display capture failed", http.StatusServiceUnavailable)

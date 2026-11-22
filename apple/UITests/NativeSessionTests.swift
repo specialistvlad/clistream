@@ -351,10 +351,12 @@ final class NativeSessionTests: XCTestCase {
     #if os(macOS)
       XCTAssertTrue(
         app.staticTexts["Couldn’t pair this device"].firstMatch.waitForExistence(timeout: 12))
+      captureCurrent("pairing-error", app)
       app.activate()
       app.typeKey(.return, modifierFlags: [])
     #else
       XCTAssertTrue(app.alerts["Couldn’t pair this device"].waitForExistence(timeout: 12))
+      captureCurrent("pairing-error", app)
       activate(app.buttons["OK"].firstMatch)
     #endif
     XCTAssertFalse(app.buttons["Pair device"].exists)
@@ -467,6 +469,7 @@ final class NativeSessionTests: XCTestCase {
     #else
       app.launch()
     #endif
+    captureWelcomeIfEmpty(app)
     let link = try await invitation()
     #if os(macOS)
       if pairInWindow {
@@ -524,6 +527,18 @@ final class NativeSessionTests: XCTestCase {
 }
 
 extension XCTestCase {
+  @MainActor private static var inspectedFirstLaunch = false
+
+  @MainActor func captureWelcomeIfEmpty(_ app: XCUIApplication) {
+    guard ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1",
+      !Self.inspectedFirstLaunch else { return }
+    Self.inspectedFirstLaunch = true
+    if app.state == .notRunning { app.launch() }
+    if app.staticTexts["Add a server to see its CLI apps."].firstMatch.waitForExistence(timeout: 3) {
+      captureCurrent("welcome", app)
+    }
+  }
+
   #if os(iOS)
     @MainActor func openTerminalKeys(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
       let menu = app.buttons["Session"].firstMatch
