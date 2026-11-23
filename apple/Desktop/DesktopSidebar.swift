@@ -98,8 +98,7 @@ struct DesktopSidebar: View {
   }
 
   private func serverHeader(_ server: ServerProfile, group: [String]) -> some View {
-    DesktopServerHeader(server: server, group: group, state: state, workspace: workspace,
-      latency: workspace.samples[server.id].map(DesktopTerminal.latency))
+    DesktopServerHeader(server: server, group: group, state: state, workspace: workspace)
       .frame(maxWidth: .infinity, minHeight: 22)
       .tag(SidebarSelection.server(server.id))
   }

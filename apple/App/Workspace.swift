@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 struct ServerProfile: Identifiable {
@@ -22,7 +23,10 @@ struct WorkspaceSession: Identifiable {
   @Published private(set) var rows = [String: [SessionInfo]]()
   @Published private(set) var errors = [String: String]()
   #if os(macOS)
-    @Published private(set) var samples = [String: Int64]()
+    // Latency updates belong to the two labels displaying them. Invalidating
+    // the entire window here also rebuilds its focused menu and outline.
+    let latencySamples = CurrentValueSubject<[String: Int64], Never>([:])
+    var samples: [String: Int64] { latencySamples.value }
   #else
     // The mobile status bar samples latency on its own timer. Publishing every
     // RTT here rebuilds its parent toolbar and closes the native Keys submenu.
@@ -124,7 +128,16 @@ struct WorkspaceSession: Identifiable {
     if rowsChanged { rows[profile.id] = connection.sessions }
     if errorChanged || rowsChanged { updateFinder() }
     let sample = connection.listError.isEmpty ? connection.latency : nil
-    if samples[profile.id] != sample { samples[profile.id] = sample }
+    setSample(sample, for: profile.id)
+  }
+
+  private func setSample(_ sample: Int64?, for server: String) {
+    guard samples[server] != sample else { return }
+    #if os(macOS)
+      latencySamples.value[server] = sample
+    #else
+      samples[server] = sample
+    #endif
   }
 
   private func updateFinder() {
@@ -160,7 +173,7 @@ struct WorkspaceSession: Identifiable {
       for id in Array(terminals.keys) where id.hasPrefix(profile.id + "/") { detach(id) }
       profiles.removeAll { $0.id == profile.id }
       rows.removeValue(forKey: profile.id)
-      samples.removeValue(forKey: profile.id)
+      setSample(nil, for: profile.id)
       errors.removeValue(forKey: profile.id)
       UserDefaults.standard.removeObject(forKey: "server-name-" + profile.id)
       if UserDefaults.standard.string(forKey: "last-paired-server") == profile.id {

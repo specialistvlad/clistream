@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// These are the three app-drawn status colors in the approved Mac design.
@@ -61,8 +62,7 @@ struct DesktopTerminal: View {
       HStack(spacing: 6) {
         Circle().fill(online ? DesktopStatusColor.connected(appearance) : DesktopStatusColor.stopped(appearance))
           .frame(width: 8, height: 8).accessibilityHidden(true)
-        Text(online ? "Connected" + (workspace.samples[row.server.id].map { " · " + Self.latency($0) } ?? "") : "Disconnected")
-          .accessibilityIdentifier("desktop-session-status")
+        DesktopConnectionStatus(workspace: workspace, server: row.server.id, online: online)
         Spacer()
         Text((item.Mode == "pipe" ? "Pipe" : "PTY") + (item.running ? "" : " · Stopped"))
       }.font(.caption).foregroundStyle(.secondary).padding(.horizontal, 12).frame(minHeight: 26)
@@ -85,6 +85,21 @@ struct DesktopTerminal: View {
         Button(action, action: perform).controlSize(.small)
       }.font(.callout).padding(.horizontal, 16).padding(.vertical, 6)
     }
+  }
+}
+
+private struct DesktopConnectionStatus: View {
+  let workspace: Workspace
+  let server: String
+  let online: Bool
+  @State private var latency: String?
+
+  var body: some View {
+    Text(online ? "Connected" + (latency.map { " · " + $0 } ?? "") : "Disconnected")
+      .accessibilityIdentifier("desktop-session-status")
+      .onReceive(workspace.latencySamples.map { $0[server].map(DesktopTerminal.latency) }.removeDuplicates()) {
+        latency = $0
+      }
   }
 }
 

@@ -98,13 +98,13 @@ struct DesktopServerHeader: NSViewRepresentable {
   let group: [String]
   let state: DesktopSelection
   let workspace: Workspace
-  let latency: String?
 
   final class Header: NSStackView, NSTextFieldDelegate, NSMenuDelegate {
     private let title = NSTextField(labelWithString: "")
     private let sample = NSTextField(labelWithString: "")
     private var model: DesktopServerHeader?
     private var subscription: AnyCancellable?
+    private var latencySubscription: AnyCancellable?
     private var editing = false
 
     override init(frame frameRect: NSRect) {
@@ -130,9 +130,14 @@ struct DesktopServerHeader: NSViewRepresentable {
     func update(_ value: DesktopServerHeader) {
       let needsObserver = model?.state !== value.state || model?.group != value.group
       model = value
-      sample.stringValue = value.latency ?? ""
-      sample.isHidden = editing || value.latency == nil
       if needsObserver {
+        latencySubscription = value.workspace.latencySamples
+          .map { $0[value.server.id].map(DesktopTerminal.latency) }.removeDuplicates()
+          .sink { [weak self] latency in
+            guard let self else { return }
+            self.sample.stringValue = latency ?? ""
+            self.sample.isHidden = self.editing || latency == nil
+          }
         subscription = value.state.$renaming.sink { [weak self] id in self?.updateEditor(id) }
       }
       updateEditor(value.state.renaming)
@@ -158,7 +163,7 @@ struct DesktopServerHeader: NSViewRepresentable {
       setAccessibilityElement(!active)
       setAccessibilityRole(.group)
       setAccessibilityLabel(active ? nil : "Server " + model.server.name)
-      sample.isHidden = active || model.latency == nil
+      sample.isHidden = active || sample.stringValue.isEmpty
       if active {
         title.setAccessibilityRole(.textField)
         RunLoop.main.perform(inModes: [.default]) { [weak self] in
