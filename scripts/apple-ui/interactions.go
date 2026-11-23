@@ -182,8 +182,17 @@ func interactionRoutes(mux *http.ServeMux, path, root string, link []byte) error
 
 type duoScreen struct {
 	ID            uint32
+	UUID          string
 	Role, State   string
 	Width, Height float64
+}
+
+func captureDuoScreen(ctx context.Context, udid string, panel duoScreen, path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return exec.CommandContext(ctx, "xcrun", "simctl", "io", udid, "screenshot",
+		fmt.Sprintf("--display=%d", panel.ID), path).Run()
 }
 
 // AXe reports the lit panel's role and oriented size in points.
@@ -270,12 +279,7 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 			}
 			if os.Getenv("TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY") == "1" {
 				filename := "duo-" + scenario + "-" + strings.ToLower(strings.ReplaceAll(name, " ", "-")) + "-active.png"
-				if err := os.MkdirAll("results", 0755); err != nil {
-					http.Error(w, "diagnostic directory unavailable", http.StatusInternalServerError)
-					return
-				}
-				cmd := exec.CommandContext(r.Context(), "xcrun", "simctl", "io", udid, "screenshot", fmt.Sprintf("--display=%d", panel.ID), filepath.Join("results", filename))
-				if err := cmd.Run(); err != nil {
+				if err := captureDuoScreen(r.Context(), udid, panel, filepath.Join("results", filename)); err != nil {
 					http.Error(w, "active display capture failed", http.StatusServiceUnavailable)
 					return
 				}
@@ -284,6 +288,35 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 			return
 		}
 		http.Error(w, "simulator hinge did not settle", http.StatusServiceUnavailable)
+	})
+	mux.HandleFunc(path+"DUO-HIDE-KEYBOARD", func(w http.ResponseWriter, r *http.Request) {
+		panel, _, err := settledDisplay(r.Context(), poses["Open"])
+		if err != nil || panel.UUID == "" {
+			http.Error(w, "inner display unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		// Bind each native tap to the lit inner display. The outer screen can
+		// remain XCTest's default coordinate space after transferring a window.
+		for _, label := range []string{"Session", "Keys", "Hide Keyboard"} {
+			tap := exec.CommandContext(r.Context(), "axe", "tap", "--input-mode", "selected",
+				"--screen-id", strconv.FormatUint(uint64(panel.ID), 10), "--screen-uuid", panel.UUID,
+				"--label", label, "--wait-timeout", "15", "--udid", udid)
+			err := tap.Run()
+			if os.Getenv("TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY") == "1" {
+				name := "duo-menu-" + strings.ToLower(strings.ReplaceAll(label, " ", "-")) + ".png"
+				if e := captureDuoScreen(r.Context(), udid, panel, filepath.Join("results", name)); e != nil {
+					http.Error(w, "active display capture failed", http.StatusServiceUnavailable)
+					return
+				}
+			}
+			if err != nil {
+				fmt.Printf("Duo could not tap %s on display %d\n", label, panel.ID)
+				http.Error(w, "active display control unavailable", http.StatusConflict)
+				return
+			}
+			fmt.Printf("Duo tapped %s on display %d\n", label, panel.ID)
+		}
+		fmt.Fprint(w, "delivered")
 	})
 	if os.Getenv("TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY") != "1" {
 		return
@@ -295,19 +328,13 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 			http.NotFound(w, r)
 			return
 		}
-		if err := os.MkdirAll("gallery", 0755); err != nil {
-			http.Error(w, "gallery unavailable", http.StatusInternalServerError)
-			return
-		}
 		filename := "duo-" + strings.ToLower(strings.ReplaceAll(name, " ", "-")) + ".png"
 		panel, angle, err := settledDisplay(r.Context(), degrees)
 		if err != nil {
 			http.Error(w, "requested display is not active", http.StatusConflict)
 			return
 		}
-		cmd := exec.CommandContext(r.Context(), "xcrun", "simctl", "io", udid, "screenshot", fmt.Sprintf("--display=%d", panel.ID), filepath.Join("gallery", filename))
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
+		if err := captureDuoScreen(r.Context(), udid, panel, filepath.Join("gallery", filename)); err != nil {
 			http.Error(w, "active display capture failed", http.StatusServiceUnavailable)
 			return
 		}

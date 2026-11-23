@@ -112,11 +112,13 @@ final class SessionTests: XCTestCase {
           XCTAssertEqual(restored, "applied")
         }
         try await moveDuo(to: "Open", scenario: "input", in: app)
+        let hidden = try await fixtureResponse("DUO-HIDE-KEYBOARD")
+        XCTAssertEqual(hidden, "delivered")
       } else {
         XCUIDevice.shared.orientation = .landscapeLeft
+        openTerminalKeys(in: app)
+        tap(app.buttons["Hide Keyboard"])
       }
-      openTerminalKeys(in: app)
-      tap(app.buttons["Hide Keyboard"])
       XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
       let resized = XCTNSPredicateExpectation(
         predicate: NSPredicate { _, _ in
