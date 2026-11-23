@@ -62,8 +62,15 @@ struct BrowserView: View {
       MobileInvitationPresentation(
         flow: invitations, connection: workspace.pairing,
         enroll: { link in
+          let previousServers = Set(workspace.profiles.map(\.id))
           await workspace.enroll(link)
-          if selected == nil && workspace.pairing.pairingError == nil {
+          guard workspace.pairing.pairingError == nil else { return }
+          let addedServer = workspace.profiles.contains { !previousServers.contains($0.id) }
+          if selected == nil || addedServer {
+            if addedServer {
+              UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                to: nil, from: nil, for: nil)
+            }
             visibility = .all
             column = .sidebar
           }

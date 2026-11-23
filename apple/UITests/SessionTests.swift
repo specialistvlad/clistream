@@ -186,7 +186,7 @@ final class SessionTests: XCTestCase {
         addTeardownBlock { @MainActor in await setVoiceOver(initiallyEnabled) }
         await setVoiceOver(false)
         let app = try await pairedApp(session: "CLISTREAM_SESSION")
-        touchTerminalKey("Hide Keyboard", in: app)
+        if app.keyboards.firstMatch.exists { touchTerminalKey("Hide Keyboard", in: app) }
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
         await setVoiceOver(true)
         XCTAssertTrue(voice.isEnabled)

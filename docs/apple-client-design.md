@@ -20,7 +20,7 @@ Use **File → Paste Invitation** to review the address and identity before pair
 
 ## Touch-only operation on iPhone and iPad
 
-Choose a CLI in **Servers**. Use Search to filter program names, swipe a managed row to Restart or Stop it, or long-press a server to rename or remove it. An iPhone and the closed Duo navigate from the list into a terminal. On a wide iPad or the open Duo, the sidebar stays beside the terminal and the title shows the host, connection status, latency and PTY dimensions. Narrowing the window, rotating or folding the device preserves the session. The compact layout keeps status below the terminal.
+Choose a CLI in **Servers**. Use Search to filter program names, swipe a managed row to Restart or Stop it, or long-press a server to rename or remove it. An iPhone and the closed Duo navigate from the list into a terminal. On a wide iPad or the open Duo, the sidebar stays beside the terminal and the title shows the host, connection status, latency and PTY dimensions. Pairing an additional server reveals the servers list. In Server grouping, the sidebar scrolls to the new server. Re-pairing the current server keeps the terminal open. Narrowing the window, rotating or folding the device preserves the session. The compact layout keeps status below the terminal.
 
 Tap **Show Keyboard** for the floating key bar. It provides Escape, latched Control, Tab, arrows, pointer mode and Hide Keyboard. Swipe the bar horizontally for punctuation and, on iPad, F1–F8. To send Control-C, tap **ctrl** and type **c**. Use **Session** for lifecycle actions, pipe EOF, Ports, Files or Detach. Detach releases the selected attachment. [iOS screen reference](design/ios/spec.md)
 

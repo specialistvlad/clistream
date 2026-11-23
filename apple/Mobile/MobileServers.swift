@@ -75,7 +75,15 @@ struct MobileServers: View {
   }
 
   @ViewBuilder private var adaptiveList: some View {
-    if regular { servers.listStyle(.sidebar) } else { servers.listStyle(.insetGrouped) }
+    ScrollViewReader { reader in
+      Group {
+        if regular { servers.listStyle(.sidebar) } else { servers.listStyle(.insetGrouped) }
+      }.onChange(of: workspace.profiles.map(\.id)) { previous, current in
+        if grouping == "Server", let added = current.first(where: { !previous.contains($0) }) {
+          reader.scrollTo(added, anchor: .top)
+        }
+      }
+    }
   }
 
   private var servers: some View {
@@ -117,7 +125,7 @@ struct MobileServers: View {
               }
             } header: {
               serverHeader(server, isExpanded: expanded([server.id]))
-            }
+            }.id(server.id)
           }
         }
       } else {
