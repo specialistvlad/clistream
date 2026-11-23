@@ -159,16 +159,15 @@ private struct CommandSheet: View {
   let submit: ([Data]) -> Void
   @Environment(\.dismiss) private var dismiss
   @State private var line: String
-  @State private var validation: Reply
 
   init(draft: CommandDraft, submit: @escaping ([Data]) -> Void) {
     self.draft = draft
     self.submit = submit
     _line = State(initialValue: draft.line)
-    _validation = State(initialValue: Core.call(["Op": "parse-command", "Line": draft.line]))
   }
 
   var body: some View {
+    let validation = Core.call(["Op": "parse-command", "Line": line])
     WorkspaceSheet(
       title: (draft.session.running ? "Restart “" : "Start “") + draft.session.Name + "”",
       confirmation: draft.session.running ? "Restart" : "Start",
@@ -180,9 +179,6 @@ private struct CommandSheet: View {
         CommandField(line: $line, submit: launch).frame(minHeight: 32)
         if let error = validation.Error { Text(error).foregroundStyle(.red) }
       }
-    }
-    .onChange(of: line) { _, value in
-      validation = Core.call(["Op": "parse-command", "Line": value])
     }
   }
   private func launch() {

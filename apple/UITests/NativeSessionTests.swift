@@ -219,9 +219,14 @@ final class NativeSessionTests: XCTestCase {
     let saved = try XCTUnwrap(field.value as? String)
     XCTAssertFalse(saved.isEmpty)
     try await capture("edit-command", app)
+    #if os(iOS)
+      // A system appearance change can move focus away from the review field.
+      activate(field)
+    #endif
     field.typeKey("a", modifierFlags: .command)
     field.typeText("'")
-    XCTAssertFalse(app.buttons["Restart"].firstMatch.isEnabled)
+    XCTAssertEqual(field.value as? String, "'")
+    XCTAssertTrue(app.buttons["Restart"].firstMatch.wait(for: \.isEnabled, toEqual: false, timeout: 5))
     field.typeKey("a", modifierFlags: .command)
     field.typeText(saved + " 'two words' ")
     field.typeText("\"\"")
@@ -242,11 +247,20 @@ final class NativeSessionTests: XCTestCase {
     _ value: String, in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line
   ) {
     // Restart and layout transitions can replace the native terminal view.
-    let shown = app.descendants(matching: .any).matching(NSPredicate(
-      format: "identifier == %@ AND (value CONTAINS %@ OR label CONTAINS %@)",
-      "session-terminal", value, value
-    )).firstMatch
-    if !shown.waitForExistence(timeout: 30) {
+    #if os(iOS)
+      let output = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+        let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
+        return terminal.exists && (terminal.value as? String)?.contains(value) == true
+      }, object: nil)
+      let displayed = XCTWaiter.wait(for: [output], timeout: 30) == .completed
+    #else
+      let shown = app.descendants(matching: .any).matching(NSPredicate(
+        format: "identifier == %@ AND (value CONTAINS %@ OR label CONTAINS %@)",
+        "session-terminal", value, value
+      )).firstMatch
+      let displayed = shown.waitForExistence(timeout: 30)
+    #endif
+    if !displayed {
       let attachment = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
       attachment.name = "terminal-output-window"
       attachment.lifetime = .keepAlways
