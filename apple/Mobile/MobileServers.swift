@@ -125,7 +125,7 @@ struct MobileServers: View {
               }
             }
           } header: {
-            Text(group)
+            Text(group).accessibilityIdentifier("workspace-group-" + grouping + "-" + group)
           }
         }
       }
@@ -199,7 +199,7 @@ struct MobileServers: View {
         .accessibilityLabel("Host " + host)
       Spacer()
       Text(os == "darwin" ? "macOS" : os.capitalized).font(.caption).foregroundStyle(.secondary)
-    }
+    }.accessibilityIdentifier("workspace-host-" + host)
   }
   private func leaf(_ row: WorkspaceSession, detail: String = "") -> some View {
     NavigationLink(value: row.id) {

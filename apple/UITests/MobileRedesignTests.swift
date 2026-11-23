@@ -3,6 +3,63 @@ import UIKit
 import XCTest
 
 extension NativeSessionTests {
+  @MainActor func testGroupAndRemoveServer() async throws {
+    continueAfterFailure = false
+    let env = ProcessInfo.processInfo.environment
+    let id = try XCTUnwrap(env["CLISTREAM_PIPE_ID"])
+    let address = try XCTUnwrap(env["CLISTREAM_ENDPOINT"])
+    let app = XCUIApplication()
+    app.launchArguments = ["--ui-test-first-launch"]
+    app.launch()
+    defer { app.terminate() }
+    let invitation = try await fixtureResponse("QR")
+    app.open(try XCTUnwrap(URL(string: invitation)))
+    confirmPairing(pairingButton(in: app), in: app)
+    let row = app.descendants(matching: .any)["session-" + id].firstMatch
+    XCTAssertTrue(row.waitForExistence(timeout: 15))
+    let options = app.buttons["workspace-view-options"].firstMatch
+    func choose(_ option: String, from picker: String) {
+      options.tap()
+      let choice = app.buttons[option].firstMatch
+      if !choice.isHittable && app.buttons[picker].firstMatch.isHittable {
+        app.buttons[picker].firstMatch.tap()
+      }
+      XCTAssertTrue(choice.wait(for: \.isHittable, toEqual: true, timeout: 5), option)
+      choice.tap()
+      XCTAssertTrue(row.waitForExistence(timeout: 8))
+    }
+    for layout in ["List", "Tree"] {
+      choose(layout, from: "Layout")
+      for group in ["Host", "CLI Name", "Server"] {
+        choose(group, from: "Group by")
+        let prefix = group == "Server" ? "workspace-host-" : "workspace-group-" + group + "-"
+        let heading = app.descendants(matching: .any).matching(
+          NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
+        if group == "Server" && layout == "List" {
+          XCTAssertTrue(heading.waitForNonExistence(timeout: 5))
+        } else {
+          XCTAssertTrue(heading.waitForExistence(timeout: 5))
+        }
+      }
+    }
+    let header = app.descendants(matching: .any).matching(
+      NSPredicate(format: "label CONTAINS %@", "Server " + address)).firstMatch
+    let remove = app.buttons["Remove Server…"].firstMatch
+    let alert = app.alerts["Remove “" + address + "”?"].firstMatch
+    for confirmation in ["Cancel", "Remove"] {
+      XCTAssertTrue(header.wait(for: \.isHittable, toEqual: true, timeout: 10))
+      header.press(forDuration: 0.8)
+      XCTAssertTrue(remove.waitForExistence(timeout: 5))
+      remove.tap()
+      XCTAssertTrue(alert.waitForExistence(timeout: 5))
+      XCTAssertTrue(alert.staticTexts["This device forgets the server and its pairing. The device stays enrolled until the server operator revokes it."].exists)
+      alert.buttons[confirmation].tap()
+      if confirmation == "Cancel" { XCTAssertTrue(row.exists) }
+    }
+    XCTAssertTrue(row.waitForNonExistence(timeout: 8))
+    XCTAssertTrue(app.staticTexts["No Servers"].firstMatch.exists)
+  }
+
   @MainActor func testScanAndPasteInvitationReview() async throws {
     continueAfterFailure = false
     let app = XCUIApplication()
