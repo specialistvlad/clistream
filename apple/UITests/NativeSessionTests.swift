@@ -422,12 +422,50 @@ final class NativeSessionTests: XCTestCase {
         if name.hasPrefix("duo-") {
           let recorded = try await fixtureResponse("panel-capture/" + variant)
           XCTAssertEqual(recorded, "captured")
+        } else if UIDevice.current.userInterfaceIdiom == .pad,
+          ["ipad-main", "ipad-ports", "terminal-key-bar", "session-menu"].contains(name) {
+          try await captureTabletTerminal(variant, dark: dark)
         } else { captureCurrent(variant, app) }
       #else
         captureCurrent(variant, app)
       #endif
     }
   }
+
+  #if os(iOS)
+    @MainActor private func captureTabletTerminal(_ name: String, dark: Bool) async throws {
+      // These boards have a predominantly black or white terminal. SpringBoard
+      // can acknowledge the new appearance before the window finishes its fade.
+      let deadline = ContinuousClock.now + .seconds(25)
+      repeat {
+        let image = XCUIScreen.main.screenshot().image
+        guard let cgImage = image.cgImage,
+          let sample = CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8,
+            bytesPerRow: 1, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue),
+          let pixel = sample.data
+        else { XCTFail("Could not read tablet screenshot"); return }
+        sample.interpolationQuality = .high
+        sample.draw(cgImage, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        let luminance = pixel.load(as: UInt8.self)
+        if dark ? luminance < 70 : luminance > 185 {
+          // Bake UIKit’s landscape orientation into the pixels for gallery
+          // viewers that ignore the orientation metadata in XCTest’s PNG.
+          let format = UIGraphicsImageRendererFormat()
+          format.scale = image.scale
+          let data = UIGraphicsImageRenderer(size: image.size, format: format).pngData { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+          }
+          let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.png")
+          attachment.name = "gallery-" + name
+          attachment.lifetime = .keepAlways
+          add(attachment)
+          return
+        }
+        try await Task.sleep(for: .milliseconds(500))
+      } while ContinuousClock.now < deadline
+      XCTFail("The iPad terminal did not finish switching appearance for " + name)
+    }
+  #endif
 
   @MainActor func testTerminalKeysAndAttachOnly() async throws {
     let app = try await openPipe(terminal: true)
