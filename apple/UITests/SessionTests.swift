@@ -269,9 +269,9 @@ final class SessionTests: XCTestCase {
       let app = try await pairedApp(session: "CLISTREAM_TOUCH_SESSION", largeText: true)
       let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
       assertText("copyword selection", in: terminal)
+      if !app.keyboards.firstMatch.exists { openTerminalKeys(in: app) }
       let word = terminal.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 16, dy: 8))
-      word.press(forDuration: 1)
-      tap(app.descendants(matching: .any)["Select"].firstMatch)
+      word.doubleTap()
       captureCurrent("text-selection", app)
       tap(app.descendants(matching: .any)["Copy"].firstMatch)
       word.press(forDuration: 1)
