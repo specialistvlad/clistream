@@ -132,7 +132,9 @@ extension NativeSessionTests {
     try clickMacMenuItem("Remove Server…", in: app)
     assertMacElement(macText("Remove “" + name + "”?", in: app), in: app)
     try await capture("remove-server", app)
-    app.typeKey(.escape, modifierFlags: [])
+    let cancel = app.buttons["Cancel"].firstMatch
+    cancel.click()
+    XCTAssertTrue(cancel.waitForNonExistence(timeout: 10))
     XCTAssertTrue(other.exists)
     header.rightClick()
     try clickMacMenuItem("Remove Server…", in: app)

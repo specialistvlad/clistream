@@ -199,36 +199,36 @@ private struct PortsPresentation: ViewModifier {
   #endif
 
   func body(content: Content) -> some View {
-    #if os(iOS)
-      if sizeClass == .compact {
-        content.sheet(isPresented: $presented) {
+    // The system adapts the inspector to a sheet at compact widths. Keep
+    // the attached terminal and its toolbar mounted across that transition.
+    content.inspector(isPresented: $presented) {
+      #if os(iOS)
+        if sizeClass == .compact {
           NavigationStack {
             portList.navigationTitle("Ports").navigationBarTitleDisplayMode(.inline)
               .toolbar { ToolbarItem(placement: .confirmationAction) { done } }
           }
           .presentationDetents([.medium, .large])
+        } else {
+          inspectorColumn
         }
-      } else {
-        column(content)
-      }
-    #else
-      column(content)
-    #endif
+      #else
+        inspectorColumn
+      #endif
+    }
   }
 
-  private func column(_ content: Content) -> some View {
-    content.inspector(isPresented: $presented) {
-      VStack(alignment: .leading, spacing: 0) {
-        HStack {
-          Text("Ports").font(.headline).accessibilityAddTraits(.isHeader)
-          Spacer()
-          done
-        }.padding()
-        Divider()
-        portList
-      }
-      .inspectorColumnWidth(min: 230, ideal: 280, max: 400)
+  private var inspectorColumn: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack {
+        Text("Ports").font(.headline).accessibilityAddTraits(.isHeader)
+        Spacer()
+        done
+      }.padding()
+      Divider()
+      portList
     }
+    .inspectorColumnWidth(min: 230, ideal: 280, max: 400)
   }
 
   private var done: some View {
