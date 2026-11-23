@@ -106,7 +106,12 @@ enum DesktopAlert: Identifiable {
       window.tabGroup?.selectedWindow = window
       window.makeKeyAndOrderFront(nil)
     }
-    Workspace.shared.focus(next.id)
+    // Finish the outline's selection event before assigning keyboard input.
+    // A terminal that is still attaching takes focus when its view is mounted.
+    DispatchQueue.main.async { [weak owner] in
+      guard let owner, owner.selection == .session(next.id), owner.row?.id == next.id else { return }
+      Workspace.shared.focus(next.id)
+    }
     return owner
   }
   func open(_ next: WorkspaceSession?, tab: Bool, using openWindow: OpenWindowAction) {

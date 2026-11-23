@@ -54,11 +54,22 @@ private func visibleText(in view: TerminalView) -> String {
 #if os(macOS)
   private final class AccessibleTerminal: TerminalView {
     private var keyMonitor: Any?
+    var focusOnMount = false
+
+    func focusIfMounted() {
+      guard focusOnMount, let window else { return }
+      DispatchQueue.main.async { [weak self, weak window] in
+        guard let self, let window, self.window === window, self.focusOnMount else { return }
+        self.focusOnMount = false
+        window.makeFirstResponder(self)
+      }
+    }
 
     override func viewDidMoveToWindow() {
       super.viewDidMoveToWindow()
       if let keyMonitor { NSEvent.removeMonitor(keyMonitor); self.keyMonitor = nil }
       guard window != nil else { return }
+      focusIfMounted()
       // AppKit dispatches key equivalents before sending keyDown to the
       // first responder. Only consume conventional control letters belonging
       // to this terminal. SwiftTerm handles negotiated keyboard protocols.
@@ -109,7 +120,10 @@ private func visibleText(in view: TerminalView) -> String {
       view.setAccessibilityLabel("Terminal")
       view.setAccessibilityIdentifier("session-terminal")
       connection.install(view)
-      if !connection.readOnly { DispatchQueue.main.async { view.window?.makeFirstResponder(view) } }
+      if let terminal = view as? AccessibleTerminal {
+        terminal.focusOnMount = !connection.readOnly
+        terminal.focusIfMounted()
+      }
       return view
     }
     func updateNSView(_ view: TerminalView, context: Context) {
