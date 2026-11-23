@@ -52,6 +52,8 @@ After removing the last file, Finder can delete the empty folder even if its dis
 
 Files uses a full-width colon in location names such as `build：7443`. **Show in Files** uses the system's folder names when available and the provider catalog otherwise. Remote filenames and server addresses keep their original spelling.
 
+In hosted iOS tests the domain registered and returned its folder hierarchy, but the standalone Files window remained empty. Editing on a signed device still needs verification. [Mobile Files results](verification.md)
+
 The app migrates existing server enrollments into its private App Group with the same keys. Removing a server removes its location from the provider catalog. Revoking a device stops remote operations. Local copies can remain on the device.
 
 ## Acceptance
