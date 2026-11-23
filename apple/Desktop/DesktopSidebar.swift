@@ -105,11 +105,13 @@ struct DesktopSidebar: View {
   private func unavailable(_ server: ServerProfile) -> some View {
     let revoked = workspace.revoked(server)
     return HStack {
-      Label(revoked ? "Access revoked" : "Offline", systemImage: "wifi.slash").foregroundStyle(.secondary)
-      Spacer()
+      Label(revoked ? "Access revoked" : "Offline", systemImage: "wifi.slash")
+        .foregroundStyle(.secondary).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+      Spacer(minLength: 2)
       Button(revoked ? "Pair Again…" : "Retry") {
         if revoked { state.pair("") } else { workspace.retry(server) }
-      }.controlSize(.small).buttonStyle(.bordered).accessibilityIdentifier(revoked ? "repair-server" : "retry-server")
+      }.controlSize(.small).buttonStyle(.bordered).fixedSize()
+        .accessibilityIdentifier(revoked ? "repair-server" : "retry-server")
     }
   }
 

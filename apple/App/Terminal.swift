@@ -113,7 +113,8 @@ private func visibleText(in view: TerminalView) -> String {
       return view
     }
     func updateNSView(_ view: TerminalView, context: Context) {
-      if suppressCursor { view.hideCursor(source: view.getTerminal()) }
+      // The Metal renderer reads the emulator's cursor state during a redraw.
+      if suppressCursor { view.getTerminal().hideCursor() }
     }
   }
 #else
