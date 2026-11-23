@@ -115,8 +115,17 @@ import OSLog
   }
 
   #if os(iOS)
-  static func prepareForBrowsing() async throws {
-    _ = try await manager()
+  static func prepareForBrowsing(_ row: WorkspaceSession, in workspace: Workspace) async throws {
+    try update(servers: workspace.profiles, sessions: workspace.sessions, errors: workspace.errors)
+    let manager = try await manager()
+    // Files can keep an empty root from before pairing. Resolve the selected
+    // item through the system when the user has already enabled the location.
+    let registered = try await NSFileProviderManager.domains()
+    if registered.contains(where: { $0.identifier == FinderStorage.domain.identifier && $0.userEnabled }) {
+      try await manager.signalEnumerator(for: .workingSet)
+      let id = NSFileProviderItemIdentifier(FinderID.workspace(row.server.id, row.item.id))
+      _ = try await manager.getUserVisibleURL(for: id)
+    }
   }
 
   static func filesPath(_ row: WorkspaceSession, in workspace: Workspace) -> String {

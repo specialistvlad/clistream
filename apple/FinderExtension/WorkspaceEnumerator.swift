@@ -1,4 +1,5 @@
 import FileProvider
+import OSLog
 
 final class WorkspaceEnumerator: NSObject, NSFileProviderEnumerator {
   private let container: NSFileProviderItemIdentifier
@@ -40,6 +41,12 @@ final class WorkspaceEnumerator: NSObject, NSFileProviderEnumerator {
     provider.queue.async {
       do {
         let items = try self.refresh()
+        #if DEBUG && os(iOS)
+          if self.container == .rootContainer {
+            Logger(subsystem: "com.vlk.clistream", category: "FileProvider")
+              .notice("Files enumerated root with \(items.count, privacy: .public) servers")
+          }
+        #endif
         for start in stride(from: 0, to: items.count, by: 200) {
           observer.didEnumerate(
             items[start..<min(start + 200, items.count)].map(WorkspaceItem.init))

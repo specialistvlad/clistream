@@ -2,17 +2,24 @@ import FileProvider
 import Foundation
 import Security
 
-// Both the signed app and its extension read their group from the same entitlement.
 // The acceptance app has its own bundle and group identifiers.
 enum FinderStorage {
+  #if os(iOS)
+  private final class BundleMarker: NSObject {}
+  #endif
   static func container() throws -> URL {
     #if os(iOS)
-    guard var appID = Bundle.main.bundleIdentifier else { throw CocoaError(.fileReadNoPermission) }
-    if Bundle.main.object(forInfoDictionaryKey: "NSExtension") != nil {
-      guard appID.hasSuffix(".files") else { throw CocoaError(.fileReadNoPermission) }
-      appID.removeLast(".files".count)
+    let bundle = Bundle(for: BundleMarker.self)
+    let group: String
+    if let extensionInfo = bundle.object(forInfoDictionaryKey: "NSExtension") as? [String: Any] {
+      guard let declared = extensionInfo["NSExtensionFileProviderDocumentGroup"] as? String else {
+        throw CocoaError(.fileReadNoPermission)
+      }
+      group = declared
+    } else {
+      guard let appID = bundle.bundleIdentifier else { throw CocoaError(.fileReadNoPermission) }
+      group = "group." + appID + ".workspace"
     }
-    let group = "group." + appID + ".workspace"
     #else
     guard let task = SecTaskCreateFromSelf(nil),
       let groups = SecTaskCopyValueForEntitlement(

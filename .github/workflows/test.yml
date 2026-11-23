@@ -101,6 +101,12 @@ jobs:
             xcrun simctl rename "$id" "CLIStream CI $model" || return 1
             echo "$id"
           }
+          run_mobile() {
+            export SIMULATOR_ID
+            SIMULATOR_ID=$(simulator "$@") || return 1
+            echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
+            apple/test-native.sh
+          }
           case "$DEVICE" in
             macOS) apple/test-native.sh macOS ;;
             shared)
@@ -109,24 +115,32 @@ jobs:
               IPHONE_SIMULATOR_ID=$(simulator 'iPhone 18 Pro')
               IPAD_SIMULATOR_ID=$(simulator 'iPad mini (A17 Pro)' 'iPad (A16)' 'iPad Pro 13-inch (M5)')
               go run ./scripts/apple-ui shared ;;
-            iPhone) SIMULATOR_ID="$(simulator 'iPhone 18 Pro')" apple/test-native.sh ;;
-            iPad)
-              export SIMULATOR_ID
-              SIMULATOR_ID="$(simulator 'iPad Pro 13-inch (M5)')"
-              echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
-              apple/test-native.sh ;;
-            Duo) SIMULATOR_ID="$(simulator 'iPhone Duo')" apple/test-native.sh ;;
+            iPhone) run_mobile 'iPhone 18 Pro' ;;
+            iPad) run_mobile 'iPad Pro 13-inch (M5)' ;;
+            Duo) run_mobile 'iPhone Duo' ;;
           esac
       - name: Report native failures before starting the Linux VM
-        if: ${{ failure() && steps.native-ui.outcome == 'failure' && (matrix.device == 'macOS' || matrix.device == 'iPad') }}
+        if: ${{ failure() && steps.native-ui.outcome == 'failure' && matrix.device != 'shared' }}
         run: |
           mkdir -p native-reports
           for bundle in apple/build/results-*/*.xcresult; do
             [[ -f "$bundle/Info.plist" ]] || continue
             go run ./scripts/apple-report "$bundle" > "native-reports/$(basename "$bundle" .xcresult).json"
           done
+          if [[ -n ${SIMULATOR_ID:-} ]] && jq -e '.cases[] | select(.result == "Failed" and (.test | contains("testFilesWorkspaceRoundTrip")))' native-reports/native.json >/dev/null; then
+            group=$(xcrun simctl get_app_container "$SIMULATOR_ID" com.vlk.clistream.acceptance group.com.vlk.clistream.acceptance.workspace || true)
+            if [[ -f "$group/CLIStream/finder-servers.json" ]]; then
+              jq 'length | "App Group server count \(.)"' -r "$group/CLIStream/finder-servers.json"
+            else
+              echo "Files catalog missing from app group"
+            fi
+            if [[ -f "$group/CLIStream/finder-index.plist" ]]; then
+              plutil -convert json -o - "$group/CLIStream/finder-index.plist" | jq '.nodes | length | "Provider index item count \(.)"' -r
+            fi
+            xcrun simctl spawn "$SIMULATOR_ID" log show --last 45m --style compact --predicate 'subsystem == "com.vlk.clistream" AND category == "FileProvider"' | tail -25
+          fi
       - uses: actions/upload-artifact@v4
-        if: ${{ failure() && steps.native-ui.outcome == 'failure' && (matrix.device == 'macOS' || matrix.device == 'iPad') }}
+        if: ${{ failure() && steps.native-ui.outcome == 'failure' && matrix.device != 'shared' }}
         with:
           name: native-report-${{ matrix.device }}
           path: native-reports/*.json

@@ -113,9 +113,9 @@ struct MobileTerminal: View {
       Button("OK") {}
     } message: {
       Text(
-        filesError
-          ?? ("Open Files and go to " + FinderWorkspace.filesPath(target, in: workspace)
-            + ". If CLIStream is hidden, tap Edit in Browse and enable CLIStream under Locations."))
+        (filesError.map { $0 + "\n\n" } ?? "") + "Open Files and go to "
+          + FinderWorkspace.filesPath(target, in: workspace)
+          + ". If CLIStream is hidden, tap Edit in Browse and enable CLIStream under Locations.")
     }
     .modifier(PortsPresentation(connection: connection, session: item, presented: $ports))
     .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) {
@@ -165,7 +165,7 @@ struct MobileTerminal: View {
     Button("Show in Files", systemImage: "folder") {
       Task {
         do {
-          try await FinderWorkspace.prepareForBrowsing()
+          try await FinderWorkspace.prepareForBrowsing(target, in: workspace)
           filesError = nil
         } catch {
           filesError = error.localizedDescription
