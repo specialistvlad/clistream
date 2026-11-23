@@ -3,10 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -22,6 +26,85 @@ func TestSharedCommandCancelsDescendantHoldingDiagnosticPipe(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 3*time.Second {
 		t.Fatalf("wrapper was killed but its descendant held the diagnostic pipe for %s", elapsed)
+	}
+}
+
+func TestSharedPadUsesTheVisibleTerminalAndItsKeyboard(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PATH", dir)
+	t.Setenv("INPUT_LOG", filepath.Join(dir, "input"))
+	t.Setenv("AX_SCREEN", `{"data":{"result":[{"type":"Application","children":[
+{"AXUniqueId":"workspace-confirm","AXLabel":"Pair device"},
+{"AXUniqueId":"session-terminal","AXValue":"preview-ready\nout:shared-cli\nout:shared-mac\nout:shared-phone\nout:shared-pad\nout:independent-phone"}]}]}}`)
+	for name, stub := range map[string]string{
+		"xcrun": "#!/bin/sh\nexit 0\n",
+		"axe": `#!/bin/sh
+case "$*" in
+  *describe-ui*) printf '%s\n' "$AX_SCREEN" ;;
+  *) echo "$*" >> "$INPUT_LOG" ;;
+esac
+`,
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(stub), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var mu sync.Mutex
+	var routes []string
+	fixture := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		routes = append(routes, r.URL.Path)
+		mu.Unlock()
+		if r.URL.Path == "/QR" {
+			fmt.Fprint(w, "clistream://example")
+			return
+		}
+		fmt.Fprint(w, "ready")
+	}))
+	defer fixture.Close()
+	if err := driveSharedPad(t.Context(), "tablet", "App", fixture.URL+"/", "child"); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if got := strings.Join(routes, " "); got != "/QR /ready/pad /switch/pad /return/pad" {
+		t.Fatalf("barriers: %s", got)
+	}
+	raw, err := os.ReadFile(os.Getenv("INPUT_LOG"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const gestures = "tap --id workspace-confirm\ntap --id session-child\ntap --id session-terminal\ntype shared-pad\nkey 40"
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	want := strings.Split(gestures, "\n")
+	if len(lines) != len(want) {
+		t.Fatalf("input calls: %v", lines)
+	}
+	for i, call := range lines {
+		if !strings.HasPrefix(call, want[i]+" ") || !strings.HasSuffix(call, "--udid tablet") {
+			t.Errorf("gesture %d: %s", i, call)
+		}
+	}
+}
+
+func TestTabletScreenReadsOnlyTerminalEchoAndNamedSystemPrompt(t *testing.T) {
+	raw := []byte(`{"data":{"result":{"children":[
+{"type":"Text","AXValue":"out:shared-phone"},
+{"type":"Alert","children":[{"AXLabel":"Open in a different app?"},{"AXLabel":"Open"}]},
+{"AXUniqueId":"session-terminal","AXValue":"out:shared-cli"},
+{"hidden":true,"AXUniqueId":"session-terminal","AXValue":"out:shared-pad"}
+]}}}`)
+	screen, err := readTabletScreen(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if screen.terminal != "out:shared-cli" || screen.openInvitation || screen.pair {
+		t.Fatalf("unexpected accessibility state: %+v", screen)
+	}
+	named := strings.Replace(string(raw), "a different app", "CLIStream", 1)
+	screen, err = readTabletScreen([]byte(named))
+	if err != nil || !screen.openInvitation {
+		t.Fatalf("missed named system alert: %v", err)
 	}
 }
 

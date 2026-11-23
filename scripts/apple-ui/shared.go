@@ -112,9 +112,8 @@ func prepareViewers(root string) (viewerPlans, error) {
 	if err := shutdownSimulator(ctx, "Shut down iPhone before starting iPad", phone); err != nil {
 		return viewerPlans{}, err
 	}
-	// The phone is off throughout the first iPad test launch. The normal
-	// XCTest install runs here just as it does on a single-device runner.
-	if err := prepareStage(ctx, "Boot iPad for XCTest installation and pairing", 10*time.Minute,
+	// Keep the phone off throughout the iPad's initial installation and pairing.
+	if err := prepareStage(ctx, "Boot the iPad for installation and pairing", 10*time.Minute,
 		"apple/boot-simulator.sh", os.Getenv("IPAD_SIMULATOR_ID")); err != nil {
 		return viewerPlans{}, err
 	}
@@ -194,17 +193,23 @@ func shared(plans viewerPlans, arrivals <-chan string, abortBarriers func(), url
 				return err
 			}
 		}
-		dest, plan, suite := "platform=macOS", plans.mac, "CLIStream-MacUITests"
-		if device.id != "" {
-			dest, plan, suite = "platform=iOS Simulator,id="+device.id, plans.mobile, "CLIStream-UITests"
-		}
 		sharedCheckpoint("Pair shared viewer " + device.name)
-		env := append(os.Environ(), "TEST_RUNNER_CLISTREAM_FIXTURE="+url, "TEST_RUNNER_CLISTREAM_PARTICIPANT="+device.name,
-			"TEST_RUNNER_CLISTREAM_PIPE_ID="+pipeID, "TEST_RUNNER_CLISTREAM_PTY_ID="+terminalID, "TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY=0")
 		participants.Go(func() {
-			err := testSharedViewer(ctx, device.name, device.id, plan, dest, suite, env)
+			var err error
+			if device.name == "pad" {
+				app := filepath.Join(filepath.Dir(plans.mobile), "Debug-iphonesimulator", "CLIStream.app")
+				err = driveSharedPad(ctx, device.id, app, url, pipeID)
+			} else {
+				dest, plan, suite := "platform=macOS", plans.mac, "CLIStream-MacUITests"
+				if device.id != "" {
+					dest, plan, suite = "platform=iOS Simulator,id="+device.id, plans.mobile, "CLIStream-UITests"
+				}
+				env := append(os.Environ(), "TEST_RUNNER_CLISTREAM_FIXTURE="+url, "TEST_RUNNER_CLISTREAM_PARTICIPANT="+device.name,
+					"TEST_RUNNER_CLISTREAM_PIPE_ID="+pipeID, "TEST_RUNNER_CLISTREAM_PTY_ID="+terminalID, "TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY=0")
+				err = testSharedViewer(ctx, device.name, plan, dest, suite, env)
+			}
 			if err != nil {
-				err = fmt.Errorf("%s XCTest: %w", device.name, err)
+				err = fmt.Errorf("%s UI: %w", device.name, err)
 			}
 			results <- err
 		})
@@ -241,7 +246,6 @@ func shared(plans viewerPlans, arrivals <-chan string, abortBarriers func(), url
 }
 
 func observeSharedRunner(ctx context.Context) {
-	// Three resident XCTest drivers can contend with the two simulators.
 	// Sample only system pressure and scheduling, never process arguments.
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -261,47 +265,15 @@ func observeSharedRunner(ctx context.Context) {
 	}
 }
 
-func testSharedViewer(ctx context.Context, name, id, plan, destination, suite string, env []string) error {
-	for attempt := 0; ; attempt++ {
-		bundle := filepath.Join("apple/build", fmt.Sprintf("shared-%d-%s.xcresult", time.Now().Unix(), name))
-		test := sharedCommand(ctx, "xcodebuild", "-quiet", "-xctestrun", plan, "-destination", destination,
-			"-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never",
-			"-resultBundlePath", bundle,
-			"-only-testing:"+suite+"/NativeSessionTests/testConcurrentViewers", "test-without-building")
-		test.Env = env
-		var diagnostics bytes.Buffer
-		test.Stdout = io.MultiWriter(os.Stdout, &diagnostics)
-		test.Stderr = test.Stdout
-		err := test.Run()
-		if errors.Is(err, exec.ErrWaitDelay) && test.ProcessState.Success() {
-			// XCTest finished successfully; one of its detached helpers held a pipe open.
-			err = nil
-		}
-		if err == nil || attempt != 0 || name != "pad" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" ||
-			!bytes.Contains(diagnostics.Bytes(), []byte("Test crashed with signal term while preparing to run tests.")) {
-			return err
-		}
-		// Only the first iPad can recover here, before any viewer has paired.
-		// Never retry a testcase that Xcode actually started.
-		summaryCtx, cancelSummary := context.WithTimeout(ctx, 30*time.Second)
-		data, readErr := sharedCommand(summaryCtx, "xcrun", "xcresulttool", "get", "test-results", "summary", "--path", bundle).Output()
-		cancelSummary()
-		var summary struct{ TotalTestCount *int }
-		if readErr != nil || json.Unmarshal(data, &summary) != nil || summary.TotalTestCount == nil || *summary.TotalTestCount != 0 {
-			return err
-		}
-		fmt.Println("iPad runner terminated before its first test. Rebooting the isolated iPad and retrying once.")
-		if err := os.Rename(bundle, bundle+".startup"); err != nil {
-			return err
-		}
-		if err := shutdownSimulator(ctx, "Shut down iPad after runner startup failure", id); err != nil {
-			return err
-		}
-		if err := prepareStage(ctx, "Boot iPad after runner startup failure", 5*time.Minute,
-			"apple/boot-simulator.sh", id); err != nil {
-			return err
-		}
-	}
+func testSharedViewer(ctx context.Context, name, plan, destination, suite string, env []string) error {
+	bundle := filepath.Join("apple/build", fmt.Sprintf("shared-%d-%s.xcresult", time.Now().Unix(), name))
+	test := sharedCommand(ctx, "xcodebuild", "-quiet", "-xctestrun", plan, "-destination", destination,
+		"-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never",
+		"-resultBundlePath", bundle,
+		"-only-testing:"+suite+"/NativeSessionTests/testConcurrentViewers", "test-without-building")
+	test.Env = env
+	test.Stdout, test.Stderr = os.Stdout, os.Stderr
+	return test.Run()
 }
 
 // Join after all UI clients are attached so the first marker verifies a live broadcast.
