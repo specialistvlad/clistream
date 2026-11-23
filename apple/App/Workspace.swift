@@ -168,7 +168,6 @@ struct WorkspaceSession: Identifiable {
     #endif
   }
 
-  #if os(macOS)
     func remove(_ profile: ServerProfile) throws {
       guard profiles.contains(where: { $0.id == profile.id }) else { return }
       let root = URL(fileURLWithPath: try pairing.directory).standardizedFileURL
@@ -197,7 +196,8 @@ struct WorkspaceSession: Identifiable {
       }
       updateFinder()
     }
-  #endif
+
+  func existingTerminal(_ row: WorkspaceSession) -> Connection? { terminals[row.id] }
 
   func terminal(_ row: WorkspaceSession) -> Connection {
     if let current = terminals[row.id] { return current }

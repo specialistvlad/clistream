@@ -16,18 +16,19 @@ import SwiftUI
 
 struct BrowserView: View {
   @ObservedObject var workspace: Workspace
+  @StateObject private var actions = MobileLifecycle()
   @State private var pairing: Pairing?
   @State private var selected: WorkspaceSession?
   @State private var column = NavigationSplitViewColumn.sidebar
   var body: some View {
     NavigationSplitView(preferredCompactColumn: $column) {
-      WorkspaceSidebar(
-        workspace: workspace, selected: selected?.id,
+      MobileServers(
+        workspace: workspace, actions: actions, selected: selected?.id,
         activate: { row in
           workspace.activate(row)
           selected = row
           column = .detail
-        }, pairing: $pairing)
+        }, add: { pairing = Pairing() })
     } detail: {
       if let row = selected {
         WorkspaceTerminal(connection: workspace.terminal(row), workspace: workspace, row: row) {
@@ -43,6 +44,10 @@ struct BrowserView: View {
       PairingPresentation(
         connection: workspace.pairing, pairing: $pairing, enroll: workspace.enroll)
     )
+    .modifier(MobileLifecyclePresentation(actions: actions, workspace: workspace))
+    .onChange(of: workspace.profiles.map(\.id)) { _, ids in
+      if let row = selected, !ids.contains(row.server.id) { selected = nil; column = .sidebar }
+    }
     .task { workspace.load() }
   }
 }

@@ -2,7 +2,21 @@
 
 ## Delivery status
 
-The clients support live sessions, managed commands, retained results, and named port forwarding. The approved Mac redesign adds a writable Finder location alongside the existing Go CLI workspace commands. The owner deferred the mobile Files extension. [Native client guide](apple-client-design.md) · [Verification record](verification.md)
+The clients support live sessions, managed commands, retained results, and named port forwarding. The Mac app provides writable Finder workspaces. The owner approved writable iOS Files workspaces as part of the mobile redesign. [Native client guide](apple-client-design.md) · [Verification record](verification.md)
+
+## Universal iOS redesign and Files · November 23, 2026
+
+| Screens in the design | Current view | Target |
+| --- | --- | --- |
+| iPhone Servers, dark swipe, Duo outer Servers | WorkspaceSidebar | Compact inset grouped list, searchable CLI names, server and host sections, lifecycle swipe actions |
+| iPhone terminal, Duo outer terminal, iPad main, Duo inner main | WorkspaceTerminal, SessionPane, LiveTerminal | System navigation and adaptive toolbar, floating terminal input accessory, regular-width status in the navigation subtitle |
+| Session menu, Restart, Stop | SessionActions and CommandSheet | ControlGroup, raw command sheet and run-specific confirmation |
+| Compact Ports, iPad inspector, Duo inner inspector | PortsPresentation and PortList | System sheet or trailing inspector bound to the same live forwards |
+| Add Server, QR scanner, first launch, pairing error | BrowserView and PairingPresentation | Native empty state, VisionKit scanner, masked invitation review and explicit Pair |
+
+Build the compact list, regular sidebar, terminal toolbar, key bar, menu, sheets, scanner, alerts, then the mobile File Provider. Keep desktop behavior intact and reuse the existing signed-invitation, terminal, forwarding and workspace protocols. The daemon, supervisor and CLI on Linux and macOS require no wire or behavioral change. The iOS app and extension share enrollment through an App Group and preserve existing device keys. **Show in Files** uses the selected program’s path under Files → Browse → CLIStream when a public direct handoff is unavailable. The owner approved including the current formatting of the shared Info.plist with its camera usage string.
+
+Build each slice locally, including the Mac scheme after shared changes. Run UI automation and screenshot capture exclusively in the hosted macOS, iPhone, iPad, Duo and shared-session suites. Check live terminal bytes, swipe target identity, forwarding, scanner review, Files operations and credential migration. Compare all 17 design screens in both appearances and the Duo across three poses. Record physical camera verification separately. Review the README, platform, protocol, security, deployment and requirements guides and publish verification evidence. [iOS reference](design/ios/spec.md)
 
 ## Native Mac workspace and Finder · November 23, 2026
 

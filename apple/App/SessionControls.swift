@@ -150,13 +150,13 @@ struct SessionActions: ViewModifier {
   }
 }
 
-private struct CommandDraft: Identifiable {
+struct CommandDraft: Identifiable {
   let id = UUID()
   let session: SessionInfo
   let line: String
 }
 
-private struct CommandSheet: View {
+struct CommandSheet: View {
   let draft: CommandDraft
   let submit: ([Data]) -> Void
   @Environment(\.dismiss) private var dismiss
