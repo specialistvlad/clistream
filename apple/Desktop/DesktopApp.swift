@@ -181,7 +181,10 @@ private struct DesktopWindow: View {
             .labelStyle(.titleAndIcon).buttonStyle(.borderedProminent)
         }
       } else if !actions.managed && !actions.revoked {
-        ToolbarItem { Text("Attach only").foregroundStyle(.tertiary) }
+        ToolbarItem {
+          Text("Attach only").foregroundStyle(.tertiary)
+            .accessibilityIdentifier("session-attach-only")
+        }
           .sharedBackgroundVisibility(.hidden)
       }
       if actions.reconnect {

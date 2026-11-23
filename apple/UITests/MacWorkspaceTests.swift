@@ -82,10 +82,18 @@ extension NativeSessionTests {
     let oneShot = app.descendants(matching: .any)["session-" + oneShotID].firstMatch
     oneShot.rightClick()
     try clickMacMenuItem("Open in New Window", in: app)
-    let newWindow = app.windows.firstMatch
-    XCTAssertTrue(newWindow.staticTexts["Attach only"].firstMatch.waitForExistence(timeout: 10))
+    let newWindow = app.windows.containing(.any, identifier: "session-attach-only").firstMatch
+    assertMacElement(newWindow, in: app)
     app.menuBarItems["Session"].click()
-    XCTAssertFalse(app.menuItems["Restart…"].firstMatch.isEnabled)
+    let restart = app.menuBarItems["Session"].menuItems["Restart…"].firstMatch
+    assertMacElement(restart, in: app)
+    if !restart.wait(for: \.isEnabled, toEqual: false, timeout: 6) {
+      let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+      shot.name = "failed-desktop-window-commands"
+      shot.lifetime = .keepAlways
+      add(shot)
+      XCTFail("The active attach-only window enabled Restart")
+    }
     app.typeKey(.escape, modifierFlags: [])
     app.typeKey("w", modifierFlags: .command)
     pipe.click()
