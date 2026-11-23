@@ -278,10 +278,12 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 		return err
 	}
 	var arrivals <-chan string
+	aborted := make(chan struct{})
 	if args[0] == "shared" {
-		arrivals = rendezvous(mux, path+"ready/")
-		rendezvous(mux, path+"switch/")
-		rendezvous(mux, path+"return/")
+		arrivals = rendezvous(mux, path+"ready/", aborted)
+		rendezvous(mux, path+"switch/", aborted)
+		rendezvous(mux, path+"return/", aborted)
+		sharedMacStages(mux, path+"mac-stage/")
 	}
 	issue := func(w http.ResponseWriter, r *http.Request) {
 		data, err := command("clistreamd", "invite").Output()
@@ -321,7 +323,7 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 	defer server.Close()
 	url := fmt.Sprintf("http://127.0.0.1:%d%s", listener.Addr().(*net.TCPAddr).Port, path)
 	if args[0] == "shared" {
-		return shared(plans, arrivals, url, pipe.ID, pipe.Run, terminal.ID, command)
+		return shared(plans, arrivals, func() { close(aborted) }, url, pipe.ID, pipe.Run, terminal.ID, command)
 	}
 	test := exec.Command(args[0], args[1:]...)
 	test.Stdout = os.Stdout

@@ -107,16 +107,10 @@ extension NativeSessionTests {
     let env = ProcessInfo.processInfo.environment
     let link = try await fixtureResponse("SECOND")
     let secondID = try await fixtureResponse("SECOND-ID")
-    let pasteboard = NSPasteboard.general
-    pasteboard.clearContents()
-    pasteboard.setString(link, forType: .string)
-    defer { pasteboard.clearContents() }
-    app.menuBarItems["File"].click()
-    try clickMacMenuItem("Paste Invitation", in: app)
+    try pasteMacInvitation(link, in: app)
     let name = try await fixtureResponse("SECOND-ADDRESS")
     XCTAssertTrue(app.staticTexts[name].firstMatch.waitForExistence(timeout: 10))
     confirmPairing(pairingButton(in: app), in: app)
-    pasteboard.clearContents()
     let other = app.descendants(matching: .any)["session-" + secondID].firstMatch
     XCTAssertTrue(other.waitForExistence(timeout: 15))
     let header = app.descendants(matching: .any)["Server " + name].firstMatch
@@ -197,6 +191,16 @@ extension NativeSessionTests {
       XCTFail("The menu did not present " + title)
     }
     return try XCTUnwrap(app.menuItems.matching(identifier: title).allElementsBoundByIndex.first(where: { $0.isHittable }))
+  }
+
+  @MainActor func pasteMacInvitation(_ link: String, in app: XCUIApplication) throws {
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.setString(link, forType: .string)
+    defer { pasteboard.clearContents() }
+    app.menuBarItems["File"].click()
+    try clickMacMenuItem("Paste Invitation", in: app)
+    XCTAssertTrue(pairingButton(in: app).waitForExistence(timeout: 12))
   }
 
   @MainActor func clickMacMenuItem(_ title: String, in app: XCUIApplication) throws {

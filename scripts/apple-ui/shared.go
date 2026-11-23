@@ -137,7 +137,7 @@ func prepareSimulator(ctx context.Context, device, id, products string) error {
 // Run each UI runner against the same broker. The independent CLI joins via
 // its normal attach command. A unique marker from each writer is retained in
 // the child's history so simulator launch order does not affect the assertion.
-func shared(plans viewerPlans, arrivals <-chan string, url, pipeID, pipeRun, terminalID string, command func(string, ...string) *exec.Cmd) error {
+func shared(plans viewerPlans, arrivals <-chan string, abortBarriers func(), url, pipeID, pipeRun, terminalID string, command func(string, ...string) *exec.Cmd) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
 	var participants sync.WaitGroup
 	defer func() {
@@ -145,6 +145,7 @@ func shared(plans viewerPlans, arrivals <-chan string, url, pipeID, pipeRun, ter
 		participants.Wait()
 	}()
 	results := make(chan error, 4)
+	participants.Go(func() { observeSharedRunner(ctx) })
 	for _, device := range []struct{ name, id string }{
 		{"pad", os.Getenv("IPAD_SIMULATOR_ID")}, {"phone", os.Getenv("IPHONE_SIMULATOR_ID")}, {"mac", ""},
 	} {
@@ -162,7 +163,11 @@ func shared(plans viewerPlans, arrivals <-chan string, url, pipeID, pipeRun, ter
 		env := append(os.Environ(), "TEST_RUNNER_CLISTREAM_FIXTURE="+url, "TEST_RUNNER_CLISTREAM_PARTICIPANT="+device.name,
 			"TEST_RUNNER_CLISTREAM_PIPE_ID="+pipeID, "TEST_RUNNER_CLISTREAM_PTY_ID="+terminalID, "TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY=0")
 		participants.Go(func() {
-			results <- testSharedViewer(ctx, device.name, device.id, plan, dest, suite, env)
+			err := testSharedViewer(ctx, device.name, device.id, plan, dest, suite, env)
+			if err != nil {
+				err = fmt.Errorf("%s XCTest: %w", device.name, err)
+			}
+			results <- err
 		})
 		select {
 		case <-arrivals:
@@ -174,17 +179,47 @@ func shared(plans viewerPlans, arrivals <-chan string, url, pipeID, pipeRun, ter
 	}
 	sharedCheckpoint("Join the three native viewers with the CLI")
 	participants.Go(func() { results <- observeCLI(ctx, command("clistream", "attach", pipeRun)) })
+	var failed error
+	var grace <-chan time.Time
 	for range 4 {
 		select {
 		case err := <-results:
-			if err != nil {
-				return err
+			if err != nil && failed == nil {
+				failed = err
+				fmt.Fprintln(os.Stderr, "Shared viewer exited:", err)
+				// Release blocked UI tests and let XCTest finalize their native
+				// result bundles before cancelling the other subprocesses.
+				abortBarriers()
+				grace = time.After(90 * time.Second)
 			}
+		case <-grace:
+			return failed
 		case <-ctx.Done():
-			return ctx.Err()
+			return errors.Join(failed, ctx.Err())
 		}
 	}
-	return nil
+	return failed
+}
+
+func observeSharedRunner(ctx context.Context) {
+	// Three resident XCTest drivers can contend with the two simulators.
+	// Sample only system pressure and scheduling, never process arguments.
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	previous := time.Now()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			now := time.Now()
+			probe, cancel := context.WithTimeout(ctx, 3*time.Second)
+			data, _ := sharedCommand(probe, "/usr/sbin/sysctl", "kern.memorystatus_vm_pressure_level", "vm.swapusage", "vm.loadavg").Output()
+			cancel()
+			fmt.Printf("Shared runner interval %s: %s\n", now.Sub(previous).Round(time.Second), bytes.TrimSpace(data))
+			previous = now
+		}
+	}
 }
 
 func testSharedViewer(ctx context.Context, name, id, plan, destination, suite string, env []string) error {

@@ -538,16 +538,22 @@ final class NativeSessionTests: XCTestCase {
     }
     #if os(macOS)
       let pty = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PTY_ID"])
+      _ = try await fixtureResponse("mac-stage/select-pty")
       activate(app.descendants(matching: .any)["session-" + pty].firstMatch)
       let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
       expectOutput("Terminal ready", in: app)
+      _ = try await fixtureResponse("mac-stage/pty-ready")
       let previous = try await fixtureResponse("CONTROL-COUNT")
       sendControlC(to: terminal, in: app)
       try await verifyControlC(in: terminal, previous: previous)
+      _ = try await fixtureResponse("mac-stage/control-received")
       let invitation = try await fixtureResponse("SECOND")
       let otherSession = try await fixtureResponse("SECOND-ID")
-      try await enterInvitation(invitation, in: app)
+      _ = try await fixtureResponse("mac-stage/paste-invitation")
+      try pasteMacInvitation(invitation, in: app)
+      _ = try await fixtureResponse("mac-stage/confirm-second-server")
       confirmPairing(pairingButton(in: app), in: app)
+      _ = try await fixtureResponse("mac-stage/select-second-session")
       activate(app.descendants(matching: .any)["session-" + otherSession].firstMatch)
       activate(input)
       input.typeText("independent-mac\n")
@@ -556,6 +562,7 @@ final class NativeSessionTests: XCTestCase {
           NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@",
                       "second:independent-mac", "second:independent-mac")
         ).firstMatch.waitForExistence(timeout: 12))
+      _ = try await fixtureResponse("mac-stage/second-session-echo")
     #endif
     _ = try await fixtureResponse("switch/" + participant)
     if participant == "phone" {
@@ -617,7 +624,11 @@ final class NativeSessionTests: XCTestCase {
     let link = try await invitation()
     #if os(macOS)
       if app.state == .notRunning { app.launch() }
-      try await enterInvitation(link, in: app, captureEmpty: capturePairing)
+      if ProcessInfo.processInfo.environment["CLISTREAM_PARTICIPANT"] != nil {
+        try pasteMacInvitation(link, in: app)
+      } else {
+        try await enterInvitation(link, in: app, captureEmpty: capturePairing)
+      }
     #else
       app.open(try XCTUnwrap(URL(string: link)))
     #endif
