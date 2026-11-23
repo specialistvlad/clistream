@@ -85,24 +85,28 @@ final class SessionTests: XCTestCase {
         let result = try await fixtureResponse("HID")
         XCTAssertEqual(result, "delivered")
       }
+      func selectKey(_ name: String, on panel: String = "outer") async throws {
+        if duo {
+          let result = try await fixtureResponse("duo-key/" + panel + "/" + name)
+          XCTAssertEqual(result, "delivered")
+        } else {
+          openTerminalKeys(in: app)
+          if name == "Control-C" { tap(app.buttons["Control Key"]) }
+          tap(app.buttons[name])
+        }
+      }
       // On the closed Duo the software keyboard leaves only a few rows for a menu.
       // Dismiss it before browsing all the arrow commands.
       if app.keyboards.firstMatch.exists {
-        openTerminalKeys(in: app)
-        tap(app.buttons["Hide Keyboard"])
+        try await selectKey("Hide Keyboard")
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
       }
-      for name in ["Up Arrow", "Down Arrow", "Right Arrow", "Left Arrow", "Escape"] {
-        openTerminalKeys(in: app)
-        tap(app.buttons[name])
+      for name in ["Up Arrow", "Down Arrow", "Right Arrow", "Left Arrow", "Escape", "Control-C"] {
+        try await selectKey(name)
       }
-      openTerminalKeys(in: app)
-      tap(app.buttons["Control Key"])
-      tap(app.buttons["Control-C"])
       // A windowed iPad can keep its horizontal size class through rotation.
       // Start with the software keyboard up and measure both grid dimensions.
-      openTerminalKeys(in: app)
-      tap(app.buttons["Show Keyboard"])
+      try await selectKey("Show Keyboard")
       XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
       let portrait = view.frame.size
       let firstGrid = try await fixtureResponse("GRID")
@@ -112,13 +116,10 @@ final class SessionTests: XCTestCase {
           XCTAssertEqual(restored, "applied")
         }
         try await moveDuo(to: "Open", scenario: "input", in: app)
-        let hidden = try await fixtureResponse("DUO-HIDE-KEYBOARD")
-        XCTAssertEqual(hidden, "delivered")
       } else {
         XCUIDevice.shared.orientation = .landscapeLeft
-        openTerminalKeys(in: app)
-        tap(app.buttons["Hide Keyboard"])
       }
+      try await selectKey("Hide Keyboard", on: "inner")
       XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
       let resized = XCTNSPredicateExpectation(
         predicate: NSPredicate { _, _ in

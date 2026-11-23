@@ -25,7 +25,7 @@ func fixtureResponse(
   var request = URLRequest(url: url)
   if ["ready/", "switch/", "return/"].contains(where: purpose.hasPrefix) {
     request.timeoutInterval = 17 * 60
-  } else if purpose == "EXPIRED" || purpose == "DUO-HIDE-KEYBOARD" || purpose.hasPrefix("pose/") {
+  } else if purpose == "EXPIRED" || purpose.hasPrefix("duo-key/") || purpose.hasPrefix("pose/") {
     request.timeoutInterval = 310
   } else if purpose == "HID" || purpose.hasPrefix("pose-screenshot/") || purpose.hasPrefix("appearance/") {
     request.timeoutInterval = 120

@@ -289,21 +289,36 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 		}
 		http.Error(w, "simulator hinge did not settle", http.StatusServiceUnavailable)
 	})
-	mux.HandleFunc(path+"DUO-HIDE-KEYBOARD", func(w http.ResponseWriter, r *http.Request) {
-		panel, _, err := settledDisplay(r.Context(), poses["Open"])
-		if err != nil || panel.UUID == "" {
-			http.Error(w, "inner display unavailable", http.StatusServiceUnavailable)
+	mux.HandleFunc(path+"duo-key/", func(w http.ResponseWriter, r *http.Request) {
+		role, key, ok := strings.Cut(strings.TrimPrefix(r.URL.Path, path+"duo-key/"), "/")
+		if !ok || (role != "outer" && role != "inner") {
+			http.NotFound(w, r)
 			return
 		}
-		// Bind each native tap to the lit inner display. The outer screen can
-		// remain XCTest's default coordinate space after transferring a window.
-		for _, label := range []string{"Session", "Keys", "Hide Keyboard"} {
+		controls := []string{"Session", "Keys"}
+		switch key {
+		case "Control-C":
+			controls = append(controls, "Control Key")
+		case "Up Arrow", "Down Arrow", "Right Arrow", "Left Arrow", "Escape", "Show Keyboard", "Hide Keyboard":
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		controls = append(controls, key)
+		panel, _, err := duoDisplay(r.Context(), udid)
+		if err != nil || panel.Role != role || panel.UUID == "" {
+			http.Error(w, "requested display unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		// Touch each real menu item on the same measured panel even as UIKit
+		// animates from the Session menu to its nested keyboard commands.
+		for _, label := range controls {
 			tap := exec.CommandContext(r.Context(), "axe", "tap", "--input-mode", "selected",
 				"--screen-id", strconv.FormatUint(uint64(panel.ID), 10), "--screen-uuid", panel.UUID,
 				"--label", label, "--wait-timeout", "15", "--udid", udid)
 			err := tap.Run()
-			if os.Getenv("TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY") == "1" {
-				name := "duo-menu-" + strings.ToLower(strings.ReplaceAll(label, " ", "-")) + ".png"
+			if err != nil || (key == "Hide Keyboard" && os.Getenv("TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY") == "1") {
+				name := "duo-" + role + "-menu-" + strings.ToLower(strings.ReplaceAll(label, " ", "-")) + ".png"
 				if e := captureDuoScreen(r.Context(), udid, panel, filepath.Join("results", name)); e != nil {
 					http.Error(w, "active display capture failed", http.StatusServiceUnavailable)
 					return
