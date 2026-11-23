@@ -60,7 +60,7 @@ func interactionRoutes(mux *http.ServeMux, path, root string, link []byte) error
 	keys := map[string]string{"Up Arrow": "\x1b[A", "Down Arrow": "\x1b[B", "Right Arrow": "\x1b[C", "Left Arrow": "\x1b[D",
 		"Escape": "\x1b", "Control-C": "\x03", "Tab": "\t", "tilde": "~", "pipe": "|", "slash": "/", "dash": "-",
 		"F1": "\x1bOP", "F2": "\x1bOQ", "F3": "\x1bOR", "F4": "\x1bOS", "F5": "\x1b[15~", "F6": "\x1b[17~",
-		"F7": "\x1b[18~", "F8": "\x1b[19~"}
+		"F7": "\x1b[18~", "F8": "\x1b[19~", "a": "a", "b": "b", "c": "c", "d": "d"}
 	mux.HandleFunc(path+"key-count/", func(w http.ResponseWriter, r *http.Request) {
 		sequence, ok := keys[strings.TrimPrefix(r.URL.Path, path+"key-count/")]
 		if !ok {

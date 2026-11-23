@@ -25,7 +25,8 @@
         ("Closed", "a", "[61]"), ("Partially Open", "b", "[62]"),
         ("Open", "c", "[63]"), ("Closed", "d", "[64]"),
       ] {
-        try await moveDuo(to: pose, scenario: "fold", in: app)
+        let window = try await moveDuo(to: pose, scenario: "fold", in: app)
+        let terminal = window.descendants(matching: .any)["session-terminal"].firstMatch
         let layout = XCTNSPredicateExpectation(
           predicate: NSPredicate { _, _ in
             guard terminal.exists && terminal.isHittable else { return false }
@@ -39,12 +40,19 @@
         XCTAssertEqual(result, .completed)
         widths.append(terminal.frame.width)
         // Type into the same live PTY on each display and check the byte the child saw.
-        terminal.tap()
-        terminal.typeText(key)
+        let before = try await fixtureResponse("key-count/" + key)
+        let count = try XCTUnwrap(Int(before))
+        openTerminalKeys(in: app)
+        let letter = app.keyboards.keys[key].firstMatch
+        XCTAssertTrue(letter.wait(for: \.isHittable, toEqual: true, timeout: 10))
+        letter.tap()
         let echoed = XCTNSPredicateExpectation(
           predicate: NSPredicate(format: "value CONTAINS %@", marker), object: terminal)
         let received = await XCTWaiter.fulfillment(of: [echoed], timeout: 10)
-        XCTAssertEqual(received, .completed)
+        let after = try await fixtureResponse("key-count/" + key)
+        if received != .completed || Int(after) != count + 1 { recordDuoFailure("fold-" + key, in: app) }
+        XCTAssertEqual(Int(after), count + 1, "Child byte receipt on the " + pose + " display")
+        XCTAssertEqual(received, .completed, "Visible echo on the " + pose + " display")
         if key != "d", ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1" {
           let captured = try await fixtureResponse("pose-screenshot/" + pose)
           XCTAssertEqual(captured, "captured")
@@ -56,23 +64,26 @@
   }
 
   extension XCTestCase {
-    @MainActor func moveDuo(to pose: String, scenario: String, in app: XCUIApplication,
-                            file: StaticString = #filePath, line: UInt = #line) async throws {
+    @discardableResult @MainActor func moveDuo(to pose: String, scenario: String, in app: XCUIApplication,
+                            file: StaticString = #filePath, line: UInt = #line) async throws -> XCUIElement {
       struct Panel: Decodable { let Width, Height: Double }
       let reply = try await fixtureResponse("pose/" + scenario + "/" + pose, file: file, line: line)
       let panel = try JSONDecoder().decode(Panel.self, from: Data(reply.utf8))
-      let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
-      let live = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-        guard app.state == .runningForeground, terminal.exists && terminal.isHittable else { return false }
-        return app.windows.allElementsBoundByIndex.contains { window in
+      func activeWindow() -> XCUIElement? {
+        app.windows.allElementsBoundByIndex.first { window in
           let size = window.frame.size
           return abs(size.width - panel.Width) < 2 && abs(size.height - panel.Height) < 2
+            && window.descendants(matching: .any)["session-terminal"].firstMatch.isHittable
         }
+      }
+      let live = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+        app.state == .runningForeground && activeWindow() != nil
       }, object: nil)
       let result = await XCTWaiter.fulfillment(of: [live], timeout: 30)
       if result != .completed { recordDuoFailure(scenario + "-scene", in: app) }
       XCTAssertEqual(result, .completed, "The terminal did not become active on the \(pose) display",
                      file: file, line: line)
+      return try XCTUnwrap(activeWindow(), file: file, line: line)
     }
 
     @MainActor func recordDuoFailure(_ stage: String, in app: XCUIApplication) {
@@ -83,7 +94,7 @@
       }
       let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
       for (name, item) in [("terminal", terminal), ("sessionMenu", app.buttons["Session"].firstMatch),
-                           ("keys", app.buttons["Keys"].firstMatch), ("hideKeyboard", app.buttons["Hide Keyboard"].firstMatch),
+                           ("control", app.buttons["Control Key"].firstMatch), ("hideKeyboard", app.buttons["Hide Keyboard"].firstMatch),
                            ("keyboard", app.keyboards.firstMatch)] {
         state.append(item.exists ? "\(name) hittable=\(item.isHittable) frame=\(item.frame)" : "\(name) missing")
       }
