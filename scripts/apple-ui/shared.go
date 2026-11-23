@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -88,31 +87,8 @@ func prepareViewers(root string) (viewerPlans, error) {
 	if err != nil {
 		return viewerPlans{}, err
 	}
-	products := filepath.Join(filepath.Dir(mobilePlan), "Debug-iphonesimulator")
-	// The phone's second launch overlaps the active iPad. Preload it while
-	// the machine is idle; XCTest itself installs any product still missing.
-	phone := os.Getenv("IPHONE_SIMULATOR_ID")
-	if err := prepareStage(ctx, "Boot iPhone before pairing", 10*time.Minute, "apple/boot-simulator.sh", phone); err != nil {
-		return viewerPlans{}, err
-	}
-	for _, bundle := range []string{"CLIStream.app", "CLIStreamUITests-Runner.app"} {
-		err := prepareStage(ctx, "Preload "+bundle+" on iPhone", 6*time.Minute,
-			"xcrun", "simctl", "install", phone, filepath.Join(products, bundle))
-		if err == nil {
-			continue
-		}
-		var exit *exec.ExitError
-		lostInstaller := errors.As(err, &exit) && exit.ExitCode() == 204
-		if ctx.Err() != nil || (!errors.Is(err, context.DeadlineExceeded) && !lostInstaller) {
-			return viewerPlans{}, err
-		}
-		sharedCheckpoint("iPhone preload interrupted. Reboot and use Xcode to finish installation.")
-		break
-	}
-	if err := shutdownSimulator(ctx, "Shut down iPhone before starting iPad", phone); err != nil {
-		return viewerPlans{}, err
-	}
-	// Keep the phone off throughout the iPad's initial installation and pairing.
+	// Finish installing and pairing on a fresh iPad before CoreSimulator
+	// starts a second device. Each simulator boots only once in a normal run.
 	if err := prepareStage(ctx, "Boot the iPad for installation and pairing", 10*time.Minute,
 		"apple/boot-simulator.sh", os.Getenv("IPAD_SIMULATOR_ID")); err != nil {
 		return viewerPlans{}, err
@@ -120,33 +96,8 @@ func prepareViewers(root string) (viewerPlans, error) {
 	return viewerPlans{macPlan, mobilePlan}, nil
 }
 
-func shutdownSimulator(ctx context.Context, label, id string) error {
-	err := prepareStage(ctx, label, 90*time.Second, "xcrun", "simctl", "shutdown", id)
-	if err == nil {
-		return nil
-	}
-	// CoreSimulator may already have shut down the device after losing its
-	// installation service. Confirm the state before proceeding to reboot.
-	query, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	data, listErr := sharedCommand(query, "xcrun", "simctl", "list", "devices", "--json").Output()
-	var list struct {
-		Devices map[string][]struct{ UDID, State string }
-	}
-	if listErr == nil && json.Unmarshal(data, &list) == nil {
-		for _, devices := range list.Devices {
-			for _, device := range devices {
-				if device.UDID == id && device.State == "Shutdown" {
-					return nil
-				}
-			}
-		}
-	}
-	return err
-}
-
-func bootPreparedPhone(ctx context.Context, id string) error {
-	ctx, cancel := context.WithTimeout(ctx, 7*time.Minute)
+func bootSharedPhone(ctx context.Context, id string) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 	var diagnostic bytes.Buffer
 	boot := func(label string) error {
@@ -159,7 +110,7 @@ func bootPreparedPhone(ctx context.Context, id string) error {
 		}
 		return nil
 	}
-	err := boot("Boot the prepared iPhone")
+	err := boot("Boot iPhone alongside the paired iPad")
 	var exit *exec.ExitError
 	if os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted" && errors.As(err, &exit) &&
 		exit.ExitCode() == int(syscall.ECONNABORTED) && ctx.Err() == nil &&
@@ -189,7 +140,7 @@ func shared(plans viewerPlans, arrivals <-chan string, abortBarriers func(), url
 		{"pad", os.Getenv("IPAD_SIMULATOR_ID")}, {"phone", os.Getenv("IPHONE_SIMULATOR_ID")}, {"mac", ""},
 	} {
 		if device.name == "phone" {
-			if err := bootPreparedPhone(ctx, device.id); err != nil {
+			if err := bootSharedPhone(ctx, device.id); err != nil {
 				return err
 			}
 		}

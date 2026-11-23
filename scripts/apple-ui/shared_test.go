@@ -108,7 +108,7 @@ func TestTabletScreenReadsOnlyTerminalEchoAndNamedSystemPrompt(t *testing.T) {
 	}
 }
 
-func TestPreparedPhoneResumesOnlyAfterInterruptedHostedBoot(t *testing.T) {
+func TestSharedPhoneResumesOnlyAfterInterruptedHostedBoot(t *testing.T) {
 	for _, tc := range []struct {
 		name, runner               string
 		firstCode, lastCode, calls int
@@ -139,7 +139,7 @@ exit "$FIRST_CODE"
 			if err := os.WriteFile(filepath.Join(dir, "xcrun"), []byte(stub), 0700); err != nil {
 				t.Fatal(err)
 			}
-			err := bootPreparedPhone(t.Context(), "prepared-id")
+			err := bootSharedPhone(t.Context(), "prepared-id")
 			if (err == nil) != tc.ok {
 				t.Fatalf("unexpected boot result: %v", err)
 			}

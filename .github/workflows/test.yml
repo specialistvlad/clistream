@@ -88,12 +88,17 @@ jobs:
             exit 2
           fi
           simulator() {
-            local id
-            id=$(xcrun simctl list devices available --json | jq -er --arg device "$1" '
+            local selected id model
+            selected=$(xcrun simctl list devices available --json | jq -er --args '
               [.devices | to_entries[] | select(.key | contains("iOS-27-"))]
               | sort_by(.key | capture("iOS-(?<version>[0-9]+(?:-[0-9]+)*)").version | split("-") | map(tonumber))
-              | [.[].value[] | select(.name == $device)][-1].udid // error("missing simulator")') || return 1
-            xcrun simctl rename "$id" "CLIStream CI $1" || return 1
+              | reverse
+              | first(.[] as $runtime | $ARGS.positional[] as $model | $runtime.value[] | select(.name == $model))
+                // error("none of the requested iOS 27 simulators are installed")
+              | [.udid, .name] | @tsv' "$@") || return 1
+            IFS=$'\t' read -r id model <<< "$selected"
+            echo "Selected $model" >&2
+            xcrun simctl rename "$id" "CLIStream CI $model" || return 1
             echo "$id"
           }
           case "$DEVICE" in
@@ -102,7 +107,7 @@ jobs:
               make build
               export IPHONE_SIMULATOR_ID IPAD_SIMULATOR_ID
               IPHONE_SIMULATOR_ID=$(simulator 'iPhone 18 Pro')
-              IPAD_SIMULATOR_ID=$(simulator 'iPad Pro 13-inch (M5)')
+              IPAD_SIMULATOR_ID=$(simulator 'iPad mini (A17 Pro)' 'iPad (A16)' 'iPad Pro 13-inch (M5)')
               go run ./scripts/apple-ui shared ;;
             iPhone) SIMULATOR_ID="$(simulator 'iPhone 18 Pro')" apple/test-native.sh ;;
             iPad) SIMULATOR_ID="$(simulator 'iPad Pro 13-inch (M5)')" apple/test-native.sh ;;
