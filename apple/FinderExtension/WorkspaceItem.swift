@@ -49,11 +49,22 @@ final class WorkspaceItem: NSObject, NSFileProviderItem {
     default: return [.allowsContentEnumerating]
     }
   }
+  #if os(iOS)
+  var fileSystemFlags: NSFileProviderFileSystemFlags {
+    var flags: NSFileProviderFileSystemFlags = [.userReadable]
+    if node.kind != .file { flags.insert(.userExecutable) }
+    if capabilities.contains(.allowsWriting) { flags.insert(.userWritable) }
+    return flags
+  }
+  #endif
   var itemVersion: NSFileProviderItemVersion {
     // File Provider caps both components at 128 bytes. Keep the supervisor's
     // short version for conditional writes, and hash variable-length UI metadata.
     let content = node.isRemote ? Data(node.contentRevision.utf8) : Data(SHA256.hash(data: Data(node.id.utf8)))
-    let metadata = Data(FinderID.make(node.parent, node.name, node.version).utf8)
+    var metadata = Data(FinderID.make(node.parent, node.name, node.version).utf8)
+    #if os(iOS)
+      metadata.append(contentsOf: String(fileSystemFlags.rawValue).utf8)
+    #endif
     return .init(
       contentVersion: content,
       metadataVersion: Data(SHA256.hash(data: metadata)))

@@ -137,35 +137,23 @@ import OSLog
     let logicalPath = filesPath(row, in: workspace)
     guard registered.contains(where: { $0.identifier == FinderStorage.domain.identifier && $0.userEnabled })
     else { return logicalPath }
-    try await manager.signalEnumerator(for: .workingSet)
     let id = NSFileProviderItemIdentifier(FinderID.workspace(row.server.id, row.item.id))
-    let folder = try await manager.getUserVisibleURL(for: id)
-    let root = try await manager.getUserVisibleURL(for: .rootContainer)
-    let base = root.standardizedFileURL.pathComponents
-    let path = folder.standardizedFileURL.pathComponents
-    guard path.starts(with: base), path.count == base.count + 3 else { return logicalPath }
-    let components = Array(path.dropFirst(base.count))
-    // Files can enable a new domain before it has materialized its virtual
-    // folders. Resolve the visible names under a coordinated, scoped read.
-    // Only the server/host/program hierarchy is read, never the remote files.
-    try await Task.detached(priority: .userInitiated) {
-      let acquired = root.startAccessingSecurityScopedResource()
-      defer { if acquired { root.stopAccessingSecurityScopedResource() } }
-      var parent = root
-      for name in components {
-        var coordinationError: NSError?
-        var listing: Result<[URL], Error>?
-        NSFileCoordinator().coordinate(readingItemAt: parent, options: .withoutChanges, error: &coordinationError) { url in
-          listing = Result { try FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil) }
-        }
-        if let coordinationError { throw coordinationError }
-        guard let child = try listing?.get().first(where: { $0.lastPathComponent == name }) else {
-          throw CocoaError(.fileReadNoSuchFile)
-        }
-        parent = child
+    do {
+      try await manager.signalEnumerator(for: .workingSet)
+      let folder = try await manager.getUserVisibleURL(for: id)
+      let root = try await manager.getUserVisibleURL(for: .rootContainer)
+      let base = root.standardizedFileURL.pathComponents
+      let path = folder.standardizedFileURL.pathComponents
+      if path.starts(with: base), path.count == base.count + 3 {
+        return (["Browse", "CLIStream"] + path.dropFirst(base.count)).joined(separator: " → ")
       }
-    }.value
-    return (["Browse", "CLIStream"] + components).joined(separator: " → ")
+    } catch {
+      // The app can still name the location when Files owns the only readable
+      // copy of its directory. Access to its URL is optional for this command.
+      let reason = error as NSError
+      logger.notice("Files path refresh unavailable: \(reason.domain, privacy: .public) \(reason.code)")
+    }
+    return logicalPath
   }
 
   static func filesPath(_ row: WorkspaceSession, in workspace: Workspace) -> String {
