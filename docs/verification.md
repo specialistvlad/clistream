@@ -12,6 +12,14 @@ Open `docs/screenshots/index.html` in the checkout used for capture. The gallery
 
 ## Mobile redesign and Files · November 23, 2026
 
+| Target | Verified on hosted runners | Still open |
+|---|---|---|
+| iPhone Pro | Search and swipe lifecycle, signed invitation review, large-text accessibility, ten of eleven design boards in light and dark | Pasted-link review and its two screenshots, standalone Files write round trip, full suite |
+| iPad | Pairing, selecting a terminal, launching Files and finding its first-use consent prompt | Regular-width board comparison, standalone Files writes against both hosts, full suite |
+| Duo | All four design boards and the partially open pose in light and dark, adaptive toolbars, Ports inspector, search and swipe lifecycle | Typed input and remote echo through the complete fold sequence, full suite |
+| macOS | All 24 required native cases, complete design gallery and a separate Finder write round trip against Linux. The optional real-CLI driver case was skipped. [Mac results](https://github.com/specialistvlad/clistream/actions/runs/45243809058/job/137937458564) | — |
+| Four clients | iPad paired and rendered child output | Complete the concurrent Mac, iPhone, iPad and Go CLI exchange |
+
 The iOS and macOS schemes compiled locally with Xcode 27.1. The simulator app embeds CLIStreamFiles.appex. The Go race tests, vet and end-to-end suite passed on macOS and in a Debian container with Go 1.27.4 (`make test e2e`). The UI suites and all visual captures run on isolated GitHub runners. The focused iPhone suite covers QR review, paste, search and swipe actions. The iPad Files test checks real remote changes against both macOS and Linux supervisors. [iPhone acceptance](https://github.com/specialistvlad/clistream/actions/runs/45230753695) · [iPad Files acceptance](https://github.com/specialistvlad/clistream/actions/runs/45230753802)
 
 Device archive signing currently requires the Apple Developer team to assign `group.com.vlk.clistream.workspace` to both `com.vlk.clistream` and `com.vlk.clistream.files`. The generated development profiles included an empty App Groups entitlement. Physical camera recognition, a signed Files-enabled device installation, the full hosted matrix and visual review of the redesigned gallery are pending.
