@@ -53,11 +53,28 @@ extension NativeSessionTests {
       assertMacElement(app.staticTexts[heading].firstMatch, in: app)
       app.typeKey(.escape, modifierFlags: [])
     }
-    pipe.click()
+  }
+
+  @MainActor func testKeyWindowMenuCommands() async throws {
+    let app = try await openPipe()
+    let env = ProcessInfo.processInfo.environment
+    let pipeID = try XCTUnwrap(env["CLISTREAM_PIPE_ID"])
+    let pipe = app.descendants(matching: .any)["session-" + pipeID].firstMatch
+    let search = app.searchFields.firstMatch
     for (menu, item) in [("File", "Paste Invitation"), ("Edit", "Copy"), ("View", "Show Ports"),
                          ("Session", "Restart…"), ("Server", "Remove Server…")] {
+      if menu == "Edit" {
+        search.click()
+        search.typeText("sh")
+        search.typeKey("a", modifierFlags: .command)
+      }
       try await captureMenu("menu-" + menu.lowercased(), in: app, title: item) {
         app.menuBarItems[menu].click()
+      }
+      if menu == "Edit" {
+        search.click()
+        search.typeKey("a", modifierFlags: .command)
+        search.typeKey(.delete, modifierFlags: [])
       }
     }
 
