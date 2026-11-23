@@ -410,18 +410,10 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 			}
 			// The XCTest runner is a background process. Set the clipboard on the
 			// selected simulator and verify its actual contents before tapping Paste.
-			copy := exec.CommandContext(r.Context(), "xcrun", "simctl", "pbcopy", id)
-			copy.Stdin = bytes.NewReader(value)
-			if err := copy.Run(); err != nil {
+			if err := setSimulatorClipboard(r.Context(), id, value); err != nil {
+				fmt.Fprintln(os.Stderr, "Simulator clipboard setup:", err)
 				http.Error(w, "simulator pasteboard unavailable", http.StatusServiceUnavailable)
 				return
-			}
-			if len(value) > 0 {
-				stored, err := exec.CommandContext(r.Context(), "xcrun", "simctl", "pbpaste", id).Output()
-				if err != nil || !bytes.Equal(stored, value) {
-					http.Error(w, "simulator pasteboard did not retain the text", http.StatusServiceUnavailable)
-					return
-				}
 			}
 			fmt.Fprint(w, "ready")
 		}

@@ -20,6 +20,31 @@ import (
 	"github.com/specialistvlad/clistream/internal/identity"
 )
 
+func setSimulatorClipboard(ctx context.Context, device string, value []byte) error {
+	var last error
+	for attempt := 0; attempt < 2 && ctx.Err() == nil; attempt++ {
+		write := exec.CommandContext(ctx, "xcrun", "simctl", "pbcopy", device)
+		write.Stdin = bytes.NewReader(value)
+		if err := write.Run(); err != nil {
+			last = fmt.Errorf("pbcopy: %w", err)
+			continue
+		}
+		if len(value) == 0 {
+			return nil
+		}
+		read := exec.CommandContext(ctx, "xcrun", "simctl", "pbpaste", device)
+		stored, err := read.Output()
+		if err != nil {
+			last = fmt.Errorf("pbpaste: %w", err)
+		} else if bytes.Equal(bytes.TrimSpace(stored), value) {
+			return nil
+		} else {
+			last = errors.New("clipboard text did not match the fixture")
+		}
+	}
+	return errors.Join(last, ctx.Err())
+}
+
 func interactionRoutes(mux *http.ServeMux, path, root string, link []byte) error {
 	invitation, err := identity.ParseInvitation(strings.TrimSpace(string(link)))
 	if err != nil {

@@ -27,7 +27,7 @@ func fixtureResponse(
     request.timeoutInterval = 17 * 60
   } else if purpose == "EXPIRED" || purpose.hasPrefix("duo-key/") || purpose.hasPrefix("pose/") {
     request.timeoutInterval = 310
-  } else if purpose == "HID" || purpose.hasPrefix("pose-screenshot/") || purpose.hasPrefix("appearance/") {
+  } else if purpose == "HID" || purpose.hasPrefix("pose-screenshot/") || purpose.hasPrefix("appearance/") || purpose.hasPrefix("pasteboard/") {
     request.timeoutInterval = 120
   } else {
     request.timeoutInterval = 45
