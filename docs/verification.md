@@ -36,6 +36,8 @@ Finder on a clean hosted Mac enabled CLIStream under Locations and opened the se
 
 In a later Linux run, Finder deleted the file and then rejected deletion of its empty parent because the host's directory version had advanced. The provider now verifies the directory identity and issues a nonrecursive, version-checked removal. Regression tests on macOS and Linux also verified that a newly added child survives that request. The complete Finder interaction then passed again in 1m 29s on macOS and 1m 8s on Debian. The native desktop suite independently passed all 23 required cases and exported 56 screenshots. [Both Finder hosts after the fix](https://github.com/specialistvlad/clistream/actions/runs/45197171608/job/137770637259) · [Native suite and gallery](https://github.com/specialistvlad/clistream/actions/runs/45186947338/job/137745462629)
 
+One subsequent hosted Mac job passed all 23 required cases, both real Finder workspaces and the complete light/dark gallery together. The Linux Finder interaction took 1m 16s. The Duo also passed first launch and the complete four-position fold in its full suite and captured the focused Restart sheet with both actions visible above the keyboard. [Complete Mac job](https://github.com/specialistvlad/clistream/actions/runs/45200962332/job/137784714284) · [Duo suite and captures](https://github.com/specialistvlad/clistream/actions/runs/45200962332/job/137784713835)
+
 ## Native terminal workspace · November 22, 2026
 
 Both Go jobs passed their release archive checks and end-to-end suites on macOS and Linux. The Linux job also passed the container deployment checks. [Go matrix](https://github.com/specialistvlad/clistream/actions/runs/45014110837)

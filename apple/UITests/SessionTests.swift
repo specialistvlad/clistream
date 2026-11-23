@@ -86,13 +86,25 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(result, "delivered")
       }
       func selectKey(_ name: String, on panel: String = "outer") async throws {
+        let keyboardVisibility = ["Show Keyboard": true, "Hide Keyboard": false][name]
+        let keyboard = app.keyboards.firstMatch
         if duo {
+          if let keyboardVisibility {
+            XCTAssertTrue(keyboard.wait(for: \.exists, toEqual: !keyboardVisibility, timeout: 10))
+          }
           let result = try await fixtureResponse("duo-key/" + panel + "/" + name)
-          XCTAssertEqual(result, "delivered")
+          if result == "input enqueued" {
+            XCTAssertNotNil(keyboardVisibility, "Only a keyboard visibility change can verify this receipt")
+          } else {
+            XCTAssertEqual(result, "delivered")
+          }
         } else {
           openTerminalKeys(in: app)
           if name == "Control-C" { tap(app.buttons["Control Key"]) }
           tap(app.buttons[name])
+        }
+        if let keyboardVisibility {
+          XCTAssertTrue(keyboard.wait(for: \.exists, toEqual: keyboardVisibility, timeout: 10))
         }
       }
       // On the closed Duo the software keyboard leaves only a few rows for a menu.
@@ -112,7 +124,6 @@ final class SessionTests: XCTestCase {
           }
         }
         try await selectKey("Hide Keyboard")
-        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
       }
       for name in ["Up Arrow", "Down Arrow", "Right Arrow", "Left Arrow", "Escape", "Control-C"] {
         try await selectKey(name)
@@ -120,7 +131,6 @@ final class SessionTests: XCTestCase {
       // A windowed iPad can keep its horizontal size class through rotation.
       // Start with the software keyboard up and measure both grid dimensions.
       try await selectKey("Show Keyboard")
-      XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
       let portrait = view.frame.size
       let firstGrid = try await fixtureResponse("GRID")
       if duo {
@@ -133,7 +143,6 @@ final class SessionTests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
       }
       try await selectKey("Hide Keyboard", on: "inner")
-      XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
       let resized = XCTNSPredicateExpectation(
         predicate: NSPredicate { _, _ in
           let size = view.frame.size

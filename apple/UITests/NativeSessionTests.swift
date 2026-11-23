@@ -269,6 +269,16 @@ final class NativeSessionTests: XCTestCase {
     #endif
     let saved = try XCTUnwrap(field.value as? String)
     XCTAssertFalse(saved.isEmpty)
+    func expectCommand(_ expected: String, file: StaticString = #filePath, line: UInt = #line) {
+      let changed = XCTNSPredicateExpectation(
+        predicate: NSPredicate(format: "value == %@", expected), object: field)
+      guard XCTWaiter.wait(for: [changed], timeout: 8) != .completed else { return }
+      let screen = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+      screen.name = "command-review-window"
+      screen.lifetime = .keepAlways
+      add(screen)
+      XCTAssertEqual(field.value as? String, expected, file: file, line: line)
+    }
     try await capture("edit-command", app)
     #if os(iOS)
       XCTAssertTrue(field.wait(for: \.isHittable, toEqual: true, timeout: 10))
@@ -276,12 +286,12 @@ final class NativeSessionTests: XCTestCase {
     #endif
     field.typeKey("a", modifierFlags: .command)
     field.typeText("'")
-    XCTAssertEqual(field.value as? String, "'")
+    expectCommand("'")
     XCTAssertTrue(app.buttons["Restart"].firstMatch.wait(for: \.isEnabled, toEqual: false, timeout: 5))
     field.typeKey("a", modifierFlags: .command)
     field.typeText(saved + " 'two words' ")
     field.typeText("\"\"")
-    XCTAssertEqual(field.value as? String, saved + " 'two words' \"\"")
+    expectCommand(saved + " 'two words' \"\"")
     try await capture("restart-confirmation",app)
     #if os(iOS)
       let confirm = app.buttons["workspace-confirm"].firstMatch

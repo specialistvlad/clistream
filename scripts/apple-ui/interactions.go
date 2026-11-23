@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -204,6 +205,8 @@ type duoToolbarButton struct {
 	point   [2]int
 }
 
+var errDuoKeyboardInputEnqueued = errors.New("keyboard input enqueued, confirm its visible state")
+
 // A menu may be fully drawn before AXe's label tap accepts its hit-test
 // receipt. If it certifies that no input was sent, locate the actual visible
 // control again and touch its center on the same physical panel.
@@ -244,6 +247,10 @@ func (toolbar *duoToolbarButton) tapControl(ctx context.Context, udid string, pa
 	}
 	outcome := receipt.Data.Result
 	fmt.Printf("Duo label %s: AXe code %s, input cleanup %s\n", label, receipt.Error.Code, outcome.Cleanup)
+	if (label == "Hide Keyboard" || label == "Show Keyboard") && receipt.Error.Code == "inputFailed" &&
+		outcome.EnqueuedEventCount != nil && *outcome.EnqueuedEventCount > 0 && outcome.Cleanup == "notNeeded" {
+		return errDuoKeyboardInputEnqueued
+	}
 	if outcome.EnqueuedEventCount == nil || *outcome.EnqueuedEventCount != 0 || outcome.Cleanup == "" || outcome.Cleanup == "uncertain" {
 		return err
 	}
@@ -432,6 +439,11 @@ func poseRoute(mux *http.ServeMux, path, udid, keysFile string) {
 		// animates from the Session menu to its nested keyboard commands.
 		for _, label := range controls {
 			err := toolbar.tapControl(r.Context(), udid, panel, degrees, label)
+			if err == errDuoKeyboardInputEnqueued && label == key {
+				fmt.Printf("Duo sent %s on display %d. Checking keyboard visibility in XCTest.\n", key, panel.ID)
+				fmt.Fprint(w, "input enqueued")
+				return
+			}
 			if label == key && want != "" {
 				received := false
 				for deadline := time.Now().Add(5 * time.Second); r.Context().Err() == nil && time.Now().Before(deadline); {

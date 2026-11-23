@@ -14,7 +14,7 @@ func TestDuoMenuVerifiesScreenAndUnsentInputBeforePointTap(t *testing.T) {
 echo "$*" >> "$DUO_TEST_CALLS"
 case "$*" in
   *describe-ui*) printf '{"data":{"result":%s}}' "$DUO_TEST_TREE" ;;
-  *--verbose*) printf '{"error":{"code":"timeout"},"data":{"result":{"enqueuedEventCount":%s,"cleanup":"notNeeded"}}}' "$DUO_TEST_SENT"; exit 1 ;;
+  *--verbose*) printf '{"error":{"code":"%s"},"data":{"result":{"enqueuedEventCount":%s,"cleanup":"%s"}}}' "$DUO_TEST_CODE" "$DUO_TEST_SENT" "$DUO_TEST_CLEANUP"; exit 1 ;;
   *"-x 25 -y 36"*) exit 0 ;;
   *) exit 2 ;;
 esac
@@ -23,6 +23,8 @@ esac
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("DUO_TEST_CODE", "timeout")
+	t.Setenv("DUO_TEST_CLEANUP", "notNeeded")
 	item := `{"AXLabel":"Left Arrow","frame":{"x":10,"y":20,"width":30,"height":32}}`
 	other := `{"AXLabel":"Left Arrow","frame":{"x":50,"y":100,"width":30,"height":32}}`
 	for _, tc := range []struct {
@@ -52,6 +54,18 @@ esac
 				t.Fatalf("physical panel input = %t, want %t", tapped, tc.wantTap)
 			}
 		})
+	}
+	t.Setenv("DUO_TEST_CALLS", filepath.Join(dir, "keyboard-calls"))
+	t.Setenv("DUO_TEST_SENT", "1")
+	t.Setenv("DUO_TEST_CODE", "inputFailed")
+	var toolbar duoToolbarButton
+	panel := duoScreen{ID: 3, UUID: "panel", Width: 951, Height: 669}
+	if err := toolbar.tapControl(context.Background(), "sim", panel, 180, "Hide Keyboard"); err != errDuoKeyboardInputEnqueued {
+		t.Fatalf("expected keyboard visibility verification, got %v", err)
+	}
+	t.Setenv("DUO_TEST_CLEANUP", "uncertain")
+	if err := toolbar.tapControl(context.Background(), "sim", panel, 180, "Hide Keyboard"); err == nil || err == errDuoKeyboardInputEnqueued {
+		t.Fatalf("uncertain input cleanup was accepted: %v", err)
 	}
 }
 
