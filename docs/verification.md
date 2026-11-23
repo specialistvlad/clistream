@@ -54,6 +54,10 @@ The final full Duo rerun without screenshots passed 16 of 20 required cases. Fol
 
 The isolated four-client test passed with the native Mac, iPhone and iPad apps and an independent Go terminal client attached to the same pipe. All four exchanged input. The Mac switched to a PTY and then to a second server while the other three continued using the original child. When the Mac returned, it saw the phone’s input from its time away. [Four-client test](https://github.com/specialistvlad/clistream/actions/runs/45019186229)
 
+## TestFlight 0.1.0 (2611231650)
+
+The native macOS app with its Finder extension and the universal iPhone and iPad app were archived from `32b02f4`. Both archives passed strict code-signature verification. App Store Connect reported `VALID` and `IN_BETA_TESTING` for both builds and confirmed access for the existing internal tester group. The builds use the preceding beta’s encryption declaration. The full hosted test matrix for this revision was still pending at upload. [TestFlight builds](https://appstoreconnect.apple.com/apps/6837168864/testflight) · [Hosted checks for the uploaded revision](https://github.com/specialistvlad/clistream/actions/runs/45220689577)
+
 ## TestFlight 0.1.0 (2611221901)
 
 The iOS and native macOS archives were built from revision `3dcb2ce`, signature-checked, and uploaded to App Store Connect. Both builds finished processing and are available to the existing internal tester group. The same export-compliance declaration used for the previous builds was applied after checking that the encryption code and dependencies had not changed. The hosted UI results for this revision are recorded above.
