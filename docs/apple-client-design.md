@@ -32,7 +32,7 @@ On Mac, use the window toolbar for lifecycle actions. On iPhone and iPad, open *
 
 ## Finder workspaces
 
-To enable CLIStream on this Mac, open **System Settings › General › Login Items & Extensions**. Select **By Category**, click the info button beside **File Providers**, and turn on **CLIStream**. Return to your session and choose **Show in Finder**. [Apple’s guide to extension settings](https://support.apple.com/guide/mac-help/mtusr003/mac)
+To enable CLIStream on this Mac, select **CLIStream** under **Locations** in the Finder sidebar and click **Enable**. You can also open **System Settings › General › Login Items & Extensions**, select **By Category**, click the info button beside **File Providers**, and turn on **CLIStream**. Return to your session and choose **Show in Finder**. [Apple’s guide to extension settings](https://support.apple.com/guide/mac-help/mtusr003/mac)
 
 **Show in Finder** opens the selected program under **CLIStream › server › host › program**. The system downloads file contents on demand. Finder and ordinary document apps can create, save, move, rename and remove items in a shared folder. Host-side edits are picked up by the provider. Workspaces belong to the supervisor, so stopping and restarting a managed child preserves the folder. Legacy peers and supervisors started with `--files=FALSE` omit this action. The Go CLI continues to provide its own workspace commands on Linux and macOS. [Apple File Provider](https://developer.apple.com/documentation/fileprovider)
 

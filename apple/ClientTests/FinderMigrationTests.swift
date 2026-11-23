@@ -5,6 +5,23 @@
   @testable import CLIStream
 
   extension ClientTests {
+    func testFinderResolvesOnlyTheMatchingRootEnrollment() throws {
+      let files = FileManager.default
+      let root = files.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? files.removeItem(at: root) }
+      let legacy = String(repeating: "a", count: 64)
+      let current = String(repeating: "b", count: 64)
+      let unknown = String(repeating: "c", count: 64)
+      let nested = try FinderStorage.credentialDirectory(current, in: root)
+      try files.createDirectory(at: nested, withIntermediateDirectories: true)
+      for (dir, pin) in [(root, legacy), (nested, current)] {
+        try JSONEncoder().encode(["Pin": pin]).write(to: dir.appendingPathComponent("server.json"))
+      }
+      XCTAssertEqual(try FinderStorage.existingEnrollment(legacy, in: root).path, root.path)
+      XCTAssertEqual(try FinderStorage.existingEnrollment(current, in: root).path, nested.path)
+      XCTAssertThrowsError(try FinderStorage.existingEnrollment(unknown, in: root))
+    }
+
     @MainActor func testMigratesMacProfilesWithoutChangingKeysOrRevivingRemovedServers() throws {
       let files = FileManager.default
       let temp = files.temporaryDirectory.appendingPathComponent(UUID().uuidString)

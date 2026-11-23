@@ -122,11 +122,26 @@ struct WorkspaceSession: Identifiable {
   }
   private func receive(_ connection: Connection, from profile: ServerProfile) {
     guard watchers[profile.id] != nil else { return }
+    #if os(macOS)
+      let restored = revoked(profile) && connection.listError.isEmpty
+    #endif
     let errorChanged = errors[profile.id] != connection.listError
     let rowsChanged = connection.listError.isEmpty && rows[profile.id] != connection.sessions
     if errorChanged { errors[profile.id] = connection.listError }
     if rowsChanged { rows[profile.id] = connection.sessions }
     if errorChanged || rowsChanged { updateFinder() }
+    #if os(macOS)
+      if restored {
+        // A repaired window still displays the old terminal. Resume its live
+        // attachment even when the operator keeps the same sidebar selection.
+        for item in connection.sessions where item.running {
+          let id = WorkspaceSession(server: profile, item: item).id
+          if let terminal = terminals[id], !terminal.attached {
+            Task { await terminal.attach(item) }
+          }
+        }
+      }
+    #endif
     let sample = connection.listError.isEmpty ? connection.latency : nil
     setSample(sample, for: profile.id)
   }

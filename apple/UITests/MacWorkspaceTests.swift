@@ -15,6 +15,8 @@ extension NativeSessionTests {
     XCTAssertTrue(shell.waitForExistence(timeout: 10))
     shell.click()
     let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
+    assertMacElement(terminal, in: app)
+    terminal.click()
     terminal.typeText("echo shell-ready\n")
     expectOutput("shell-ready", in: app)
     try await capture("servers-tree", app)

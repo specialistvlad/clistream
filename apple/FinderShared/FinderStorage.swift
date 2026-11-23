@@ -22,7 +22,22 @@ enum FinderStorage {
   }
 
   static func credentialDirectory(_ pin: String) throws -> URL {
-    try credentialDirectory(pin, in: container())
+    try existingEnrollment(pin, in: container())
+  }
+
+  static func existingEnrollment(_ pin: String, in root: URL) throws -> URL {
+    struct Record: Decodable { let Pin: String }
+    // The first profile can live at the root. Match its pin before using it,
+    // just as Workspace.load does when it adopts a legacy enrollment in place.
+    let canonical = try credentialDirectory(pin, in: root)
+    for folder in [canonical, root] {
+      let record = folder.appendingPathComponent("server.json")
+      guard FileManager.default.fileExists(atPath: record.path) else { continue }
+      if try JSONDecoder().decode(Record.self, from: Data(contentsOf: record)).Pin == pin {
+        return folder
+      }
+    }
+    throw NSFileProviderError(.notAuthenticated)
   }
 
   static func credentialDirectory(_ pin: String, in root: URL) throws -> URL {

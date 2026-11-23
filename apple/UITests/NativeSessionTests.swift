@@ -479,7 +479,10 @@ final class NativeSessionTests: XCTestCase {
       let id = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PIPE_ID"])
       let session = app.descendants(matching: .any)["session-" + id].firstMatch
       XCTAssertTrue(session.waitForExistence(timeout: 12))
-      session.click()
+      let restored = app.staticTexts["desktop-session-status"].firstMatch
+      let connected = XCTNSPredicateExpectation(predicate: NSPredicate(
+        format: "value BEGINSWITH %@", "Connected"), object: restored)
+      XCTAssertEqual(XCTWaiter.wait(for: [connected], timeout: 15), .completed)
       let recovered = app
     #else
       let recovered = try await openPipe()

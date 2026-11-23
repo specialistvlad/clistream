@@ -128,7 +128,7 @@ import OSLog
       if reason.domain == NSFileProviderErrorDomain && reason.code == NSFileProviderError.Code.domainDisabled.rawValue {
         throw NSError(domain: reason.domain, code: reason.code, userInfo: [
           NSLocalizedDescriptionKey:
-            "In System Settings, open General › Login Items & Extensions › File Providers and turn on CLIStream. Then choose Show in Finder again."
+            "In Finder, select CLIStream under Locations and click Enable. You can also turn on CLIStream in System Settings › General › Login Items & Extensions › File Providers. Then choose Show in Finder again."
         ])
       }
       throw error

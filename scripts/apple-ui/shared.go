@@ -2,9 +2,12 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -102,7 +105,7 @@ func prepareSimulator(id, products string) error {
 // its normal attach command. A unique marker from each writer is retained in
 // the child's history so simulator launch order does not affect the assertion.
 func shared(plans viewerPlans, arrivals <-chan string, url, pipeID, pipeRun, terminalID string, command func(string, ...string) *exec.Cmd) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
 	var participants sync.WaitGroup
 	defer func() {
 		cancel()
@@ -124,14 +127,11 @@ func shared(plans viewerPlans, arrivals <-chan string, url, pipeID, pipeRun, ter
 			dest, plan, suite = "platform=iOS Simulator,id="+device.id, plans.mobile, "CLIStream-UITests"
 		}
 		fmt.Println("Pairing shared viewer:", device.name)
-		test := exec.CommandContext(ctx, "xcodebuild", "-quiet", "-xctestrun", plan, "-destination", dest,
-			"-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never",
-			"-resultBundlePath", filepath.Join("apple/build", fmt.Sprintf("shared-%d-%s.xcresult", time.Now().Unix(), device.name)),
-			"-only-testing:"+suite+"/NativeSessionTests/testConcurrentViewers", "test-without-building")
-		test.Env = append(os.Environ(), "TEST_RUNNER_CLISTREAM_FIXTURE="+url, "TEST_RUNNER_CLISTREAM_PARTICIPANT="+device.name,
+		env := append(os.Environ(), "TEST_RUNNER_CLISTREAM_FIXTURE="+url, "TEST_RUNNER_CLISTREAM_PARTICIPANT="+device.name,
 			"TEST_RUNNER_CLISTREAM_PIPE_ID="+pipeID, "TEST_RUNNER_CLISTREAM_PTY_ID="+terminalID, "TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY=0")
-		test.Stdout, test.Stderr = os.Stdout, os.Stderr
-		participants.Go(func() { results <- test.Run() })
+		participants.Go(func() {
+			results <- testSharedViewer(ctx, device.name, device.id, plan, dest, suite, env)
+		})
 		select {
 		case <-arrivals:
 		case err := <-results:
@@ -152,6 +152,44 @@ func shared(plans viewerPlans, arrivals <-chan string, url, pipeID, pipeRun, ter
 		}
 	}
 	return nil
+}
+
+func testSharedViewer(ctx context.Context, name, id, plan, destination, suite string, env []string) error {
+	for attempt := 0; ; attempt++ {
+		bundle := filepath.Join("apple/build", fmt.Sprintf("shared-%d-%s.xcresult", time.Now().Unix(), name))
+		test := exec.CommandContext(ctx, "xcodebuild", "-quiet", "-xctestrun", plan, "-destination", destination,
+			"-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never",
+			"-resultBundlePath", bundle,
+			"-only-testing:"+suite+"/NativeSessionTests/testConcurrentViewers", "test-without-building")
+		test.Env = env
+		var diagnostics bytes.Buffer
+		test.Stdout = io.MultiWriter(os.Stdout, &diagnostics)
+		test.Stderr = test.Stdout
+		err := test.Run()
+		if err == nil || attempt != 0 || name != "pad" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" ||
+			!bytes.Contains(diagnostics.Bytes(), []byte("Test crashed with signal term while preparing to run tests.")) {
+			return err
+		}
+		// Only the first iPad can recover here, before any viewer has paired.
+		// Never retry a testcase that Xcode actually started.
+		data, readErr := exec.CommandContext(ctx, "xcrun", "xcresulttool", "get", "test-results", "summary", "--path", bundle).Output()
+		var summary struct{ TotalTestCount *int }
+		if readErr != nil || json.Unmarshal(data, &summary) != nil || summary.TotalTestCount == nil || *summary.TotalTestCount != 0 {
+			return err
+		}
+		fmt.Println("iPad runner terminated before its first test. Rebooting the isolated iPad and retrying once.")
+		if err := os.Rename(bundle, bundle+".startup"); err != nil {
+			return err
+		}
+		if err := exec.CommandContext(ctx, "xcrun", "simctl", "shutdown", id).Run(); err != nil {
+			return fmt.Errorf("restart iPad after runner startup failure: %w", err)
+		}
+		boot := exec.CommandContext(ctx, "apple/boot-simulator.sh", id)
+		boot.Stdout, boot.Stderr = os.Stdout, os.Stderr
+		if err := boot.Run(); err != nil {
+			return fmt.Errorf("boot iPad after runner startup failure: %w", err)
+		}
+	}
 }
 
 // Join after all UI clients are attached so the first marker verifies a live broadcast.
