@@ -213,7 +213,7 @@ button{font:inherit;color:inherit;cursor:default}
 <span aria-hidden="true" style="height: 1px; margin: 5px 12px; background: {{t.menuSep}}"></span>
 </sc-if>
 <sc-if value="{{mi.item}}" hint-placeholder-val="{{ true }}">
-<button type="button" role="menuitem" style="height: 24px; display: flex; align-items: center; padding: 0 12px; border: none; border-radius: 6px; background: {{mi.bg}}; color: {{mi.fg}}; font-size: 13px; text-align: left">{{mi.label}}</button>
+<button type="button" role="menuitem" style="height: 24px; display: flex; align-items: center; gap: 7px; padding: 0 12px; border: none; border-radius: 6px; background: {{mi.bg}}; color: {{mi.fg}}; font-size: 13px; text-align: left"><sc-if value="{{mi.hasIcon}}" hint-placeholder-val="{{ false }}"><span style="width: 16px; display: flex; justify-content: center"><span class="sf {{mi.icon}}" aria-hidden="true" style="width: {{mi.w}}; height: {{mi.h}}"></span></span></sc-if><span>{{mi.label}}</span></button>
 </sc-if>
 </sc-for>
 </div>
@@ -372,16 +372,17 @@ class Component extends DCLogic {
       { name: 'Home lab', label: 'Server Home lab', meta: '', offline: true, offlineText: 'Offline', offlineButton: 'Retry', renaming: false, plain: true, ring: 'none', hosts: [] }
     ].filter((s) => !searchState || s.hosts.length > 0);
 
-    const item = (label, hl) => ({ item: true, sep: false, label, bg: hl ? accent : 'transparent', fg: hl ? '#FFFFFF' : t.label });
+    // Icons follow the HIG: key actions only, and every item in a group or none.
+    const item = (label, hl, icon, w, h) => ({ item: true, sep: false, label, hasIcon: !!icon, icon: icon || '', w: (w || 0) + 'px', h: (h || 0) + 'px', bg: hl ? accent : 'transparent', fg: hl ? '#FFFFFF' : t.label });
     const sep = { item: false, sep: true };
     const menus = {
       cli: { label: 'codex actions', left: '200px', top: '160px', items: [
         item('Open in New Tab'), item('Open in New Window'), sep,
-        item('Restart…', true), item('Stop…'), sep,
+        item('Restart…', true, 'sf-arrow-counterclockwise', 12, 14), item('Stop…', false, 'sf-stop', 12, 11), sep,
         item('Show Ports'), item('Show in Finder')
       ] },
       server: { label: 'Build server actions', left: '150px', top: '84px', items: [
-        item('Rename…', true), item('Reconnect'), sep, item('Remove Server…')
+        item('Rename…', true), item('Reconnect'), sep, item('Remove Server…', false, 'sf-trash', 12, 14)
       ] }
     };
 

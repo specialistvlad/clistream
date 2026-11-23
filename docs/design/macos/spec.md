@@ -60,7 +60,7 @@ The toolbar's layout pull-down and the View menu set two remembered preferences.
 
 ### Context menus
 
-Plain text items, no keyboard shortcuts, unavailable items hidden. Items that need more input end in an ellipsis.
+No keyboard shortcuts, unavailable items hidden, and an ellipsis on items that need more input. Icons mark key actions only, on every item of a group or none: Restart… (`arrow.counterclockwise`) with Stop… (`stop`), and Remove Server… (`trash`, the standard Delete icon). Other items are plain text.
 
 | Target | Items |
 |---|---|
@@ -104,7 +104,7 @@ A trailing inspector, 280 pt (230–400), toggled by the Ports toolbar item and 
 
 ## Menu bar
 
-Standard order: app menu, File, Edit, View, Session, Server, Window, Help. Items are plain text, and only the system's Dictation and Emoji items carry symbols. Main menus show shortcuts and dim unavailable commands. Every shortcut uses Command, so Control combinations reach the terminal.
+Standard order: app menu, File, Edit, View, Session, Server, Window, Help. Icons follow the HIG's June 2026 rule (key actions only, a whole group or none): the Session menu's run-control group uses the toolbar symbols, Remove Server… uses `trash`, and the system supplies the Dictation and Emoji icons. Other items are plain text. Main menus show shortcuts and dim unavailable commands. Every shortcut uses Command, so Control combinations reach the terminal.
 
 | Menu | Items |
 |---|---|
@@ -180,4 +180,4 @@ Each screen below is a board on the design canvas. Shipping screenshots with the
 | [Materials](https://developer.apple.com/design/human-interface-guidelines/materials) | Liquid Glass for controls and navigation. The terminal stays in the content layer. |
 | [Windows](https://developer.apple.com/design/human-interface-guidelines/windows) | System window chrome. The bottom bar carries only small related details. |
 | [Context menus](https://developer.apple.com/design/human-interface-guidelines/context-menus) | No shortcuts, unavailable items hidden, items also reachable from the main interface. |
-| [Menus](https://developer.apple.com/design/human-interface-guidelines/menus) | Title-style capitalization, an ellipsis for commands that ask for input, submenus one level deep. |
+| [Menus](https://developer.apple.com/design/human-interface-guidelines/menus) | Icons sparingly and with purpose, on every item of a group or none. Title-style capitalization, an ellipsis for commands that ask for input, submenus one level deep. |

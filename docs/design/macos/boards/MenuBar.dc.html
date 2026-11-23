@@ -47,7 +47,7 @@ button{font:inherit;color:inherit;cursor:default}
 <p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Standard order.</strong> App, File, Edit, View, then the custom Session and Server menus, then Window and Help, as the HIG orders menu bar menus.</p>
 <p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Shortcuts.</strong> Main menus show them and context menus don’t. Every shortcut uses Command, so Control combinations keep reaching the terminal. Restart ⌘R and Stop ⌘. follow Xcode’s Run and Stop.</p>
 <p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Availability.</strong> Main menus dim commands the selection can’t run, such as Send EOF for a PTY. Context menus hide them. Restart… reads Start… when the run is stopped.</p>
-<p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Kit styling.</strong> Rows are 24 pt of SF Pro 13 in a 12 pt-radius glass menu. Items are plain text, as in the kit’s Edit menu, and only the system’s own Dictation and Emoji items carry symbols.</p>
+<p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Kit styling.</strong> Rows are 24 pt of SF Pro 13 in a 12 pt-radius glass menu. Icons mark key actions only, as the June 2026 HIG asks: the run controls, Remove Server… and the system’s Dictation and Emoji items. Each group shows icons on every item or none.</p>
 </div>
 </div>
 </x-dc>
@@ -96,14 +96,14 @@ class Component extends DCLogic {
         it('Server', '', { check: true, checked: true }), it('Host', '', { check: true }), it('CLI Name', '', { check: true })
       ] },
       menu('Session', 230, [
-        it('Restart…', '⌘ R'), it('Stop…', '⌘ .'),
-        it('Send EOF', '', { disabled: true }), it('Reconnect', '', { disabled: true }), sep,
+        it('Restart…', '⌘ R', { icon: 'sf-arrow-counterclockwise', w: 12, h: 14 }), it('Stop…', '⌘ .', { icon: 'sf-stop', w: 12, h: 11 }),
+        it('Send EOF', '', { disabled: true, icon: 'sf-text-append', w: 14, h: 12 }), it('Reconnect', '', { disabled: true, icon: 'sf-arrow-clockwise', w: 12, h: 14 }), sep,
         it('Open in New Tab'), it('Open in New Window'), sep,
         it('Show in Finder', '⌥ ⌘ R')
       ]),
       menu('Server', 220, [
         it('Rename…'), it('Reconnect'), sep,
-        it('Remove Server…', '⌘ ⌫')
+        it('Remove Server…', '⌘ ⌫', { icon: 'sf-trash', w: 12, h: 14 })
       ])
     ];
     return { bar, menus };
