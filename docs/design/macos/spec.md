@@ -64,7 +64,7 @@ Plain text items, no keyboard shortcuts, unavailable items hidden. Items that ne
 
 | Target | Items |
 |---|---|
-| CLI row | Open in New Tab · Open in New Window — Restart… (Start… when stopped) · Stop… — Show Ports |
+| CLI row | Open in New Tab · Open in New Window — Restart… (Start… when stopped) · Stop… — Show Ports · Show in Finder |
 | Server header | Rename… · Reconnect — Remove Server… |
 
 **Rename…** turns the header into an inline text field with the system focus ring. Return saves and Escape cancels. Return on a selected server header starts rename, as in Finder.
@@ -81,7 +81,7 @@ Toolbar items are 36 pt glass circles or capsules drawn by the system. Prefer sy
 | Trailing | **Start…**, tinted accent with `play.fill`, the window's one prominent action | Stopped run |
 | Trailing | `Attach only`, plain tertiary text | One-shot run |
 | Trailing | **Reconnect** circle (`arrow.clockwise`) | Server revoked or attachment lost |
-| Trailing | **Ports** circle (`sidebar.right`), pressed while the inspector is open | Any session |
+| Trailing | Capsule: **Show in Finder** (`folder`) and **Ports** (`sidebar.right`, pressed while the inspector is open) | Any session. Show in Finder hides when the supervisor runs with `--files=FALSE` or access is revoked. |
 | Trailing edge | **Search CLIs** field, 160 × 36, placeholder `Search`, filters the sidebar | Always |
 
 ## Terminal content
@@ -111,7 +111,7 @@ Standard order: app menu, File, Edit, View, Session, Server, Window, Help. Items
 | File | New Window ⌘N · New Tab ⌘T — Add Server… ⌘K · Paste Invitation — Close Window ⌘W |
 | Edit | Undo ⌘Z · Redo ⇧⌘Z — Cut ⌘X · Copy ⌘C · Paste ⌘V · Select All ⌘A — Start Dictation… · Emoji & Symbols |
 | View | Hide Sidebar ⌃⌘S · Show Ports ⌥⌘I — as Tree ⌘1 · as List ⌘2 · Group By ▸ (Server, Host, CLI Name) — Enter Full Screen |
-| Session | Restart… ⌘R (Start… when stopped) · Stop… ⌘. · Send EOF · Reconnect — Open in New Tab · Open in New Window |
+| Session | Restart… ⌘R (Start… when stopped) · Stop… ⌘. · Send EOF · Reconnect — Open in New Tab · Open in New Window — Show in Finder ⌥⌘R |
 | Server | Rename… · Reconnect — Remove Server… ⌘⌫ |
 
 Restart ⌘R and Stop ⌘. follow Xcode's Run and Stop. Implement with `.commands`: `CommandGroup` for File and View, `CommandMenu("Session")` and `CommandMenu("Server")`, routed to the key window through focused scene values.
@@ -147,6 +147,7 @@ Alerts follow the kit's side-by-side alert: 260 pt wide, 22 pt padding, radius 1
 | Search CLIs | Filters sidebar rows by program name. Servers and hosts without matches hide while a query is active. |
 | Paste Invitation | Reads a `clistream://` link from the pasteboard and opens the Pair sheet with it filled in. |
 | Remove Server… | Deletes the local server profile and its enrollment directory after the alert confirms. Server-side revocation stays with the operator. |
+| Show in Finder | Opens the session's shared workspace in Finder through the CLIStream File Provider domain, at `CLIStream › SERVER › HOST › PROGRAM`. Requires the replicated File Provider described under [Future file access](../../apple-client-design.md#future-file-access). |
 | Context menu lifecycle actions | Restart…, Stop… and Show Ports activate the clicked row, then run the same flow as the toolbar. |
 | Menu bar commands | The Session, Server and View items above, enabled by the key window's selection. |
 
