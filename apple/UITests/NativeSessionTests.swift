@@ -4,6 +4,19 @@ import XCTest
 #endif
 
 final class NativeSessionTests: XCTestCase {
+  #if os(iOS)
+    private var tapLocation: XCTSourceCodeLocation?
+
+    override func record(_ issue: XCTIssue) {
+      var issue = issue
+      if let tapLocation {
+        issue.sourceCodeContext = XCTSourceCodeContext(
+          callStack: issue.sourceCodeContext.callStack, location: tapLocation)
+      }
+      super.record(issue)
+    }
+  #endif
+
   @MainActor func testPairPreviewAndSend() async throws {
     let app = try await openPipe()
     func togglePort(_ name: String) {
@@ -227,12 +240,14 @@ final class NativeSessionTests: XCTestCase {
       XCTFail("Command editor did not appear")
       return
     }
-    activate(field)
+    #if os(macOS)
+      activate(field)
+    #endif
     let saved = try XCTUnwrap(field.value as? String)
     XCTAssertFalse(saved.isEmpty)
     try await capture("edit-command", app)
     #if os(iOS)
-      // A system appearance change can move focus away from the review field.
+      XCTAssertTrue(field.wait(for: \.isHittable, toEqual: true, timeout: 10))
       activate(field)
     #endif
     field.typeKey("a", modifierFlags: .command)
@@ -753,6 +768,10 @@ final class NativeSessionTests: XCTestCase {
         element.click()
       }
     #else
+      // Report the actual gesture in the shareable XCTest results. Element
+      // descriptions may include invitation values and terminal input.
+      tapLocation = XCTSourceCodeLocation(filePath: file.description, lineNumber: Int(line))
+      defer { tapLocation = nil }
       element.tap()
     #endif
   }
