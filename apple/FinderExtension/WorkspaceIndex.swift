@@ -73,11 +73,25 @@ final class WorkspaceIndex {
     dirty = true
     state.changes.append(Change(sequence: state.sequence, id: id, oldParent: old, parent: new))
   }
-  func store(_ node: WorkspaceNode) {
+  @discardableResult func store(_ value: WorkspaceNode) -> WorkspaceNode {
+    var node = value
     let prior = state.nodes[node.id]
-    guard prior != node else { return }
+    if node.contentVersionAcrossMove == nil, node.version == prior?.version {
+      node.contentVersionAcrossMove = prior?.contentVersionAcrossMove
+    }
+    guard prior != node else { return node }
     state.nodes[node.id] = node
     record(node.id, old: prior?.parent, new: node.parent)
+    return node
+  }
+  func storeMove(_ moved: WorkspaceNode, from original: WorkspaceNode, basedOn version: String) -> WorkspaceNode {
+    var node = moved
+    if moved.id == original.id, original.version == version,
+      moved.bytes == original.bytes, moved.modified == original.modified
+    {
+      node.contentVersionAcrossMove = original.contentRevision
+    }
+    return store(node)
   }
   func remove(_ id: String) {
     guard let node = state.nodes.removeValue(forKey: id) else { return }
@@ -99,7 +113,7 @@ final class WorkspaceIndex {
   private func reconcile(_ children: [WorkspaceNode], parent: String) {
     let next = Set(children.map(\.id))
     for old in self.children(of: parent) where !next.contains(old.id) { remove(old.id) }
-    children.forEach(store)
+    for child in children { store(child) }
   }
 
   // Finder names must fit on a case-insensitive volume. Keep the exact remote component
@@ -204,7 +218,7 @@ final class WorkspaceIndex {
         // must carry its materialized descendants and their identifiers to the new parent.
         try refreshFolders(server: node.server, workspace: node.workspace)
       } else {
-        incoming.forEach(store)
+        for child in incoming { store(child) }
       }
     case .file:
       let parent = try require(node.parent)
@@ -234,7 +248,7 @@ final class WorkspaceIndex {
       do {
         let contents = try readChildren(current)
         seen[current.id] = Set(contents.map(\.id))
-        contents.forEach(store)
+        for child in contents { store(child) }
       } catch let error as NSError
         where error.domain == NSFileProviderErrorDomain
         && [.serverUnreachable, .notAuthenticated, .noSuchItem].contains(

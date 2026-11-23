@@ -110,7 +110,7 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
         throw NSFileProviderError(.noSuchItem)
       }
       let file = try manager.temporaryDirectoryURL().appendingPathComponent(UUID().uuidString)
-      let version = requestedVersion.map { String(decoding: $0.contentVersion, as: UTF8.self) }
+      let version = requestedVersion.map { node.serverVersion(for: $0.contentVersion) }
       do {
         let entry = try WorkspaceService.request(
           "fetch", parent: node, path: self.index.path(of: node),
@@ -119,8 +119,7 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
         var current = entry.node(in: try self.index.require(node.parent))
         guard current.id == node.id else { throw NSFileProviderError(.noSuchItem) }
         current.name = node.name
-        self.index.store(current)
-        return (file, WorkspaceItem(current))
+        return (file, WorkspaceItem(self.index.store(current)))
       } catch {
         try? FileManager.default.removeItem(at: file)
         if (error as NSError).code
@@ -141,8 +140,7 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
   private func existing(at path: String, in parent: WorkspaceNode) throws -> WorkspaceNode {
     let entry = try WorkspaceService.request("stat", parent: parent, path: path).entry()
     let node = entry.node(in: parent)
-    index.store(node)
-    return node
+    return index.store(node)
   }
 
   private func digest(_ url: URL) throws -> SHA256.Digest {
@@ -237,7 +235,13 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
   ) -> Progress {
     perform({ handle -> (WorkspaceItem, NSFileProviderItemFields, Bool) in
       let node = try self.index.require(item.itemIdentifier.rawValue)
-      guard node.isRemote else { throw CocoaError(.fileWriteNoPermission) }
+      if !node.isRemote {
+        // Finder updates last-used dates and other local metadata while navigating.
+        if changedFields.intersection([.contents, .filename, .parentItemIdentifier]).isEmpty {
+          return (WorkspaceItem(node), [], false)
+        }
+        throw CocoaError(.fileWriteNoPermission)
+      }
       let oldPath = try self.index.path(of: node)
       let parent = try self.index.require(item.parentItemIdentifier.rawValue)
       guard node.server == parent.server && node.workspace == parent.workspace else {
@@ -245,15 +249,15 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
       }
       let name = changedFields.contains(.filename) ? item.filename : node.remoteName
       let dest = try self.index.childPath(name, in: parent)
-      let version = String(decoding: baseVersion.contentVersion, as: UTF8.self)
+      let version = node.serverVersion(for: baseVersion.contentVersion)
       do {
         if oldPath != dest {
           let moved = try WorkspaceService.request(
             "move", parent: node, path: oldPath, destination: dest,
             version: version, requestID: handle
           ).entry().node(in: parent)
-          self.index.store(moved)
-          return (WorkspaceItem(moved), changedFields.intersection(.contents), false)
+          let stored = self.index.storeMove(moved, from: node, basedOn: version)
+          return (WorkspaceItem(stored), changedFields.intersection(.contents), false)
         }
         if changedFields.contains(.contents) {
           guard let newContents else { throw CocoaError(.fileReadNoSuchFile) }
@@ -328,7 +332,7 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
       do {
         _ = try WorkspaceService.request(
           "remove", parent: node, path: path,
-          version: String(decoding: baseVersion.contentVersion, as: UTF8.self),
+          version: node.serverVersion(for: baseVersion.contentVersion),
           recursive: options.contains(.recursive), requestID: handle)
       } catch let error as NSError where error.domain == NSFileProviderErrorDomain {
         if error.code == NSFileProviderError.Code.localVersionConflictingWithServer.rawValue {

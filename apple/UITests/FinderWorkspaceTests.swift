@@ -4,7 +4,7 @@ import XCTest
 
 extension NativeSessionTests {
   @MainActor private func rememberProviderWindow(_ app: XCUIApplication, name: String) {
-    let image = XCTAttachment(screenshot: app.screenshot())
+    let image = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
     image.name = name + "-window"
     image.lifetime = .keepAlways
     add(image)

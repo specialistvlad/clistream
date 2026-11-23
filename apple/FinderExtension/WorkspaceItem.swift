@@ -13,9 +13,16 @@ struct WorkspaceNode: Codable, Equatable {
   var workspace = ""
   var remoteName = ""
   var version = ""
+  // A successful move can change the host's stat version without changing bytes.
+  var contentVersionAcrossMove: String?
   var bytes: Int64 = 0
   var modified: Int64 = 0
   var isRemote: Bool { kind == .file || kind == .directory }
+  var contentRevision: String { contentVersionAcrossMove ?? version }
+  func serverVersion(for revision: Data) -> String {
+    let base = String(decoding: revision, as: UTF8.self)
+    return base == contentRevision ? version : base
+  }
   static let root = Self(id: FinderID.root, parent: FinderID.root, name: "CLIStream", kind: .root)
 }
 
@@ -45,7 +52,7 @@ final class WorkspaceItem: NSObject, NSFileProviderItem {
   var itemVersion: NSFileProviderItemVersion {
     // File Provider caps both components at 128 bytes. Keep the supervisor's
     // short version for conditional writes, and hash variable-length UI metadata.
-    let content = node.isRemote ? Data(node.version.utf8) : Data(SHA256.hash(data: Data(node.id.utf8)))
+    let content = node.isRemote ? Data(node.contentRevision.utf8) : Data(SHA256.hash(data: Data(node.id.utf8)))
     let metadata = Data(FinderID.make(node.parent, node.name, node.version).utf8)
     return .init(
       contentVersion: content,
