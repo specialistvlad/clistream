@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -61,6 +62,51 @@ func firstInvitation(root string, command *exec.Cmd) ([]byte, error) {
 		lockErr == nil, len(log) > 0)
 }
 
+// Reconcile the test fixture through the public CLI. A supervisor may still
+// be registering its new run when the previous UI case exits.
+func preparePipe(ctx context.Context, id string, cli func(context.Context, ...string) ([]byte, error)) error {
+	last := "supervisor unavailable"
+	started := false
+	for {
+		query, cancel := context.WithTimeout(ctx, 10*time.Second)
+		data, err := cli(query, "list")
+		cancel()
+		var rows []struct{ ID, Run string }
+		switch {
+		case err != nil:
+			last = "discovery unavailable"
+		case json.Unmarshal(data, &rows) != nil:
+			return errors.New("invalid discovery response")
+		default:
+			last = "supervisor unavailable"
+			for _, row := range rows {
+				if row.ID != id {
+					continue
+				}
+				if row.Run != "" {
+					return nil
+				}
+				last = "waiting for the new run"
+				if !started {
+					start, cancel := context.WithTimeout(ctx, 10*time.Second)
+					_, err := cli(start, id, "start")
+					cancel()
+					started = err == nil
+					if err != nil {
+						last = "start unavailable"
+					}
+				}
+				break
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("%s: %w", last, ctx.Err())
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+}
+
 func run(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: apple-ui COMMAND [ARG ...]")
@@ -80,12 +126,13 @@ func run(args []string) error {
 	if args[0] == "shared" {
 		sharedCheckpoint("Start the two brokers and register supervised children before booting simulators")
 	}
-	command := func(tool string, args ...string) *exec.Cmd {
-		cmd := exec.Command(filepath.Join(bin, tool), args...)
+	commandIn := func(ctx context.Context, tool string, args ...string) *exec.Cmd {
+		cmd := exec.CommandContext(ctx, filepath.Join(bin, tool), args...)
 		cmd.Env = append(os.Environ(), "HOME="+root, "XDG_CONFIG_HOME="+root)
 		cmd.Dir = root
 		return cmd
 	}
+	command := func(tool string, args ...string) *exec.Cmd { return commandIn(context.Background(), tool, args...) }
 	launch := func(cmd *exec.Cmd) (func(), error) {
 		if filepath.Base(cmd.Path) == "clistreamd" {
 			log, err := os.OpenFile(filepath.Join(cmd.Dir, "broker-stderr"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
@@ -232,21 +279,18 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 	// Cases share the same published supervisor. An interrupted lifecycle or
 	// Finder case may leave its child stopped. Restore the fixture before the
 	// next case, without replacing a running child or discarding its replay.
-	mux.HandleFunc(path+"prepare-pipe", func(w http.ResponseWriter, _ *http.Request) {
-		raw, err := command("clistream", "list").Output()
-		var rows []registration
-		if err == nil && json.Unmarshal(raw, &rows) == nil {
-			for _, row := range rows {
-				if row.ID == pipe.ID {
-					if row.Run == "" && command("clistream", row.ID, "start").Run() != nil {
-						break
-					}
-					fmt.Fprint(w, "ready")
-					return
-				}
-			}
+	mux.HandleFunc(path+"prepare-pipe", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		err := preparePipe(ctx, pipe.ID, func(ctx context.Context, args ...string) ([]byte, error) {
+			return commandIn(ctx, "clistream", args...).Output()
+		})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Prepare supervised pipe:", err)
+			http.Error(w, "fixture pipe unavailable", http.StatusServiceUnavailable)
+			return
 		}
-		http.Error(w, "fixture pipe unavailable", http.StatusServiceUnavailable)
+		fmt.Fprint(w, "ready")
 	})
 	if args[0] == "shared" || os.Getenv("CLISTREAM_HOSTED_TESTS") == "1" {
 		stopSecond, err := secondServer(root, bin, mux, path, launch)

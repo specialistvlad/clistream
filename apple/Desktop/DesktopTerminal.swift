@@ -106,18 +106,13 @@ private struct DesktopConnectionStatus: View {
 struct DesktopPorts: View {
   @ObservedObject var connection: Connection
   let item: SessionInfo
-  @State private var changing = Set<String>()
   var body: some View {
     Form {
       Section {
         ForEach((item.Ports ?? [:]).keys.sorted(), id: \.self) { name in
           VStack(alignment: .leading, spacing: 4) {
-            Toggle(isOn: Binding(get: { connection.forwarding[name] != nil }, set: { _ in
-              guard changing.insert(name).inserted else { return }
-              Task {
-                await connection.forward(name, item: item)
-                changing.remove(name)
-              }
+            Toggle(isOn: Binding(get: { connection.forwarding[name] != nil }, set: { enabled in
+              Task { await connection.setForward(name, enabled: enabled, item: item) }
             })) {
               VStack(alignment: .leading) {
                 Text(name)
@@ -126,7 +121,7 @@ struct DesktopPorts: View {
               }
             }
             .toggleStyle(.switch).controlSize(.mini)
-            .disabled(!connection.attached || changing.contains(name)).accessibilityIdentifier("forward-" + name)
+            .disabled(!connection.attached || connection.changingForwards.contains(name)).accessibilityIdentifier("forward-" + name)
             if let address = connection.forwarding[name] {
               HStack {
                 Text(address).font(.system(.caption, design: .monospaced)).textSelection(.enabled)

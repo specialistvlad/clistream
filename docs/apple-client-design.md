@@ -28,7 +28,7 @@ Pipe and PTY sessions both open in SwiftTerm. Keystrokes go straight to the chil
 
 On Mac, use the window toolbar for lifecycle actions. On iPhone and iPad, open **Session**. **Restart…** and **Start…** present the current executable and arguments together in a highlighted command field. Use quotes for spaces and `""` for an empty argument. The Go client and native apps use the same parser. Cancel keeps the current run; confirming launches the reviewed command and attaches to its replacement. **Stop…** identifies the affected program before ending it for all viewers. One-shot supervisors offer attachment only.
 
-**Ports** opens a trailing inspector on Mac and wide mobile layouts, or a sheet in compact layouts. Toggle a named TCP or UDP export, then copy its local listening address. Closing the inspector leaves active listeners running. Each tab or window shows the forwards for its selected session.
+**Ports** opens a trailing inspector on Mac and wide mobile layouts, or a sheet in compact layouts. Toggle a named TCP or UDP export, then copy its local listening address. Closing the inspector leaves active listeners running. Each tab or window shows the forwards for its selected session. Windows showing the same session share its switch state and local listener address.
 
 ## Finder workspaces
 

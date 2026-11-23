@@ -129,18 +129,29 @@ final class ClientTests: XCTestCase {
     }
   }
 
-  func testPortForwarding() async throws {
+  @MainActor func testPortForwarding() async throws {
     let dir = try await profile("PORTS")
     let id = try session("PIPE_RUN")
     let list = try await request("list", ["Dir": dir])
     let item = try XCTUnwrap(list.Sessions?.first { $0.id == id })
     XCTAssertEqual(item.Ports, ["tcp": "tcp", "udp": "udp"])
+    let model = Connection(profile: dir)
+    let reader = Task { await model.attach(item) }
+    defer {
+      model.leave()
+      reader.cancel()
+    }
+    try await waitUntil { model.attached }
     for proto in ["tcp", "udp"] {
-      let r = try await request("forward", ["ID": id, "Dir": dir, "Name": proto])
-      let handle = try XCTUnwrap(r.Handle)
-      defer { _ = Core.call(["Op": "close", "Handle": handle]) }
-      let address = try XCTUnwrap(r.Address?.components(separatedBy: ":").last.flatMap(UInt16.init))
-      try exchange(port: address, datagram: proto == "udp")
+      await model.setForward(proto, enabled: true, item: item)
+      let listener = try XCTUnwrap(model.forwarding[proto])
+      await model.setForward(proto, enabled: true, item: item)
+      XCTAssertEqual(model.forwarding[proto], listener)
+      let port = try XCTUnwrap(listener.components(separatedBy: ":").last.flatMap(UInt16.init))
+      try exchange(port: port, datagram: proto == "udp")
+      await model.setForward(proto, enabled: false, item: item)
+      await model.setForward(proto, enabled: false, item: item)
+      XCTAssertNil(model.forwarding[proto])
     }
   }
 

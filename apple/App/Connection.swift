@@ -45,6 +45,7 @@ final class Connection: ObservableObject {
   @Published var selected: SessionInfo?
   @Published var status = ""
   @Published var forwarding = [String: String]()
+  @Published private(set) var changingForwards = Set<String>()
   @Published var stdout = Data()
   private(set) var renderer: (any TerminalRenderer)?
   private var refreshTicket = UUID()
@@ -144,6 +145,7 @@ final class Connection: ObservableObject {
     selected = nil
     forwards.removeAll()
     forwarding.removeAll()
+    changingForwards.removeAll()
     renderer = nil
     pending = Data()
     stdout = Data()
@@ -316,13 +318,15 @@ final class Connection: ObservableObject {
     }
   }
 
-  func forward(_ name: String, item: SessionInfo) async {
-    if let key = forwards.removeValue(forKey: name) {
+  func setForward(_ name: String, enabled: Bool, item: SessionInfo) async {
+    guard attached, enabled != (forwards[name] != nil), changingForwards.insert(name).inserted else { return }
+    let ticket = generation
+    defer { if ticket == generation { changingForwards.remove(name) } }
+    if !enabled, let key = forwards.removeValue(forKey: name) {
       forwarding.removeValue(forKey: name)
       _ = await Core.request(["Op": "close", "Handle": key])
       return
     }
-    let ticket = generation
     do {
       let r = await Core.request([
         "Op": "forward", "Dir": try directory, "ID": item.ID, "Name": name,
@@ -334,9 +338,9 @@ final class Connection: ObservableObject {
         }
         forwards[name] = key
         forwarding[name] = address
-      } else {
+      } else if ticket == generation {
         status = r.Error ?? "Forward failed"
       }
-    } catch { status = error.localizedDescription }
+    } catch { if ticket == generation { status = error.localizedDescription } }
   }
 }

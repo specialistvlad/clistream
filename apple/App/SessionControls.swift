@@ -247,7 +247,6 @@ private struct PortsPresentation: ViewModifier {
 private struct PortList: View {
   @ObservedObject var connection: Connection
   let session: SessionInfo
-  @State private var changing = Set<String>()
 
   var body: some View {
     List {
@@ -256,17 +255,13 @@ private struct PortList: View {
           Toggle(
             isOn: Binding(
               get: { connection.forwarding[name] != nil },
-              set: { _ in
-                guard changing.insert(name).inserted else { return }
-                Task {
-                  await connection.forward(name, item: session)
-                  changing.remove(name)
-                }
+              set: { enabled in
+                Task { await connection.setForward(name, enabled: enabled, item: session) }
               })
           ) {
             Text(name)
             Text((session.Ports?[name] ?? "").uppercased()).font(.caption)
-          }.disabled(!connection.attached || changing.contains(name))
+          }.disabled(!connection.attached || connection.changingForwards.contains(name))
             .accessibilityIdentifier("forward-" + name)
           if let address = connection.forwarding[name] {
             Text(address).textSelection(.enabled).accessibilityIdentifier(

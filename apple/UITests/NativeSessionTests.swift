@@ -42,7 +42,12 @@ final class NativeSessionTests: XCTestCase {
         let nested = row.switches.firstMatch
         let control = nested.exists ? nested : row
         XCTAssertTrue(control.wait(for: \.isEnabled, toEqual: true, timeout: 12))
-        activate(control)
+        XCTAssertTrue(control.wait(for: \.isHittable, toEqual: true, timeout: 10))
+        // UIKit can expose the label and switch as one row-wide accessibility
+        // frame. Touch the native switch at the trailing edge of that frame.
+        let inset = min(24, control.frame.width / 2)
+        control.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5))
+          .withOffset(CGVector(dx: -inset, dy: 0)).tap()
       #else
         activate(row)
       #endif
