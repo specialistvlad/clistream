@@ -408,7 +408,15 @@ final class NativeSessionTests: XCTestCase {
         // SpringBoard updates the application, keyboard and system sheets on separate frames.
         try await Task.sleep(for: .seconds(1))
       #endif
-      captureCurrent(name + (dark ? "-dark" : ""), app)
+      let variant = name + (dark ? "-dark" : "")
+      #if os(iOS)
+        if name.hasPrefix("duo-") {
+          let recorded = try await fixtureResponse("panel-capture/" + variant)
+          XCTAssertEqual(recorded, "captured")
+        } else { captureCurrent(variant, app) }
+      #else
+        captureCurrent(variant, app)
+      #endif
     }
   }
 
@@ -567,7 +575,7 @@ final class NativeSessionTests: XCTestCase {
       app.typeKey(.return, modifierFlags: [])
     #else
       XCTAssertTrue(app.alerts["Couldn’t Pair This Device"].waitForExistence(timeout: 12))
-      captureCurrent("pairing-error", app)
+      try await capture("pairing-error", app)
       activate(app.buttons["OK"].firstMatch)
     #endif
     XCTAssertFalse(pairingButton(in: app).exists)

@@ -10,6 +10,12 @@ To run one Apple UI suite on an isolated Mac, open **Actions → Test → Run wo
 
 Open `docs/screenshots/index.html` in the checkout used for capture. The gallery groups full-resolution PNGs by the native Mac app, iPhone, iPad, iPhone Duo, and the Go terminal client on macOS and Linux. The hosted Apple matrix exports named PNGs from the running apps. Gallery artifacts are available for three days. The terminal captures use output from the compiled Go programs connected to a pseudo-terminal. Git ignores the entire gallery, so a fresh clone contains only the published README animation.
 
+## Mobile redesign and Files · November 23, 2026
+
+The iOS and macOS schemes compiled locally with Xcode 27.1. The simulator app embeds CLIStreamFiles.appex. The Go race tests, vet and host end-to-end suite passed on macOS. The UI suites and all visual captures run on isolated GitHub runners. The focused iPhone suite covers QR review, paste, search and swipe actions. The iPad Files test checks real remote changes against both macOS and Linux supervisors. [iPhone acceptance](https://github.com/specialistvlad/clistream/actions/runs/45230753695) · [iPad Files acceptance](https://github.com/specialistvlad/clistream/actions/runs/45230753802)
+
+Device archive signing currently requires the Apple Developer team to assign `group.com.vlk.clistream.workspace` to both `com.vlk.clistream` and `com.vlk.clistream.files`. The generated development profiles included an empty App Groups entitlement. Physical camera recognition, a signed Files-enabled device installation, the full hosted matrix and visual review of the redesigned gallery are pending.
+
 ## Mac redesign and Finder · November 23, 2026
 
 The Go daemon, supervisor and CLI passed race-enabled tests, end-to-end tests and release archive checks on Linux and macOS. The Linux runner also passed the container deployment tests. The old-binary compatibility suite passed locally on macOS. [Linux results](https://github.com/specialistvlad/clistream/actions/runs/45136905954/job/137567468495) · [Mac results](https://github.com/specialistvlad/clistream/actions/runs/45136905954/job/137567468920)

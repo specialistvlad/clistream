@@ -498,6 +498,29 @@ func poseRoute(mux *http.ServeMux, path, udid, keysFile string) {
 	if os.Getenv("TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY") != "1" {
 		return
 	}
+	mux.HandleFunc(path+"panel-capture/", func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, path+"panel-capture/")
+		board := strings.TrimSuffix(name, "-dark")
+		role := "inner"
+		switch board {
+		case "duo-outer-list", "duo-outer-terminal":
+			role = "outer"
+		case "duo-inner", "duo-inner-ports", "duo-partially-open":
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		panel, _, err := duoDisplay(r.Context(), udid)
+		if err != nil || panel.Role != role {
+			http.Error(w, "requested display unavailable", 409)
+			return
+		}
+		if err := captureDuoScreen(r.Context(), udid, panel, filepath.Join("gallery", name+".png")); err != nil {
+			http.Error(w, "active display capture failed", 503)
+			return
+		}
+		fmt.Fprint(w, "captured")
+	})
 	mux.HandleFunc(path+"pose-screenshot/", func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, path+"pose-screenshot/")
 		degrees, ok := poses[name]

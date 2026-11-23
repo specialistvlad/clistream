@@ -14,10 +14,11 @@
 | Start, stop, or restart a managed program, edit its executable and arguments, and read its retained output after exit. | All clients |
 | Forward a named TCP or UDP service to a local port on the viewing device. | All clients |
 | Pair and rename servers, see connection latency, and browse programs in a tree or list grouped by server, host, or CLI name. | Native Mac, iPhone, and iPad apps |
+| Scan or paste a daemon invitation, check its address and fingerprint, and pair. Search CLI names or swipe a managed CLI to restart or stop it. | iPhone, iPad, and both Duo displays |
 | Search CLI names, activate a terminal in one click, and open sessions in native tabs or separate windows. | Mac app |
 | Use touch terminal keys, select and paste text, and keep a session across size or fold changes. | iPhone, iPad, and iPhone Duo apps |
 | List, copy, move, or remove files and manage directories in the supervisor’s shared workspace. | Go CLI on macOS and Linux |
-| Open the selected program’s shared folder in Finder. Browse, edit, move, or delete its files on the remote host. | Mac app with a workspace-capable daemon and supervisor |
+| Browse, edit, move, or delete files in a program’s remote workspace. | Finder on Mac and the CLIStream location in Files on iPhone, iPad, and Duo with a workspace-capable daemon and supervisor |
 
 The **server** handles pairing and routes traffic. A **supervisor** runs beside each program on its **host** and keeps it available when viewers leave. A server can bring together programs from several hosts. The Apple apps require macOS 27 or iOS/iPadOS 27 and follow the system appearance. Upgrade the Go client, daemon, and supervisor together. Older native builds also need an update to display current sessions. [Native client guide](docs/apple-client-design.md) · [Build and TestFlight instructions](docs/deployment.md#apple-client-and-testflight)
 

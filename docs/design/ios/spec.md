@@ -114,7 +114,7 @@ Alerts follow the kit: 300 pt wide, radius 34, left-aligned title in Headline Bo
 | Bottom search | Filters the servers list, as on the Mac. |
 | Scan QR Code | Scans the QR code that clistreamd shows with the device camera and opens the Add Server sheet with the invitation, on iPhone, iPad and both Duo screens. Scanning with the system Camera app keeps working as before. |
 | Paste Invitation | Reads a `clistream://` link from the pasteboard into the Add Server sheet. |
-| Show in Files | Opens the session workspace in the Files app. Requires the iOS Files extension that [Native Apple clients](../../apple-client-design.md#finder-workspaces) lists as deferred. |
+| Show in Files | Exposes the writable session workspace in the Files app. **Show in Files** displays its exact path under Browse → CLIStream and directions for enabling the location. [Native Apple clients](../../apple-client-design.md#files-workspaces-on-iphone-ipad-and-duo) |
 | Remove Server… | Long-press a server header, as on the Mac. |
 
 ## Screens

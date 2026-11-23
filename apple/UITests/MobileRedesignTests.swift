@@ -50,6 +50,52 @@ extension NativeSessionTests {
     XCTAssertTrue(app.descendants(matching: .any)["session-" + pipe].firstMatch.waitForExistence(timeout: 20))
   }
 
+  @MainActor func testAdaptiveTerminalToolbarAndInspector() async throws {
+    continueAfterFailure = false
+    let duo = !(ProcessInfo.processInfo.environment["CLISTREAM_DUO_NAME"] ?? "").isEmpty
+    let device = XCUIDevice.shared
+    let initialOrientation = device.orientation
+    if UIDevice.current.userInterfaceIdiom == .pad { device.orientation = .landscapeLeft }
+    defer { if !duo && initialOrientation != .unknown { device.orientation = initialOrientation } }
+    if duo {
+      _ = try await fixtureResponse("pose/Closed")
+      addTeardownBlock { _ = try await fixtureResponse("pose/Closed") }
+    }
+    let app = try await openPipe()
+    expectOutput("preview-ready", in: app)
+    openTerminalKeys(in: app)
+    try await capture("terminal-key-bar", app)
+    touchTerminalKey("Hide Keyboard", in: app)
+    let session = app.buttons["Session"].firstMatch
+    XCTAssertTrue(session.waitForExistence(timeout: 10))
+    if duo {
+      XCTAssertTrue(app.descendants(matching: .any)["duo-terminal-tools"].firstMatch.exists)
+      try await capture("duo-outer-terminal", app)
+    }
+    session.tap()
+    XCTAssertTrue(app.buttons["Detach"].firstMatch.waitForExistence(timeout: 8))
+    try await capture("session-menu", app)
+    // Choosing Ports also verifies the action in the presented Session menu.
+    app.buttons.matching(NSPredicate(format: "label == 'Ports' AND identifier != 'session-ports'")).firstMatch.tap()
+    XCTAssertTrue(app.descendants(matching: .any)["forward-tcp"].firstMatch.waitForExistence(timeout: 12))
+    app.buttons["dismiss-ports"].firstMatch.tap()
+    if duo {
+      try await moveDuo(to: "Partially Open", scenario: "fold", in: app)
+      try await capture("duo-partially-open", app)
+      try await moveDuo(to: "Open", scenario: "fold", in: app)
+    }
+    if duo || UIDevice.current.userInterfaceIdiom == .pad {
+      let status = app.descendants(matching: .any).matching(NSPredicate(
+        format: "label CONTAINS %@ AND label CONTAINS %@", "Connected", "Pipe")).firstMatch
+      XCTAssertTrue(status.waitForExistence(timeout: 15))
+      XCTAssertFalse(app.descendants(matching: .any)["desktop-session-status"].exists)
+      try await capture(duo ? "duo-inner" : "ipad-main", app)
+      app.buttons["session-ports"].firstMatch.tap()
+      XCTAssertTrue(app.staticTexts["Forwards keep running when you close this inspector."].waitForExistence(timeout: 12))
+      try await capture(duo ? "duo-inner-ports" : "ipad-ports", app)
+    }
+  }
+
   @MainActor private func allowPaste(in app: XCUIApplication) {
     for surface in [app, XCUIApplication(bundleIdentifier: "com.apple.springboard")] {
       let allow = surface.alerts.buttons["Allow Paste"].firstMatch
@@ -72,6 +118,10 @@ extension NativeSessionTests {
     let oneShot = app.descendants(matching: .any)["session-" + other].firstMatch
     XCTAssertTrue(row.waitForExistence(timeout: 15))
     try await capture("servers-tree", app)
+    if !(env["CLISTREAM_DUO_NAME"] ?? "").isEmpty {
+      XCTAssertTrue(app.descendants(matching: .any)["duo-server-tools"].firstMatch.exists)
+      try await capture("duo-outer-list", app)
+    }
     let search = app.searchFields.firstMatch
     if !search.isHittable && app.buttons["Search"].firstMatch.exists { app.buttons["Search"].firstMatch.tap() }
     XCTAssertTrue(search.waitForExistence(timeout: 8))

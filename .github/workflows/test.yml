@@ -169,6 +169,26 @@ jobs:
           path: gallery/*.png
           if-no-files-found: ignore
           retention-days: 3
+      - name: Verify mobile design captures
+        if: ${{ !cancelled() && steps.build-apple.outcome == 'success' && (matrix.device == 'iPhone' || matrix.device == 'iPad' || matrix.device == 'Duo') && !inputs.cases && (github.event_name != 'workflow_dispatch' || inputs.screenshots) }}
+        env:
+          DEVICE: ${{ matrix.device }}
+        run: |
+          case "$DEVICE" in
+            iPhone) boards="servers-tree swipe-actions terminal-key-bar session-menu port-forwards add-server scan-qr edit-command stop-confirmation welcome pairing-error" ;;
+            iPad) boards="ipad-main ipad-ports" ;;
+            Duo) boards="duo-outer-list duo-outer-terminal duo-partially-open duo-inner duo-inner-ports" ;;
+          esac
+          missing=0
+          for board in $boards; do
+            for suffix in '' '-dark'; do
+              if [[ ! -s "gallery/$board$suffix.png" ]]; then
+                echo "::error::Missing $DEVICE capture $board$suffix"
+                missing=1
+              fi
+            done
+          done
+          exit "$missing"
       - name: Verify the complete Mac design gallery
         if: ${{ !cancelled() && steps.build-apple.outcome == 'success' && matrix.device == 'macOS' && !inputs.cases && (github.event_name != 'workflow_dispatch' || inputs.screenshots) }}
         run: |

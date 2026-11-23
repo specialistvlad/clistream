@@ -73,6 +73,8 @@ The native client reads the smoothed RTT from the QUIC connection to the broker.
 
 ## Replicated workspaces
 
+The Mac Finder provider and iOS Files provider use the same workspace operations and version checks.
+
 A broker advertising `workspace-v1` accepts `workspace-supervisors`. Each supporting supervisor with an enabled workspace sets `Workspace` on its descriptor. The new listing can also include the configured loopback endpoint for each named port in `Info.PortAddresses`. Legacy listing operations keep their original field sets.
 
 Open a `workspace` request with the managed supervisor ID or the current attach-only registration ID, a channel and a relative path. A managed workspace remains available while its child is stopped. The broker checks enrollment and the advertised capability before forwarding the stream. The supervisor applies the same pinned-root checks as the existing file service.

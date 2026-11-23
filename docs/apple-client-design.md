@@ -10,7 +10,7 @@ CLIStream has a dedicated macOS application and a universal iPhone and iPad appl
 
 ## Pair and discover
 
-Open the daemon’s invitation or paste it into Pair. Review the advertised server address before confirming enrollment. Keep the saved identity across launches. A pairing error lets you dismiss an invalid or expired link. For a revoked device, obtain a new invitation from the server operator. Successful pairing displays the server’s supervisors, including stopped CLI apps. Pair additional servers with **Add Server**. Under **View**, choose **Tree** or **List**, then group by **Server**, **Host**, or **CLI Name**. An offline server offers **Retry**.
+On iPhone, iPad, or Duo, choose **Scan QR Code** and point the camera at the code printed by the daemon, choose **Paste Invitation**, or open a signed link. The system Camera app can also open CLIStream. **Add Server** shows a masked invitation and its verified address and identity. Choose **Pair** to enroll. If camera access is unavailable, paste the link instead. **Open Settings** lets you restore camera access after denying permission. Review the advertised server address before confirming enrollment. Keep the saved identity across launches. A pairing error lets you dismiss an invalid or expired link. For a revoked device, obtain a new invitation from the server operator. Successful pairing displays the server’s supervisors, including stopped CLI apps. Pair additional servers with **Add Server**. Under **View**, choose **Tree** or **List**, then group by **Server**, **Host**, or **CLI Name**. An offline server offers **Retry**.
 
 ## Mac windows
 
@@ -20,7 +20,9 @@ Use **File → Paste Invitation** to review the address and identity before pair
 
 ## Touch-only operation on iPhone and iPad
 
-Choose a session in the sidebar when space permits or navigate from the compact session list. Switching preserves open attachments. Choose **Session → Detach** to close the selected attachment. The terminal follows the system appearance and scales its monospaced text with Dynamic Type. In an attached terminal, open **Session → Keys** for Escape, arrows, Control-letter combinations, and the onscreen keyboard. The selected run stays open across keyboard changes, rotation, iPad resizing, and Duo folding. Use hardware keyboard and pointer input where available.
+Choose a CLI in **Servers**. Use Search to filter program names, swipe a managed row to Restart or Stop it, or long-press a server to rename or remove it. An iPhone and the closed Duo navigate from the list into a terminal. On a wide iPad or the open Duo, the sidebar stays beside the terminal and the title shows the host, connection status, latency and PTY dimensions. Narrowing the window, rotating or folding the device preserves the session. The compact layout keeps status below the terminal.
+
+Tap **Show Keyboard** for the floating key bar. It provides Escape, latched Control, Tab, arrows, pointer mode and Hide Keyboard. Swipe the bar horizontally for punctuation and, on iPad, F1–F8. To send Control-C, tap **ctrl** and type **c**. Use **Session** for lifecycle actions, pipe EOF, Ports, Files or Detach. Detach releases the selected attachment. [iOS screen reference](design/ios/spec.md)
 
 ## Terminal and session controls
 
@@ -42,9 +44,13 @@ While the extension is running, it checks previously browsed folders for host-si
 
 After removing the last file, Finder can delete the empty folder even if its displayed version predates that file removal. The provider verifies that the folder still has the same identity and sends a version-checked, nonrecursive delete. A new child on the host prevents the deletion.
 
-## Future file access
+<a id="future-file-access"></a>
 
-The iPhone, iPad and Duo Files extension is deferred. These apps use the shared terminal and session controls described above.
+## Files workspaces on iPhone, iPad and Duo
+
+**Show in Files** gives the selected program’s location under **Files → Browse → CLIStream → server → host → program**. In Files, enable CLIStream under **Browse → Edit → Locations** if needed. The Files extension uses the same remote item identities, version checks and conflict handling as Finder. Other document apps can open these files through the system picker. A stopped managed child keeps its workspace available.
+
+The app migrates existing server enrollments into its private App Group with the same keys. Removing a server removes its location from the provider catalog. Revoking a device stops remote operations. Local copies can remain on the device.
 
 ## Acceptance
 
