@@ -6,10 +6,11 @@ struct HingeObserver: UIViewRepresentable {
   func makeUIView(context: Context) -> UIView {
     let view = UIView()
     view.isUserInteractionEnabled = false
-    view.addInteraction(UIHingeInteraction { _, update in
-      let value = update.hinge?.status == .closed
-      if closed != value { closed = value }
-    })
+    view.addInteraction(
+      UIHingeInteraction { _, update in
+        let value = update.hinge?.status == .closed
+        if closed != value { closed = value }
+      })
     return view
   }
   func updateUIView(_ view: UIView, context: Context) {}
@@ -41,7 +42,8 @@ struct MobileTerminal: View {
   }
   private var status: String {
     guard online else { return item.running ? "Reconnecting…" : "Disconnected" }
-    return ["Connected", sample.map(MobileServers.latency)].compactMap { $0 }.joined(separator: " · ")
+    return ["Connected", sample.map(MobileServers.latency)].compactMap { $0 }.joined(
+      separator: " · ")
   }
   private var subtitle: String {
     if !regular { return item.Host + " — " + row.server.name }
@@ -67,7 +69,9 @@ struct MobileTerminal: View {
         if !connection.status.isEmpty {
           Text(connection.status).font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
         }
-      } else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
+      } else {
+        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+      }
       if !regular {
         HStack {
           Circle().fill(online ? Color.green : .secondary).frame(width: 8, height: 8)
@@ -88,7 +92,7 @@ struct MobileTerminal: View {
           if !keyboard { showKeyboard }
           Spacer()
         }.labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
-        .accessibilityIdentifier("duo-terminal-tools")
+          .accessibilityIdentifier("duo-terminal-tools")
       }
     }
     .navigationTitle(item.Name).navigationBarTitleDisplayMode(.inline)
@@ -107,13 +111,20 @@ struct MobileTerminal: View {
         ToolbarItem(placement: .topBarTrailing) { sessionMenu }
       }
     }
-    .alert("Show in Files", isPresented: $showingFiles) { Button("OK") {} } message: {
-      Text("Open Files and go to " + FinderWorkspace.filesPath(target, in: workspace)
-           + ". If CLIStream is hidden, tap Edit in Browse and enable CLIStream under Locations.")
+    .alert("Show in Files", isPresented: $showingFiles) {
+      Button("OK") {}
+    } message: {
+      Text(
+        "Open Files and go to " + FinderWorkspace.filesPath(target, in: workspace)
+          + ". If CLIStream is hidden, tap Edit in Browse and enable CLIStream under Locations.")
     }
     .modifier(PortsPresentation(connection: connection, session: item, presented: $ports))
-    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in keyboard = true }
-    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in keyboard = false }
+    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) {
+      _ in keyboard = true
+    }
+    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) {
+      _ in keyboard = false
+    }
     .task(id: connection.attached) {
       sample = nil
       while !Task.isCancelled {
@@ -138,7 +149,10 @@ struct MobileTerminal: View {
   }
   @ViewBuilder private var lifecycleButtons: some View {
     let row = target
-    Button(item.running ? "Restart…" : "Start…", systemImage: item.running ? "arrow.counterclockwise" : "play") {
+    Button(
+      item.running ? "Restart…" : "Start…",
+      systemImage: item.running ? "arrow.counterclockwise" : "play"
+    ) {
       Task { await actions.review(row, in: workspace) }
     }.disabled((item.revision ?? 0) == 0)
       .accessibilityIdentifier(item.running ? "session-restart" : "session-start")
@@ -150,11 +164,14 @@ struct MobileTerminal: View {
       ControlGroup {
         lifecycleButtons
         Button("Send EOF", systemImage: "text.append") { connection.send(.eof) }
-        .disabled(!connection.attached || item.Mode != "pipe").accessibilityIdentifier("session-send-eof")
+          .disabled(!connection.attached || item.Mode != "pipe").accessibilityIdentifier(
+            "session-send-eof")
       }
       Divider()
       if item.running && !connection.attached {
-        Button("Reconnect", systemImage: "arrow.clockwise") { Task { await connection.reconnect(item) } }
+        Button("Reconnect", systemImage: "arrow.clockwise") {
+          Task { await connection.reconnect(item) }
+        }
       }
       Button("Ports", systemImage: "network") { ports = true }
       if item.workspace == true { filesButton }

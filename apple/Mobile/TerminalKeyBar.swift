@@ -38,7 +38,7 @@ final class TerminalKeyBar: UIView {
       keys.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor),
       keys.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
       keys.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
-      keys.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor)
+      keys.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
     ])
     addKey("Escape", text: "esc") { $0.send(txt: "\u{1b}") }
     control = addKey("Control Key", text: "ctrl") { [weak self] view in
@@ -50,14 +50,16 @@ final class TerminalKeyBar: UIView {
       terminal?.send(txt: "\u{03}")
     }
     control.menu = UIMenu(children: [interrupt])
-    control.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "Control-C") { [weak terminal] _ in
-      guard let terminal else { return false }
-      terminal.controlModifier = false
-      terminal.send(txt: "\u{03}")
-      return true
-    }]
+    control.accessibilityCustomActions = [
+      UIAccessibilityCustomAction(name: "Control-C") { [weak terminal] _ in
+        guard let terminal else { return false }
+        terminal.controlModifier = false
+        terminal.send(txt: "\u{03}")
+        return true
+      }
+    ]
     addKey("Tab", symbol: "arrow.right.to.line") { $0.send(txt: "\t") }
-    for (name, suffix) in [("Left","D"), ("Down","B"), ("Up","A"), ("Right","C")] {
+    for (name, suffix) in [("Left", "D"), ("Down", "B"), ("Up", "A"), ("Right", "C")] {
       addKey(name + " Arrow", symbol: "arrow." + name.lowercased()) { view in
         view.send(txt: (view.getTerminal().applicationCursor ? "\u{1b}O" : "\u{1b}[") + suffix)
       }
@@ -66,27 +68,34 @@ final class TerminalKeyBar: UIView {
       view.allowMouseReporting.toggle()
       self?.refreshModifiers()
     }
-    addKey("Hide Keyboard", symbol: "keyboard.chevron.compact.down") { _ = $0.resignFirstResponder() }
+    addKey("Hide Keyboard", symbol: "keyboard.chevron.compact.down") {
+      _ = $0.resignFirstResponder()
+    }
     for key in ["~", "|", "/", "-"] { addKey(key, text: key) { $0.insertText(key) } }
     if traitCollection.userInterfaceIdiom == .pad || UIDevice.current.userInterfaceIdiom == .pad {
-      for (index, code) in ["OP","OQ","OR","OS","[15~","[17~","[18~","[19~"].enumerated() {
+      for (index, code) in ["OP", "OQ", "OR", "OS", "[15~", "[17~", "[18~", "[19~"].enumerated() {
         let label = "F\(index + 1)"
         addKey(label, text: label) { $0.send(txt: "\u{1b}" + code) }
       }
     }
-    NotificationCenter.default.addObserver(self, selector: #selector(refreshModifiers),
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(refreshModifiers),
       name: .terminalViewControlModifierReset, object: terminal)
     refreshModifiers()
   }
   required init?(coder: NSCoder) { nil }
   @objc private func refreshModifiers() {
-    for (button, enabled) in [(control, terminal?.controlModifier), (pointer, terminal?.allowMouseReporting)] {
+    for (button, enabled) in [
+      (control, terminal?.controlModifier), (pointer, terminal?.allowMouseReporting),
+    ] {
       button?.tintColor = enabled == true ? .systemBlue : .label
       button?.accessibilityValue = enabled == true ? "On" : "Off"
     }
   }
-  @discardableResult private func addKey(_ name: String, text: String? = nil, symbol: String? = nil,
-                                          action: @escaping (TerminalView) -> Void) -> UIButton {
+  @discardableResult private func addKey(
+    _ name: String, text: String? = nil, symbol: String? = nil,
+    action: @escaping (TerminalView) -> Void
+  ) -> UIButton {
     let button = UIButton(type: .system)
     var config = UIButton.Configuration.plain()
     config.title = text
@@ -96,9 +105,10 @@ final class TerminalKeyBar: UIView {
     button.tintColor = .label
     button.accessibilityLabel = name
     button.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
-    button.addAction(UIAction { [weak terminal] _ in
-      if let terminal { action(terminal) }
-    }, for: .primaryActionTriggered)
+    button.addAction(
+      UIAction { [weak terminal] _ in
+        if let terminal { action(terminal) }
+      }, for: .primaryActionTriggered)
     keys.addArrangedSubview(button)
     return button
   }

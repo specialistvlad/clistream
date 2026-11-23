@@ -6,7 +6,10 @@ import SwiftUI
   @Published var link = ""
   private(set) var confirmed: String?
 
-  func add(_ value: String = "") { link = value; page = .review }
+  func add(_ value: String = "") {
+    link = value
+    page = .review
+  }
   func paste() {
     let board = UIPasteboard.general
     add(board.string ?? board.url?.absoluteString ?? "")
@@ -18,9 +21,15 @@ import SwiftUI
     add(value)
     return true
   }
-  func accept() { confirmed = link.trimmingCharacters(in: .whitespacesAndNewlines); page = nil }
+  func accept() {
+    confirmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
+    page = nil
+  }
   func takeConfirmation() -> String? {
-    defer { confirmed = nil; link = "" }
+    defer {
+      confirmed = nil
+      link = ""
+    }
     return confirmed
   }
 }
@@ -35,14 +44,23 @@ struct MobileInvitationPresentation: ViewModifier {
       guard url.scheme == "clistream" else { return }
       if !flow.scanned(url.absoluteString) { connection.pairingError = "Invalid invitation" }
     }
-    .sheet(isPresented: Binding(get: { flow.page != nil }, set: { if !$0 { flow.page = nil } }),
-           onDismiss: { if let link = flow.takeConfirmation() { Task { await enroll(link) } } }) {
+    .sheet(
+      isPresented: Binding(get: { flow.page != nil }, set: { if !$0 { flow.page = nil } }),
+      onDismiss: { if let link = flow.takeConfirmation() { Task { await enroll(link) } } }
+    ) {
       MobileInvitationSheet(flow: flow)
     }
-    .alert("Couldn’t Pair This Device", isPresented: Binding(
-      get: { connection.pairingError != nil }, set: { if !$0 { connection.pairingError = nil } }
-    )) { Button("OK") { connection.pairingError = nil } } message: {
-      Text("The invitation expired or was replaced. Ask the server operator for a new one with clistreamd invite.")
+    .alert(
+      "Couldn’t Pair This Device",
+      isPresented: Binding(
+        get: { connection.pairingError != nil }, set: { if !$0 { connection.pairingError = nil } }
+      )
+    ) {
+      Button("OK") { connection.pairingError = nil }
+    } message: {
+      Text(
+        "The invitation expired or was replaced. Ask the server operator for a new one with clistreamd invite."
+      )
     }
   }
 }
@@ -62,7 +80,9 @@ private struct MobileInvitationSheet: View {
               .accessibilityIdentifier("pairing-link")
             Button("Paste Invitation", systemImage: "doc.on.clipboard", action: flow.paste)
             Button("Scan QR Code", systemImage: "qrcode.viewfinder", action: flow.scan)
-          } header: { Text("Invitation") } footer: {
+          } header: {
+            Text("Invitation")
+          } footer: {
             Text("Scan or paste the invitation from clistreamd. Invitations last three minutes.")
           }
           if let address = info.Address, let pin = info.Pin, info.Error == nil {
@@ -72,19 +92,23 @@ private struct MobileInvitationSheet: View {
                 Text(pin.uppercased()).font(.system(.caption, design: .monospaced))
                   .textSelection(.enabled).accessibilityIdentifier("pairing-identity")
               }
-            } header: { Text("Server") } footer: {
+            } header: {
+              Text("Server")
+            } footer: {
               Text("Check the server before pairing. This device can then control every CLI on it.")
             }
           }
         }.navigationTitle("Add Server").navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-          ToolbarItem(placement: .cancellationAction) { close }
-          ToolbarItem(placement: .confirmationAction) {
-            Button("Pair", systemImage: "checkmark", action: flow.accept)
-              .labelStyle(.iconOnly).disabled(info.Address == nil || info.Pin == nil || info.Error != nil)
-              .accessibilityIdentifier("workspace-confirm")
+          .toolbar {
+            ToolbarItem(placement: .cancellationAction) { close }
+            ToolbarItem(placement: .confirmationAction) {
+              Button("Pair", systemImage: "checkmark", action: flow.accept)
+                .labelStyle(.iconOnly).disabled(
+                  info.Address == nil || info.Pin == nil || info.Error != nil
+                )
+                .accessibilityIdentifier("workspace-confirm")
+            }
           }
-        }
       }
     }.presentationDetents([.large]).presentationDragIndicator(.visible)
   }

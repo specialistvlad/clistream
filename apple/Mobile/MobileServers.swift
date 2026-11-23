@@ -16,48 +16,64 @@ struct MobileServers: View {
   @State private var name = ""
 
   private var matches: [WorkspaceSession] {
-    workspace.sessions.filter { query.isEmpty || $0.item.Name.localizedCaseInsensitiveContains(query) }
+    workspace.sessions.filter {
+      query.isEmpty || $0.item.Name.localizedCaseInsensitiveContains(query)
+    }
   }
 
   var body: some View {
     adaptiveList
-    .searchable(text: $query, placement: !regular ? .toolbar : .sidebar, prompt: "Search")
-    .navigationTitle("Servers")
-    .navigationBarTitleDisplayMode(closedHinge ? .inline : .automatic)
-    .safeAreaInset(edge: .trailing, spacing: 0) {
-      if closedHinge && !regular {
-        VStack { serverButtons; Spacer() }.labelStyle(.iconOnly).buttonStyle(.glass)
-          .buttonBorderShape(.circle).accessibilityIdentifier("duo-server-tools")
-      }
-    }
-    .overlay {
-      if workspace.profiles.isEmpty {
-        ContentUnavailableView {
-          Label("No Servers", systemImage: "network")
-        } description: {
-          Text("Scan the QR code that clistreamd shows, or paste its invitation. Invitations last three minutes.")
-        } actions: {
-          Button("Paste Invitation", systemImage: "doc.on.clipboard", action: invitations.paste).buttonStyle(.glass)
-          Button("Scan QR Code", systemImage: "qrcode.viewfinder", action: invitations.scan).buttonStyle(.glassProminent)
+      .searchable(text: $query, placement: !regular ? .toolbar : .sidebar, prompt: "Search")
+      .navigationTitle("Servers")
+      .navigationBarTitleDisplayMode(closedHinge ? .inline : .automatic)
+      .safeAreaInset(edge: .trailing, spacing: 0) {
+        if closedHinge && !regular {
+          VStack {
+            serverButtons
+            Spacer()
+          }.labelStyle(.iconOnly).buttonStyle(.glass)
+            .buttonBorderShape(.circle).accessibilityIdentifier("duo-server-tools")
         }
       }
-    }
-    .toolbar {
-      if !regular && !workspace.profiles.isEmpty { DefaultToolbarItem(kind: .search, placement: .bottomBar) }
-      if !closedHinge || regular { ToolbarItemGroup(placement: .topBarTrailing) { serverButtons } }
-    }
-    .sheet(item: $renaming, content: renameSheet)
+      .overlay {
+        if workspace.profiles.isEmpty {
+          ContentUnavailableView {
+            Label("No Servers", systemImage: "network")
+          } description: {
+            Text(
+              "Scan the QR code that clistreamd shows, or paste its invitation. Invitations last three minutes."
+            )
+          } actions: {
+            Button("Paste Invitation", systemImage: "doc.on.clipboard", action: invitations.paste)
+              .buttonStyle(.glass)
+            Button("Scan QR Code", systemImage: "qrcode.viewfinder", action: invitations.scan)
+              .buttonStyle(.glassProminent)
+          }
+        }
+      }
+      .toolbar {
+        if !regular && !workspace.profiles.isEmpty {
+          DefaultToolbarItem(kind: .search, placement: .bottomBar)
+        }
+        if !closedHinge || regular {
+          ToolbarItemGroup(placement: .topBarTrailing) { serverButtons }
+        }
+      }
+      .sheet(item: $renaming, content: renameSheet)
   }
 
   @ViewBuilder private var adaptiveList: some View {
-    if regular { servers.listStyle(.sidebar) }
-    else { servers.listStyle(.insetGrouped) }
+    if regular { servers.listStyle(.sidebar) } else { servers.listStyle(.insetGrouped) }
   }
 
   private var servers: some View {
-    List(selection: Binding(get: { selected }, set: { id in
-      if let row = workspace.sessions.first(where: { $0.id == id }) { activate(row) }
-    })) {
+    List(
+      selection: Binding(
+        get: { selected },
+        set: { id in
+          if let row = workspace.sessions.first(where: { $0.id == id }) { activate(row) }
+        })
+    ) {
       if grouping == "Server" {
         ForEach(workspace.profiles) { server in
           let rows = matches.filter { $0.server.id == server.id }
@@ -71,16 +87,21 @@ struct MobileServers: View {
                     .accessibilityIdentifier("retry-server")
                 }
               }
-              if flat { ForEach(rows) { leaf($0, detail: $0.item.Host) } }
-              else {
+              if flat {
+                ForEach(rows) { leaf($0, detail: $0.item.Host) }
+              } else {
                 ForEach(Set(rows.map(\.item.Host)).sorted(), id: \.self) { host in
                   let children = rows.filter { $0.item.Host == host }
                   DisclosureGroup(isExpanded: expanded([server.id, host])) {
                     ForEach(children) { leaf($0) }
-                  } label: { hostLabel(host, os: children.first?.item.OS ?? "") }
+                  } label: {
+                    hostLabel(host, os: children.first?.item.OS ?? "")
+                  }
                 }
               }
-            } header: { serverHeader(server) }
+            } header: {
+              serverHeader(server)
+            }
           }
         }
       } else {
@@ -97,47 +118,62 @@ struct MobileServers: View {
                 } else {
                   DisclosureGroup(isExpanded: expanded([grouping, group, server.id])) {
                     ForEach(children) { leaf($0, detail: byHost ? "" : $0.item.Host) }
-                  } label: { serverHeader(server) }
+                  } label: {
+                    serverHeader(server)
+                  }
                 }
               }
             }
-          } header: { Text(group) }
+          } header: {
+            Text(group)
+          }
         }
       }
     }
   }
 
   @ViewBuilder private var serverButtons: some View {
-        Button("Scan QR Code", systemImage: "qrcode.viewfinder", action: invitations.scan)
-          .accessibilityIdentifier("workspace-scan")
-        Button("Add Server", systemImage: "plus") { invitations.add() }.keyboardShortcut("k")
-          .accessibilityIdentifier("workspace-add-server")
-        Menu("Layout and grouping", systemImage: "list.bullet.indent") {
-          Picker("Layout", selection: $flat) { Text("Tree").tag(false); Text("List").tag(true) }
-          Picker("Group by", selection: $grouping) {
-            ForEach(["Server", "Host", "CLI Name"], id: \.self) { Text($0) }
-          }
-          Menu("Rename Server…") {
-            ForEach(workspace.profiles) { server in Button(server.name) { rename(server) } }
-          }
-        }.accessibilityIdentifier("workspace-view-options")
+    Button("Scan QR Code", systemImage: "qrcode.viewfinder", action: invitations.scan)
+      .accessibilityIdentifier("workspace-scan")
+    Button("Add Server", systemImage: "plus") { invitations.add() }.keyboardShortcut("k")
+      .accessibilityIdentifier("workspace-add-server")
+    Menu("Layout and grouping", systemImage: "list.bullet.indent") {
+      Picker("Layout", selection: $flat) {
+        Text("Tree").tag(false)
+        Text("List").tag(true)
+      }
+      Picker("Group by", selection: $grouping) {
+        ForEach(["Server", "Host", "CLI Name"], id: \.self) { Text($0) }
+      }
+      Menu("Rename Server…") {
+        ForEach(workspace.profiles) { server in Button(server.name) { rename(server) } }
+      }
+    }.accessibilityIdentifier("workspace-view-options")
   }
 
   private func renameSheet(_ server: ServerProfile) -> some View {
-      WorkspaceSheet(title: "Rename Server", confirmation: "Save",
-                     enabled: !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                     cancel: { renaming = nil }, confirm: {
+    MobileFormSheet(
+      title: "Rename Server", confirmation: "Save",
+      enabled: !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+      cancel: { renaming = nil },
+      confirm: {
         workspace.rename(server, to: name)
         renaming = nil
-      }) { TextField("Name", text: $name).accessibilityIdentifier("server-name-field") }
+      }
+    ) { TextField("Name", text: $name).accessibilityIdentifier("server-name-field") }
   }
 
   private func expanded(_ path: [String]) -> Binding<Bool> {
-    Binding(get: { !query.isEmpty || !collapsed.contains(path) }, set: {
-      if $0 { collapsed.remove(path) } else { collapsed.insert(path) }
-    })
+    Binding(
+      get: { !query.isEmpty || !collapsed.contains(path) },
+      set: {
+        if $0 { collapsed.remove(path) } else { collapsed.insert(path) }
+      })
   }
-  private func rename(_ server: ServerProfile) { name = server.name; renaming = server }
+  private func rename(_ server: ServerProfile) {
+    name = server.name
+    renaming = server
+  }
   private func serverHeader(_ server: ServerProfile) -> some View {
     HStack {
       Text(server.name).accessibilityLabel("Server " + server.name)
@@ -149,7 +185,9 @@ struct MobileServers: View {
       }
     }.textCase(nil).contextMenu {
       Button("Rename…", systemImage: "pencil") { rename(server) }
-      Button("Remove Server…", systemImage: "trash", role: .destructive) { actions.confirmation = .remove(server) }
+      Button("Remove Server…", systemImage: "trash", role: .destructive) {
+        actions.confirmation = .remove(server)
+      }
     }
   }
   static func latency(_ us: Int64) -> String {
@@ -166,10 +204,13 @@ struct MobileServers: View {
   private func leaf(_ row: WorkspaceSession, detail: String = "") -> some View {
     NavigationLink(value: row.id) {
       HStack {
-        Image(systemName: "terminal").foregroundStyle(row.item.running ? Color.accentColor : .secondary)
+        Image(systemName: "terminal").foregroundStyle(
+          row.item.running ? Color.accentColor : .secondary)
         Text(row.item.Name)
         Spacer()
-        let label = !row.item.running ? row.item.exitCode.map { "Exit \($0)" } ?? "Stopped"
+        let label =
+          !row.item.running
+          ? row.item.exitCode.map { "Exit \($0)" } ?? "Stopped"
           : (row.item.revision ?? 0) == 0 ? "Attach only" : detail
         if !label.isEmpty { Text(label).font(.caption).foregroundStyle(.secondary) }
       }
@@ -177,10 +218,14 @@ struct MobileServers: View {
       .swipeActions(edge: .trailing, allowsFullSwipe: false) {
         if (row.item.revision ?? 0) > 0 {
           if row.item.running {
-            Button("Stop", systemImage: "stop.fill", role: .destructive) { actions.confirmation = .stop(row) }
+            Button("Stop", systemImage: "stop.fill", role: .destructive) {
+              actions.confirmation = .stop(row)
+            }
           }
-          Button(row.item.running ? "Restart" : "Start",
-                 systemImage: row.item.running ? "arrow.counterclockwise" : "play") {
+          Button(
+            row.item.running ? "Restart" : "Start",
+            systemImage: row.item.running ? "arrow.counterclockwise" : "play"
+          ) {
             Task { await actions.review(row, in: workspace) }
           }.tint(.accentColor)
         }

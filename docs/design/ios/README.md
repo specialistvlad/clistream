@@ -15,6 +15,10 @@ The design target for the CLIStream app on iPhone Pro, iPad and iPhone Duo under
 2. Use [tokens.json](tokens.json) to check the rendered app. Hardcode only the values marked `appDrawn`.
 3. Compare the hosted UI suite's iPhone, iPad and Duo screenshots with the Screens table in [spec.md](spec.md). The system rendering on iOS 27 is the final reference when it differs from a value here.
 
+## Implementation map
+
+The handoff records the pre-redesign filenames at `e1890eb`. The mobile UI now lives in `apple/Mobile`. MobileServers draws both list layouts, MobileTerminal owns the terminal toolbar and status, and TerminalKeyBar hosts the keyboard accessory. MobileLifecycle and MobileSheets present run and port controls. MobileInvitations and MobileScanner handle pairing. Shared terminal I/O and enrollment live in `apple/App`. The native Mac and mobile Files extensions compile the same provider implementation.
+
 ## Board states
 
 Each iOS board on the canvas renders one of the two components with these props. Unlisted props keep their defaults: light appearance, servers list, nothing open.
