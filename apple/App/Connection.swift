@@ -95,25 +95,23 @@ final class Connection: ObservableObject {
     }
   }
 
-  func refresh() async {
+  @discardableResult func refresh() async -> [SessionInfo]? {
     let ticket = UUID()
     refreshTicket = ticket
     do {
       let dir = try directory
-      guard FileManager.default.fileExists(atPath: dir + "/server.json") else { return }
+      guard FileManager.default.fileExists(atPath: dir + "/server.json") else { return nil }
       paired = true
       let r = await Core.request(["Op": "supervisors", "Dir": dir])
-      guard refreshTicket == ticket else { return }
       if let error = r.Error {
+        guard refreshTicket == ticket else { return nil }
         listError =
           error.contains("client authorization required")
           ? "Device access was revoked. Pair again with a fresh invitation." : error
         status = listError
-        return
+        return nil
       }
-      listError = ""
-      latency = r.RTTMicros
-      sessions = (r.Supervisors ?? []).map { row in
+      let observed = (r.Supervisors ?? []).map { row in
         var item = row.Info
         item.supervisor = row.ID
         item.revision = row.Revision
@@ -123,8 +121,19 @@ final class Connection: ObservableObject {
         item.exitCode = row.Exit
         return item
       }
-      status = r.Error ?? (sessions.isEmpty ? "No active sessions" : "")
-    } catch { status = error.localizedDescription }
+      if refreshTicket == ticket {
+        sessions = observed
+        listError = ""
+        latency = r.RTTMicros
+        status = observed.isEmpty ? "No active sessions" : ""
+      }
+      // A lifecycle action consumes its own post-acknowledgement listing.
+      // Another reader may have superseded publication to our UI cache.
+      return observed
+    } catch {
+      if refreshTicket == ticket { status = error.localizedDescription }
+      return nil
+    }
   }
 
   func leave() {
@@ -220,6 +229,7 @@ final class Connection: ObservableObject {
         // publishes its next revision to the broker.
         let deadline = ContinuousClock.now + .seconds(6)
         repeat {
+          guard ticket == generation else { return }
           await refresh()
           guard ticket == generation else { return }
           guard childExited, listError.isEmpty, (item.revision ?? 0) > 0,
@@ -262,9 +272,9 @@ final class Connection: ObservableObject {
     leave()
     selected = item
     let replacement = generation
-    await refresh()
+    let observed = await refresh()
     guard replacement == generation else { return nil }
-    guard listError.isEmpty, let current = sessions.first(where: { $0.id == item.id }) else {
+    guard let current = observed?.first(where: { $0.id == item.id }) else {
       status = listError.isEmpty ? "The supervisor is unavailable." : listError
       return status
     }
