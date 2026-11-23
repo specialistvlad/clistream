@@ -8,6 +8,9 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
   let index = WorkspaceIndex()
   let manager: NSFileProviderManager?
   private var poll: DispatchSourceTimer?
+  private var refreshing = Set<String>()
+  private var nextRefresh = [String: ContinuousClock.Instant]()
+  private var invalidated = false
   private let log = Logger(subsystem: "com.vlk.clistream", category: "FileProvider")
 
   required init(domain: NSFileProviderDomain) {
@@ -21,7 +24,7 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
       do {
         try index.load()
         let prior = index.sequence
-        try index.refreshWorkingSet()
+        try refreshWorkingSet()
         try persist(after: prior)
       } catch {
         let failure = error as NSError
@@ -33,7 +36,57 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
     timer.resume()
   }
 
-  func invalidate() { poll?.cancel() }
+  func invalidate() {
+    poll?.cancel()
+    queue.async { self.invalidated = true }
+  }
+
+  // Publish the local catalog immediately. Probe each server independently so a
+  // disconnected peer's handshake cannot hold Finder's metadata queue or prevent
+  // opening a different server. All index mutation still runs on the domain queue.
+  func refreshWorkingSet() throws {
+    guard !invalidated else { throw CocoaError(.userCancelled) }
+    let servers = try index.refreshCatalog()
+    let pins = Set(servers.map(\.server))
+    nextRefresh = nextRefresh.filter { pins.contains($0.key) }
+    for server in servers {
+      if let due = nextRefresh[server.server], due > .now { continue }
+      guard refreshing.insert(server.server).inserted else { continue }
+      let generation = index.generation(for: server)
+      DispatchQueue.global(qos: .utility).async { [weak self] in
+        let result = Result { try WorkspaceIndex.supervisors(on: server) }
+        self?.queue.async { [weak self] in
+          self?.finishRefresh(result, server: server, generation: generation)
+        }
+      }
+    }
+  }
+
+  private func finishRefresh(
+    _ result: Result<[WorkspaceService.Supervisor], Error>, server: WorkspaceNode, generation: Int
+  ) {
+    refreshing.remove(server.server)
+    guard !invalidated else { return }
+    let prior = index.sequence
+    do {
+      try index.refreshCatalog()
+      if index.cached(server.id) != nil && index.generation(for: server) == generation {
+        do {
+          try index.apply(result, to: server)
+          try index.refreshFolders(server: server.server)
+          nextRefresh[server.server] = .now + .seconds(10)
+        } catch {
+          // Keep the materialized tree during outages. A direct selection can
+          // still retry this server while periodic discovery backs off.
+          nextRefresh[server.server] = .now + .seconds(45)
+        }
+      }
+      try persist(after: prior)
+    } catch {
+      let failure = error as NSError
+      log.error("Could not publish Finder metadata: \(failure.domain, privacy: .public) \(failure.code)")
+    }
+  }
 
   func persist(after sequence: Int) throws {
     try index.save()

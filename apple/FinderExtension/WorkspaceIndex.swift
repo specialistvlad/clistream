@@ -21,6 +21,8 @@ final class WorkspaceIndex {
   private var state = State()
   private var loaded = false
   private var dirty = false
+  private var discoveryGeneration = [String: Int]()
+  private var unavailableUntil = [String: ContinuousClock.Instant]()
 
   func load() throws {
     guard !loaded else { return }
@@ -95,6 +97,10 @@ final class WorkspaceIndex {
   }
   func remove(_ id: String) {
     guard let node = state.nodes.removeValue(forKey: id) else { return }
+    if node.kind == .server {
+      discoveryGeneration[node.server, default: 0] += 1
+      unavailableUntil.removeValue(forKey: node.server)
+    }
     state.enumerated.remove(id)
     record(id, old: node.parent, new: nil)
     if node.kind != .file {
@@ -137,7 +143,7 @@ final class WorkspaceIndex {
       return node
     }
   }
-  func discover(only serverID: String? = nil) throws {
+  @discardableResult func refreshCatalog() throws -> [WorkspaceNode] {
     let servers = try FinderStorage.servers()
     let roots = displayNames(
       servers.map {
@@ -146,36 +152,57 @@ final class WorkspaceIndex {
           server: $0.pin)
       })
     reconcile(roots, parent: FinderID.root)
-    for server in roots where serverID == nil || server.server == serverID {
-      do {
-        let dir = try FinderStorage.credentialDirectory(server.server)
-        let reply = try WorkspaceService.call(["Op": "supervisors", "Dir": dir.path])
-        let available = (reply.Supervisors ?? []).filter { $0.Workspace == true }
-        let byHost = Dictionary(grouping: available, by: { $0.Info.Host })
-        let hosts = displayNames(
-          byHost.keys.map { name in
-            WorkspaceNode(
-              id: FinderID.make("host", server.server, name), parent: server.id,
-              name: name, kind: .host, server: server.server, remoteName: name)
-          })
-        reconcile(hosts, parent: server.id)
-        for host in hosts {
-          let workspaces = displayNames(
-            (byHost[host.remoteName] ?? []).map { run in
-              WorkspaceNode(
-                id: FinderID.workspace(server.server, run.ID), parent: host.id, name: run.Info.Name,
-                kind: .workspace, server: server.server, workspace: run.ID)
-            })
-          reconcile(workspaces, parent: host.id)
-        }
-      } catch let error as NSError {
-        if error.domain == NSFileProviderErrorDomain
-          && error.code == NSFileProviderError.Code.notAuthenticated.rawValue
-        {
-          reconcile([], parent: server.id)
-        }
-        // An unavailable server must not erase materialized files or hide other servers.
-        if serverID != nil { throw error }
+    return roots
+  }
+
+  static func supervisors(on server: WorkspaceNode) throws -> [WorkspaceService.Supervisor] {
+    let dir = try FinderStorage.credentialDirectory(server.server)
+    return try WorkspaceService.call(["Op": "supervisors", "Dir": dir.path]).Supervisors ?? []
+  }
+  func generation(for server: WorkspaceNode) -> Int { discoveryGeneration[server.server, default: 0] }
+
+  private func noteFailure(_ error: NSError, on pin: String) {
+    if error.domain == NSFileProviderErrorDomain && error.code == NSFileProviderError.Code.serverUnreachable.rawValue {
+      unavailableUntil[pin] = .now + .seconds(15)
+    }
+  }
+  private func metadata<T>(on pin: String, _ operation: () throws -> T) throws -> T {
+    if let retry = unavailableUntil[pin], retry > .now { throw NSFileProviderError(.serverUnreachable) }
+    do { return try operation() } catch let failure as NSError {
+      noteFailure(failure, on: pin)
+      throw failure
+    }
+  }
+  func apply(_ result: Result<[WorkspaceService.Supervisor], Error>, to server: WorkspaceNode) throws {
+    discoveryGeneration[server.server, default: 0] += 1
+    let available: [WorkspaceService.Supervisor]
+    do { available = try result.get().filter { $0.Workspace == true } } catch let error as NSError {
+      noteFailure(error, on: server.server)
+      if error.domain == NSFileProviderErrorDomain && error.code == NSFileProviderError.Code.notAuthenticated.rawValue {
+        reconcile([], parent: server.id)
+      }
+      throw error
+    }
+    unavailableUntil.removeValue(forKey: server.server)
+    let byHost = Dictionary(grouping: available, by: { $0.Info.Host })
+    let hosts = displayNames(byHost.keys.map { name in
+      WorkspaceNode(id: FinderID.make("host", server.server, name), parent: server.id,
+                    name: name, kind: .host, server: server.server, remoteName: name)
+    })
+    reconcile(hosts, parent: server.id)
+    for host in hosts {
+      let workspaces = displayNames((byHost[host.remoteName] ?? []).map { run in
+        WorkspaceNode(id: FinderID.workspace(server.server, run.ID), parent: host.id, name: run.Info.Name,
+                      kind: .workspace, server: server.server, workspace: run.ID)
+      })
+      reconcile(workspaces, parent: host.id)
+    }
+  }
+  func discover(only serverID: String?) throws {
+    let roots = try refreshCatalog()
+    if let server = roots.first(where: { $0.server == serverID }) {
+      try metadata(on: server.server) {
+        try apply(Result { try Self.supervisors(on: server) }, to: server)
       }
     }
   }
@@ -197,7 +224,9 @@ final class WorkspaceIndex {
     return root == "." ? name : root + "/" + name
   }
   private func readChildren(_ node: WorkspaceNode) throws -> [WorkspaceNode] {
-    let list = try WorkspaceService.request("list", parent: node, path: path(of: node))
+    let list = try metadata(on: node.server) {
+      try WorkspaceService.request("list", parent: node, path: path(of: node))
+    }
     guard let entries = list.Entries else { throw CocoaError(.fileReadCorruptFile) }
     for entry in entries where entry.Name == "." || entry.Name == ".." || entry.Name.contains("/") {
       throw CocoaError(.fileReadCorruptFile)
@@ -222,7 +251,9 @@ final class WorkspaceIndex {
       }
     case .file:
       let parent = try require(node.parent)
-      let entry = try WorkspaceService.request("stat", parent: node, path: path(of: node)).entry()
+      let entry = try metadata(on: node.server) {
+        try WorkspaceService.request("stat", parent: node, path: path(of: node)).entry()
+      }
       var result = entry.node(in: parent)
       guard result.id == node.id else {
         remove(node.id)
@@ -233,14 +264,9 @@ final class WorkspaceIndex {
     }
   }
 
-  func refreshWorkingSet() throws {
-    try discover()
-    try refreshFolders()
-  }
-
-  private func refreshFolders(server: String? = nil, workspace: String? = nil) throws {
+  func refreshFolders(server: String, workspace: String? = nil) throws {
     let watched = state.enumerated.compactMap(cached).filter {
-      (server == nil || server == $0.server) && (workspace == nil || workspace == $0.workspace)
+      server == $0.server && (workspace == nil || workspace == $0.workspace)
     }.sorted { ((try? path(of: $0))?.count ?? 0) < ((try? path(of: $1))?.count ?? 0) }
     var seen = [String: Set<String>]()
     for item in watched {
@@ -251,8 +277,7 @@ final class WorkspaceIndex {
         for child in contents { store(child) }
       } catch let error as NSError
         where error.domain == NSFileProviderErrorDomain
-        && [.serverUnreachable, .notAuthenticated, .noSuchItem].contains(
-          NSFileProviderError.Code(rawValue: error.code))
+        && error.code == NSFileProviderError.Code.noSuchItem.rawValue
       {
         continue
       }

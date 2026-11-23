@@ -114,6 +114,9 @@ import OSLog
 
   static func show(serverID: String, workspaceID: String) async throws {
     do {
+      #if DEBUG
+        logger.notice("Resolving selected Finder workspace")
+      #endif
       let manager = try await manager()
       let id = NSFileProviderItemIdentifier(FinderID.workspace(serverID, workspaceID))
       let folder = try await manager.getUserVisibleURL(for: id)
@@ -122,6 +125,9 @@ import OSLog
       guard NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path) else {
         throw CocoaError(.fileReadUnknown)
       }
+      #if DEBUG
+        logger.notice("Opened selected Finder workspace")
+      #endif
     } catch {
       let reason = error as NSError
       logger.error("Could not open Finder workspace: \(reason.domain, privacy: .public) \(reason.code)")

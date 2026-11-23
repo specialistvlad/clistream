@@ -20,7 +20,7 @@ final class WorkspaceEnumerator: NSObject, NSFileProviderEnumerator {
     let prior = index.sequence
     let items: [WorkspaceNode]
     if container == .workingSet {
-      try index.refreshWorkingSet()
+      try provider.refreshWorkingSet()
       items = index.all
     } else {
       if index.cached(container.rawValue) == nil {
