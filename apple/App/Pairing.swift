@@ -105,8 +105,13 @@ struct WorkspaceSheet<Fields: View>: View {
     NavigationStack {
       Form { fields() }.formStyle(.grouped)
         .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarVisibility(.visible, for: .navigationBar)
+        .toolbarMinimizationBehavior(.never, for: .navigationBar)
         .toolbar {
-          ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: cancel) }
+          ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel", action: cancel).accessibilityIdentifier("workspace-cancel")
+          }
           ToolbarItem(placement: .confirmationAction) {
             Button(confirmation, action: confirm).disabled(!enabled)
               .accessibilityIdentifier("workspace-confirm").keyboardShortcut(.defaultAction)

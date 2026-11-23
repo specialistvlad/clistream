@@ -232,7 +232,14 @@ final class NativeSessionTests: XCTestCase {
     field.typeText("\"\"")
     XCTAssertEqual(field.value as? String, saved + " 'two words' \"\"")
     try await capture("restart-confirmation",app)
-    activate(app.buttons["Restart"].firstMatch)
+    #if os(iOS)
+      let confirm = app.buttons["workspace-confirm"].firstMatch
+      XCTAssertTrue(app.buttons["workspace-cancel"].firstMatch.wait(for: \.isHittable, toEqual: true, timeout: 10))
+      XCTAssertTrue(confirm.wait(for: \.isHittable, toEqual: true, timeout: 10))
+      activate(confirm)
+    #else
+      activate(app.buttons["Restart"].firstMatch)
+    #endif
     let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
     expectOutput("args=2", in: app)
     expectOutput("first=<two words>", in: app)
