@@ -348,21 +348,29 @@ final class NativeSessionTests: XCTestCase {
       // Keep the gesture on the active display while UIKit replaces the
       // toolbar button's accessibility element with the presented menu.
       let frame = menu.frame
-      let origin = app.frame.origin
+      let appFrame = app.frame
+      let origin = appFrame.origin
       app.coordinate(withNormalizedOffset: .zero)
         .withOffset(CGVector(dx: frame.midX - origin.x, dy: frame.midY - origin.y)).tap()
       let command = title.replacingOccurrences(of: "…", with: "")
       let identifier = "session-" + command.lowercased().replacingOccurrences(of: " ", with: "-")
       let labels = [title, command, command + "..."]
-      let item = app.descendants(matching: .any).matching(
-        NSPredicate(format: "identifier == %@ OR label IN %@", identifier, labels)
-      ).firstMatch
-      guard item.waitForExistence(timeout: 12), item.isEnabled else {
+      // Read the enabled state and bounds from the same native menu snapshot.
+      // UIKit can replace an action between two AX queries during presentation.
+      let button = app.buttons[identifier].firstMatch
+      var actionSnapshot = try? button.snapshot()
+      if actionSnapshot == nil {
+        let titled = app.descendants(matching: .any).matching(
+          NSPredicate(format: "label IN %@", labels)
+        ).firstMatch
+        if titled.waitForExistence(timeout: 12) { actionSnapshot = try? titled.snapshot() }
+      }
+      guard let actionSnapshot, actionSnapshot.isEnabled else {
         recordDuoFailure("session-action", in: app)
         XCTFail("The Session menu did not present " + title)
         return
       }
-      let row = item.frame.intersection(app.frame)
+      let row = actionSnapshot.frame.intersection(appFrame)
       guard !row.isEmpty else {
         recordDuoFailure("session-action", in: app)
         XCTFail("The requested Session command was outside the active display")
@@ -620,22 +628,41 @@ final class NativeSessionTests: XCTestCase {
       XCTAssertEqual(receipt, "opened")
       let confirm = pairingButton(in: app)
       let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-      if !confirm.waitForExistence(timeout: 3) {
-        // Launch Services may ask permission to deliver a custom URL to the
-        // app. Confirm only the system alert which names CLIStream.
-        let alert = springboard.alerts.containing(NSPredicate(
-          format: "label CONTAINS[c] %@", "CLIStream"
-        )).firstMatch
-        let open = alert.buttons["Open"].firstMatch
-        if open.waitForExistence(timeout: 3) { open.tap() }
-      }
-      if !confirm.waitForExistence(timeout: 12) {
+      let appName = NSPredicate(
+        format: "label CONTAINS[c] %@ OR title CONTAINS[c] %@ OR identifier CONTAINS[c] %@",
+        "CLIStream", "CLIStream", "CLIStream")
+      let systemOpen = springboard.alerts.buttons["Open"].firstMatch
+      let namedAlert = springboard.alerts.matching(appName).buttons["Open"].firstMatch
+      let namedContent = springboard.alerts.containing(appName).buttons["Open"].firstMatch
+      var grantedConsent = false
+      var readyToPair = false
+      let end = ContinuousClock.now + .seconds(25)
+      repeat {
+        // Launch Services and the foreground app present independently. The
+        // system consent prompt can appear after the first app snapshot.
+        if systemOpen.exists {
+          if !grantedConsent,
+             let open = [namedAlert, namedContent].first(where: { $0.exists && $0.isHittable }) {
+            open.tap()
+            grantedConsent = true
+          }
+        } else if confirm.exists && confirm.isHittable {
+          readyToPair = true
+          break
+        }
+        try await Task.sleep(for: .milliseconds(300))
+      } while ContinuousClock.now < end
+      if !readyToPair {
         let detail = XCTAttachment(string: """
           App foreground: \(app.state == .runningForeground)
           App pairing error: \(app.alerts["Couldn’t pair this device"].exists)
           Terminal visible: \(app.descendants(matching: .any)["session-terminal"].firstMatch.exists)
           System alert: \(springboard.alerts.firstMatch.exists)
-          System Open action: \(springboard.alerts.buttons["Open"].firstMatch.exists)
+          System Open action: \(systemOpen.exists)
+          App named by system alert: \(namedAlert.exists)
+          App named within system alert: \(namedContent.exists)
+          Consent granted: \(grantedConsent)
+          Pair device visible: \(confirm.exists)
           """)
         detail.name = "mobile-repair-state"
         detail.lifetime = .keepAlways

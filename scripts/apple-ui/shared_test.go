@@ -41,6 +41,7 @@ func TestSharedPadUsesTheVisibleTerminalAndItsKeyboard(t *testing.T) {
 		"axe": `#!/bin/sh
 case "$*" in
   *describe-ui*) printf '%s\n' "$AX_SCREEN" ;;
+  *'type --stdin'*) IFS= read -r link || :; [ "$link" = 'clistream://example' ] || exit 1; echo "$*" >> "$INPUT_LOG" ;;
   *) echo "$*" >> "$INPUT_LOG" ;;
 esac
 `,
@@ -74,7 +75,7 @@ esac
 	if err != nil {
 		t.Fatal(err)
 	}
-	const gestures = "tap --id workspace-confirm\ntap --id session-child\ntap --id session-terminal\ntype shared-pad\nkey 40"
+	const gestures = "tap --id workspace-add-server\ntap --id pairing-link\ntype --stdin --layout us\ntap --label Pair device\ntap --id session-child\ntap --id session-terminal\ntype shared-pad\nkey 40"
 	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
 	want := strings.Split(gestures, "\n")
 	if len(lines) != len(want) {
@@ -87,24 +88,18 @@ esac
 	}
 }
 
-func TestTabletScreenReadsOnlyTerminalEchoAndNamedSystemPrompt(t *testing.T) {
+func TestTabletScreenReadsOnlyVisibleTerminalEcho(t *testing.T) {
 	raw := []byte(`{"data":{"result":{"children":[
 {"type":"Text","AXValue":"out:shared-phone"},
-{"type":"Alert","children":[{"AXLabel":"Open in a different app?"},{"AXLabel":"Open"}]},
-{"AXUniqueId":"session-terminal","AXValue":"out:shared-cli"},
-{"hidden":true,"AXUniqueId":"session-terminal","AXValue":"out:shared-pad"}
+{"hidden":true,"AXUniqueId":"session-terminal","AXValue":"out:shared-pad"},
+{"AXUniqueId":"session-terminal","AXValue":"out:shared-cli"}
 ]}}}`)
-	screen, err := readTabletScreen(raw)
+	text, err := readTabletTerminal(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if screen.terminal != "out:shared-cli" || screen.openInvitation || screen.pair {
-		t.Fatalf("unexpected accessibility state: %+v", screen)
-	}
-	named := strings.Replace(string(raw), "a different app", "CLIStream", 1)
-	screen, err = readTabletScreen([]byte(named))
-	if err != nil || !screen.openInvitation {
-		t.Fatalf("missed named system alert: %v", err)
+	if text != "out:shared-cli" {
+		t.Fatalf("unexpected selected terminal text: %s", text)
 	}
 }
 

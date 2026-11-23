@@ -11,93 +11,80 @@ import (
 	"time"
 )
 
-type tabletScreen struct {
-	pair, openInvitation bool
-	terminal             string
-}
-
-// Keep only the confirmation state and the visible terminal value. Other
+// Only the visible terminal's value is evidence of a child echo. Other
 // accessibility elements can contain enrollment links and must stay private.
-func readTabletScreen(raw []byte) (tabletScreen, error) {
+func readTabletTerminal(raw []byte) (string, error) {
 	type node struct {
-		ID          string          `json:"AXUniqueId"`
-		Label       string          `json:"AXLabel"`
-		Value       json.RawMessage `json:"AXValue"`
-		Type, Title string
-		Hidden      bool
-		Children    []node
+		ID       string          `json:"AXUniqueId"`
+		Value    json.RawMessage `json:"AXValue"`
+		Hidden   bool
+		Children []node
 	}
 	var tree struct {
 		Data struct{ Result json.RawMessage }
 	}
 	if err := json.Unmarshal(raw, &tree); err != nil {
-		return tabletScreen{}, err
+		return "", err
 	}
 	var roots []node
 	switch {
 	case len(tree.Data.Result) == 0:
-		return tabletScreen{}, errors.New("missing accessibility tree")
+		return "", errors.New("missing accessibility tree")
 	case tree.Data.Result[0] == '{':
 		var root node
 		if err := json.Unmarshal(tree.Data.Result, &root); err != nil {
-			return tabletScreen{}, err
+			return "", err
 		}
 		roots = []node{root}
 	default:
 		if err := json.Unmarshal(tree.Data.Result, &roots); err != nil {
-			return tabletScreen{}, err
+			return "", err
 		}
 	}
-	var screen tabletScreen
-	var visit func(node) (named, open bool)
-	visit = func(n node) (bool, bool) {
+	var visit func(node) string
+	visit = func(n node) string {
 		if n.Hidden {
-			return false, false
+			return ""
 		}
-		named := strings.Contains(n.Label+" "+n.Title, "CLIStream")
-		open := n.Label == "Open"
-		switch n.ID {
-		case "workspace-confirm":
-			screen.pair = n.Label == "Pair device"
-		case "session-terminal":
+		if n.ID == "session-terminal" {
 			var text string
 			if json.Unmarshal(n.Value, &text) == nil && text != "" {
-				screen.terminal = text
+				return text
 			}
 		}
 		for _, child := range n.Children {
-			childNamed, childOpen := visit(child)
-			named = named || childNamed
-			open = open || childOpen
+			if text := visit(child); text != "" {
+				return text
+			}
 		}
-		if strings.EqualFold(n.Type, "Alert") && named && open {
-			screen.openInvitation = true
-		}
-		return named, open
+		return ""
 	}
 	for _, root := range roots {
-		visit(root)
+		if text := visit(root); text != "" {
+			return text, nil
+		}
 	}
-	return screen, nil
+	return "", nil
 }
 
-func waitTabletScreen(ctx context.Context, id string, duration time.Duration, match func(tabletScreen) bool) (tabletScreen, error) {
-	ctx, cancel := context.WithTimeout(ctx, duration)
+func waitTabletEcho(ctx context.Context, id, expected string) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	for {
 		data, err := sharedCommand(ctx, "axe", "--output", "json", "describe-ui", "--minimal-keys", "--udid", id).Output()
 		if err == nil {
-			screen, err := readTabletScreen(data)
+			terminal, err := readTabletTerminal(data)
 			if err != nil {
-				return screen, fmt.Errorf("decode iPad accessibility tree: %w", err)
+				return fmt.Errorf("decode iPad accessibility tree: %w", err)
 			}
-			if match(screen) {
-				return screen, nil
+			if strings.Contains(terminal, expected) {
+				sharedCheckpoint("iPad observed " + expected)
+				return nil
 			}
 		}
 		select {
 		case <-ctx.Done():
-			return tabletScreen{}, ctx.Err()
+			return fmt.Errorf("iPad terminal missing %s: %w", expected, ctx.Err())
 		case <-time.After(2 * time.Second):
 		}
 	}
@@ -126,21 +113,8 @@ func driveSharedPad(ctx context.Context, id, app, base, pipeID string) error {
 		data, err := io.ReadAll(io.LimitReader(res.Body, 8192))
 		return strings.TrimSpace(string(data)), err
 	}
-	simctl := func(args ...string) error {
-		command, cancel := context.WithTimeout(ctx, 90*time.Second)
-		defer cancel()
-		return sharedCommand(command, "xcrun", append([]string{"simctl"}, args...)...).Run()
-	}
-	sharedCheckpoint("Open a signed invitation in the iPad app")
-	if err := simctl("launch", id, "com.vlk.clistream.acceptance.shared"); err != nil {
-		return fmt.Errorf("launch iPad app: %w", err)
-	}
-	invitation, err := fixture("QR")
-	if err != nil {
+	if err := prepareStage(ctx, "Launch the iPad app", 90*time.Second, "xcrun", "simctl", "launch", id, "com.vlk.clistream.acceptance.shared"); err != nil {
 		return err
-	}
-	if err := simctl("openurl", id, invitation); err != nil {
-		return fmt.Errorf("deliver invitation to iPad: %w", err)
 	}
 	axe := func(args ...string) error {
 		command, cancel := context.WithTimeout(ctx, 90*time.Second)
@@ -150,30 +124,37 @@ func driveSharedPad(ctx context.Context, id, app, base, pipeID string) error {
 	tap := func(by, name string) error {
 		return axe("tap", by, name, "--wait-timeout", "45", "--poll-interval", "1")
 	}
-	screen, err := waitTabletScreen(ctx, id, 90*time.Second, func(s tabletScreen) bool { return s.pair || s.openInvitation })
+	sharedCheckpoint("Open Add Server on iPad")
+	if err := tap("--id", "workspace-add-server"); err != nil {
+		return fmt.Errorf("open iPad Add Server: %w", err)
+	}
+	if err := tap("--id", "pairing-link"); err != nil {
+		return fmt.Errorf("focus iPad invitation field: %w", err)
+	}
+	invitation, err := fixture("QR")
 	if err != nil {
-		return fmt.Errorf("wait for iPad invitation confirmation: %w", err)
+		return err
 	}
-	if !screen.pair && screen.openInvitation {
-		if err := tap("--label", "Open"); err != nil {
-			return fmt.Errorf("open system invitation prompt: %w", err)
-		}
+	// Pass the fresh link as private stdin to the keyboard driver. The secure
+	// invitation field receives real keystrokes without printing the link.
+	typing, done := context.WithTimeout(ctx, 90*time.Second)
+	input := sharedCommand(typing, "axe", "type", "--stdin", "--layout", "us", "--udid", id)
+	input.Stdin = strings.NewReader(invitation)
+	err = input.Run()
+	done()
+	if err != nil {
+		return fmt.Errorf("enter signed iPad invitation: %w", err)
 	}
-	sharedCheckpoint("Confirm the invitation and select the terminal on iPad")
-	for _, field := range []string{"workspace-confirm", "session-" + pipeID, "session-terminal"} {
+	sharedCheckpoint("Confirm the signed invitation on iPad")
+	if err := tap("--label", "Pair device"); err != nil {
+		return fmt.Errorf("tap Pair device on iPad: %w", err)
+	}
+	for _, field := range []string{"session-" + pipeID, "session-terminal"} {
 		if err := tap("--id", field); err != nil {
 			return fmt.Errorf("tap iPad %s: %w", field, err)
 		}
 	}
-	echo := func(text string) error {
-		_, err := waitTabletScreen(ctx, id, 5*time.Minute, func(s tabletScreen) bool { return strings.Contains(s.terminal, text) })
-		if err != nil {
-			return fmt.Errorf("iPad terminal missing %s: %w", text, err)
-		}
-		sharedCheckpoint("iPad observed " + text)
-		return nil
-	}
-	if err := echo("preview-ready"); err != nil {
+	if err := waitTabletEcho(ctx, id, "preview-ready"); err != nil {
 		return err
 	}
 	if _, err := fixture("ready/pad"); err != nil {
@@ -188,14 +169,14 @@ func driveSharedPad(ctx context.Context, id, app, base, pipeID string) error {
 				return fmt.Errorf("press iPad Return: %w", err)
 			}
 		}
-		if err := echo("out:shared-" + writer); err != nil {
+		if err := waitTabletEcho(ctx, id, "out:shared-"+writer); err != nil {
 			return err
 		}
 	}
 	if _, err := fixture("switch/pad"); err != nil {
 		return err
 	}
-	if err := echo("out:independent-phone"); err != nil {
+	if err := waitTabletEcho(ctx, id, "out:independent-phone"); err != nil {
 		return err
 	}
 	_, err = fixture("return/pad")
