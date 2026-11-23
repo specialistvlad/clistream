@@ -368,9 +368,9 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 	}
 	if id := os.Getenv("SIMULATOR_ID"); id != "" {
 		mux.HandleFunc(path+"open-repair-invitation", issue)
-		mux.HandleFunc(path+"pasteboard/", func(w http.ResponseWriter, r *http.Request) {
+		prepareInput := func(w http.ResponseWriter, r *http.Request) {
 			var value []byte
-			switch strings.TrimPrefix(r.URL.Path, path+"pasteboard/") {
+			switch filepath.Base(r.URL.Path) {
 			case "invitation":
 				data, err := command("clistreamd", "invite").Output()
 				if err != nil {
@@ -383,6 +383,15 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 			case "clear":
 			default:
 				http.NotFound(w, r)
+				return
+			}
+			if strings.HasPrefix(r.URL.Path, path+"scan-sample/") {
+				folder, err := exec.CommandContext(r.Context(), "xcrun", "simctl", "get_app_container", id, "com.vlk.clistream.acceptance", "data").Output()
+				if err != nil || os.WriteFile(filepath.Join(strings.TrimSpace(string(folder)), "tmp", "uitest-scanned-qr"), value, 0600) != nil {
+					http.Error(w, "scanner sample unavailable", http.StatusServiceUnavailable)
+					return
+				}
+				fmt.Fprint(w, "ready")
 				return
 			}
 			// The XCTest runner is a background process. Set the clipboard on the
@@ -401,6 +410,20 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 				}
 			}
 			fmt.Fprint(w, "ready")
+		}
+		mux.HandleFunc(path+"pasteboard/", prepareInput)
+		mux.HandleFunc(path+"scan-sample/", prepareInput)
+		mux.HandleFunc(path+"accept-paste", func(w http.ResponseWriter, r *http.Request) {
+			// SpringBoard can show consent while the app's synchronous paste action
+			// is waiting. Operate only its named paste button on the isolated device.
+			ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+			defer cancel()
+			err := exec.CommandContext(ctx, "axe", "tap", "--label", "Allow Paste", "--wait-timeout", "12", "--udid", id).Run()
+			if err != nil {
+				fmt.Fprint(w, "no consent button")
+				return
+			}
+			fmt.Fprint(w, "allowed")
 		})
 	}
 	for _, op := range []string{"QR", "PIPE", "PORTS", "PTY", "FLUSH", "DRIVERS"} {

@@ -40,7 +40,7 @@ struct MobileScanner: View {
     }
     .safeAreaInset(edge: .bottom) {
       Button("Paste Invitation", systemImage: "doc.on.clipboard", action: flow.paste)
-        .buttonStyle(.glass).controlSize(.large).padding()
+        .accessibilityIdentifier("scanner-paste-invitation").buttonStyle(.glass).controlSize(.large).padding()
     }
     .navigationTitle("Scan QR Code").navigationBarTitleDisplayMode(.inline)
     .toolbar {
@@ -52,10 +52,12 @@ struct MobileScanner: View {
     .task(id: scenePhase) {
       guard scenePhase == .active else { return }
       #if DEBUG && targetEnvironment(simulator)
-        if CommandLine.arguments.contains("--ui-test-scanned-code"),
-          let sample = UIPasteboard.general.string, flow.scanned(sample)
-        {
-          return
+        if CommandLine.arguments.contains("--ui-test-scanned-code") {
+          let sample = FileManager.default.temporaryDirectory.appendingPathComponent("uitest-scanned-qr")
+          if let value = try? String(contentsOf: sample, encoding: .utf8) {
+            try? FileManager.default.removeItem(at: sample)
+            if flow.scanned(value) { return }
+          }
         }
         if CommandLine.arguments.contains("--ui-test-camera-denied") {
           camera = .denied
