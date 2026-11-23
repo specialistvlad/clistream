@@ -68,9 +68,9 @@ button{font:inherit;color:inherit;cursor:default}
 <span style="position: absolute; right: 64px; top: 18px; font-size: 15px; font-weight: 600">9:41</span>
 <span aria-hidden="true" style="position: absolute; right: 14px; top: 10px; width: 40px; height: 40px; border-radius: 20px; background: #000"></span>
 </sc-if>
-<div style="position: absolute; left: 24px; top: {{barTop}}; height: 44px; display: flex; flex-direction: column; justify-content: center; max-width: 260px">
+<div style="position: absolute; left: 24px; top: {{barTop}}; height: 44px; display: flex; flex-direction: column; justify-content: center; max-width: {{titleMax}}">
 <h1 style="margin: 0; font-size: 17px; font-weight: 700; line-height: 21px">sh</h1>
-<span style="font-size: 13px; line-height: 16px; color: {{t.secondary}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">build-mac — Build server</span>
+<span style="font-size: 13px; line-height: 16px; color: {{t.secondary}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">build-mac · Connected · 2 ms · PTY 132 × 38</span>
 </div>
 <div style="position: absolute; right: {{barRight}}; top: {{barTop}}; display: flex; gap: 10px">
 <div style="height: 44px; display: flex; align-items: center; padding: 0 4px; border-radius: 22px; background: {{t.glass}}; box-shadow: {{t.glassShadow}}">
@@ -83,15 +83,10 @@ button{font:inherit;color:inherit;cursor:default}
 </div>
 <button type="button" aria-label="More" aria-haspopup="menu" style="width: 44px; height: 44px; border-radius: 22px; border: none; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-ellipsis" aria-hidden="true" style="width: 20px; height: 6px"></span></button>
 </div>
-<div style="position: absolute; left: 0; right: {{termRight}}; top: {{termTop}}; bottom: 36px; overflow: hidden; padding: 8px 24px; font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 13px; line-height: 19px; white-space: pre; color: {{t.termText}}">
+<div style="position: absolute; left: 0; right: {{termRight}}; top: {{termTop}}; bottom: 20px; overflow: hidden; padding: 8px 24px; font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 13px; line-height: 19px; white-space: pre; color: {{t.termText}}">
 <sc-for list="{{lines}}" as="ln" hint-placeholder-count="8">
 <div><span style="color: {{ln.c1}}">{{ln.a}}</span><span>{{ln.b}}</span><sc-if value="{{ln.cursor}}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="display: inline-block; width: 8px; height: 15px; vertical-align: -3px; background: {{t.termText}}"></span></sc-if></div>
 </sc-for>
-</div>
-<div style="position: absolute; left: 24px; right: {{statusRight}}; bottom: 10px; height: 20px; display: flex; align-items: center; gap: 6px; font-size: 13px; color: {{t.secondary}}">
-<span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 4px; background: {{t.green}}"></span>
-<span>Connected · 2 ms</span>
-<span style="margin-left: auto">PTY · 132 × 38</span>
 </div>
 
 <sc-if value="{{showPorts}}" hint-placeholder-val="{{ false }}">
@@ -192,7 +187,7 @@ class Component extends DCLogic {
       sideW: duo ? '272px' : '330px', sideTop: duo ? '14px' : '38px', searchTop: duo ? '70px' : '94px', rowsTop: duo ? '122px' : '148px',
       barTop: duo ? '14px' : '38px', barRight: duo ? '110px' : '20px', termTop: duo ? '70px' : '96px',
       showPorts, inspW: inspW + 'px', inspTop: duo ? '70px' : '96px',
-      termRight: showPorts ? inspW + 'px' : '0px', statusRight: showPorts ? (inspW + 24) + 'px' : '24px',
+      termRight: showPorts ? inspW + 'px' : '0px', titleMax: duo ? '290px' : '600px',
       portsPressed: showPorts ? 'true' : 'false', portsBg: showPorts ? t.pressed : 'transparent',
       togglePorts: () => this.setState({ ports: !showPorts })
     };

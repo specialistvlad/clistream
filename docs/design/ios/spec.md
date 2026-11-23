@@ -43,10 +43,10 @@ The iPad and Duo inner sidebar uses the same sections and rows at 44 pt with 17 
 | Element | iPhone Pro | iPad and Duo inner | Duo outer |
 |---|---|---|---|
 | Back | 44 pt glass circle, `chevron.left` | Sidebar navigation | Glass circle at the top leading edge |
-| Title | Inline, centered: program name in Headline, `HOST — SERVER` in Caption 1 | Leading: program name 17 Bold, subtitle Footnote | Leading, beside the back button |
+| Title | Inline, centered: program name in Headline, `HOST — SERVER` in Caption 1 | Leading: program name 17 Bold, and a Footnote subtitle carrying host and status: `build-mac · Connected · 2 ms · PTY 132 × 38` | Leading, beside the back button |
 | Toolbar | Glass capsule: **Ports** (`network`, opens a sheet) and **Session** (`ellipsis`, opens the menu) | Capsules: Restart… and Stop…; Show in Files and Ports (`sidebar.right`, toggles the inspector); More (`ellipsis`) | Stacked circles: Ports, Session, Show Keyboard |
 | Terminal | SF Mono 12, 14 pt horizontal inset | SF Mono 13, 24 pt inset | SF Mono 12 |
-| Status line | 8 pt dot, `Connected · 2 ms`, trailing `PTY` in Footnote | Same, trailing `PTY · 132 × 38` | Same |
+| Status line | 8 pt dot, `Connected · 2 ms`, trailing `PTY` in Footnote | In the title's subtitle, set with `.navigationSubtitle`. While reconnecting it reads `build-mac · Reconnecting…`. The terminal runs to the bottom edge. | Same as iPhone Pro |
 
 ### Keyboard and key bar
 
