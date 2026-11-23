@@ -14,9 +14,9 @@ Open `docs/screenshots/index.html` in the checkout used for capture. The gallery
 
 | Target | Verified on hosted runners | Still open |
 |---|---|---|
-| iPhone Pro | Search and swipe lifecycle, signed invitation review, large-text accessibility, ten of eleven design boards in light and dark | Pasted-link review and its two screenshots, standalone Files write round trip, full suite |
+| iPhone Pro | 24 native cases passed, including live input, port forwarding, the six grouping layouts up to removal, signed invitation review and large-text accessibility. Ten of eleven boards captured in both appearances. [Full iPhone report](https://github.com/specialistvlad/clistream/actions/runs/45243809058/job/137937458784) | Native Paste review and its screenshots, server removal, re-pairing an open terminal, standalone Files writes |
 | iPad | Pairing, selecting a terminal, launching Files and finding its first-use consent prompt | Regular-width board comparison, standalone Files writes against both hosts, full suite |
-| Duo | All four design boards and the partially open pose in light and dark, adaptive toolbars, Ports inspector, search and swipe lifecycle | Typed input and remote echo through the complete fold sequence, full suite |
+| Duo | All four design boards and the partially open pose in light and dark, adaptive toolbars, Ports inspector, search and swipe lifecycle | Typed input and echo through the complete fold sequence. The focused simulator reported failed data migration, then lost its device service during XCTest. [Fold rerun](https://github.com/specialistvlad/clistream/actions/runs/45242939670) |
 | macOS | All 24 required native cases, complete design gallery and a separate Finder write round trip against Linux. The optional real-CLI driver case was skipped. [Mac results](https://github.com/specialistvlad/clistream/actions/runs/45243809058/job/137937458564) | — |
 | Four clients | iPad paired and rendered child output | Complete the concurrent Mac, iPhone, iPad and Go CLI exchange |
 

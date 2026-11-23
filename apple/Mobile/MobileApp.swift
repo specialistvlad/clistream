@@ -17,6 +17,7 @@ import SwiftUI
 struct BrowserView: View {
   @ObservedObject var workspace: Workspace
   @Environment(\.horizontalSizeClass) private var width
+  @Environment(\.scenePhase) private var scenePhase
   @StateObject private var actions = MobileLifecycle()
   @StateObject private var invitations = MobileInvitations()
   @State private var selected: WorkspaceSession?
@@ -55,6 +56,7 @@ struct BrowserView: View {
     .background { if #available(iOS 27.1, *) { HingeObserver(closed: $closedHinge) } }
     .environment(\.closedHinge, closedHinge)
     .environment(\.regularWorkspace, width == .regular)
+    .handlesExternalEvents(preferring: scenePhase == .active ? ["clistream://"] : [], allowing: ["clistream://"])
     .modifier(
       MobileInvitationPresentation(
         flow: invitations, connection: workspace.pairing,

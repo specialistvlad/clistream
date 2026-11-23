@@ -46,7 +46,6 @@ final class SessionTests: XCTestCase {
       XCTAssertTrue(
         app.descendants(matching: .any)["session-" + session].firstMatch.waitForExistence(
           timeout: 12))
-      captureCurrent("servers-tree", app)
       app.open(url)
       tap(app.buttons["workspace-confirm"])
       XCTAssertTrue(

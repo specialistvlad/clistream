@@ -187,18 +187,24 @@ struct MobileServers: View {
   }
   private func serverHeader(_ server: ServerProfile) -> some View {
     HStack {
-      Text(server.name).accessibilityLabel("Server " + server.name)
+      Text(server.name)
       Spacer()
       TimelineView(.periodic(from: .now, by: 2)) { _ in
         if let us = workspace.samples[server.id] {
           Text(Self.latency(us)).monospacedDigit().font(.caption)
         }
       }
-    }.textCase(nil).contextMenu {
+    }.textCase(nil)
+    .contentShape(Rectangle())
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("Server " + server.name)
+    .accessibilityValue(workspace.samples[server.id].map(Self.latency) ?? "")
+    .accessibilityIdentifier("workspace-server-" + server.id)
+    .contextMenu {
       Button("Rename…", systemImage: "pencil") { rename(server) }
       Button("Remove Server…", systemImage: "trash", role: .destructive) {
         actions.confirmation = .remove(server)
-      }
+      }.accessibilityIdentifier("server-remove")
     }
   }
   static func latency(_ us: Int64) -> String {

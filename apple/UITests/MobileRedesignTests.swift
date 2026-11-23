@@ -43,8 +43,8 @@ extension NativeSessionTests {
       }
     }
     let header = app.descendants(matching: .any).matching(
-      NSPredicate(format: "label CONTAINS %@", "Server " + address)).firstMatch
-    let remove = app.buttons["Remove Server…"].firstMatch
+      NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "workspace-server-", "Server " + address)).firstMatch
+    let remove = app.buttons["server-remove"].firstMatch
     let alert = app.alerts["Remove “" + address + "”?"].firstMatch
     for confirmation in ["Cancel", "Remove"] {
       XCTAssertTrue(header.wait(for: \.isHittable, toEqual: true, timeout: 10))
