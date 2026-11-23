@@ -24,7 +24,7 @@ The selected run stays open across rotation, iPad resizing and Duo folding.
 | Element | Specification | Component |
 |---|---|---|
 | Title | `Servers`, Large Title 34 Bold. On the Duo outer screen, an inline Headline title. | `.navigationTitle` |
-| Toolbar | Trailing glass capsule with **Add Server** (`plus`) and **Layout and grouping** (`list.bullet.indent`). Stacked circles on the Duo outer screen. | `.toolbar` |
+| Toolbar | Trailing glass capsule with **Scan QR Code** (`qrcode.viewfinder`), **Add Server** (`plus`) and **Layout and grouping** (`list.bullet.indent`). Stacked circles in the same order on the Duo outer screen. | `.toolbar` |
 | Sections | One inset grouped section per server: header in Headline, secondary color, with trailing latency (`2 ms`). Rows 52 pt, radius 26, 16 pt margins. | `List` with `.insetGrouped` style |
 | Host row | `laptopcomputer` for macOS, `desktopcomputer` for others, host name, trailing OS name, disclosure chevron. | `DisclosureGroup` |
 | CLI row | Indented 44 pt. `terminal` symbol, program name, trailing caption, navigation chevron. | `NavigationLink` |
@@ -36,7 +36,7 @@ CLI row states match the macOS spec: running rows use the accent symbol, stopped
 
 ## Sidebar (regular)
 
-The iPad and Duo inner sidebar uses the same sections and rows at 44 pt with 17 pt labels and accent symbols. The top has the Add Server and layout capsule plus the **Hide Sidebar** circle (`sidebar.left`). A 40 pt search field sits below them. Section headers carry a disclosure chevron. Selection is the system pill (radius 22). Use `List(selection:)` with `.listStyle(.sidebar)`.
+The iPad and Duo inner sidebar uses the same sections and rows at 44 pt with 17 pt labels and accent symbols. The top has the capsule with Scan QR Code, Add Server and layout, plus the **Hide Sidebar** circle (`sidebar.left`). A 40 pt search field sits below them. Section headers carry a disclosure chevron. Selection is the system pill (radius 22). Use `List(selection:)` with `.listStyle(.sidebar)`.
 
 ## Terminal
 
@@ -71,8 +71,23 @@ Sheets follow the kit: inset 8 pt from the screen edges, radius 40, grabber, a g
 | Sheet | Detent | Content |
 |---|---|---|
 | Ports | Medium | One row per export: name, `TCP · 127.0.0.1:8080` subtitle, 64 × 28 toggle. An enabled forward adds a row with the local address in SF Mono and a **Copy** circle. Footer: `Forwards keep running when you close this sheet.` No Confirm button. |
-| Add Server | Large | **Invitation** section: masked link field and **Paste Invitation** (`doc.on.clipboard`). Footer: `Paste the invitation from clistreamd. Invitations last three minutes.` **Server** section after a valid link: Address and Identity (SF Mono fingerprint). Footer: `Check the server before pairing. This device can then control every CLI on it.` Confirm reads **Pair**. |
+| Add Server | Large | **Invitation** section: masked link field, **Paste Invitation** (`doc.on.clipboard`) and **Scan QR Code** (`qrcode.viewfinder`). Footer: `Scan or paste the invitation from clistreamd. Invitations last three minutes.` **Server** section after a valid link: Address and Identity (SF Mono fingerprint). Footer: `Check the server before pairing. This device can then control every CLI on it.` Confirm reads **Pair**. |
 | Restart or Start | Medium | **Command** section with the SF Mono command field. Footer: `Quote arguments that contain spaces. Use "" for an empty argument. Restarting ends the current run for everyone connected.` Confirm reads **Restart** or **Start**. |
+
+### Scan QR Code
+
+Scan QR Code opens a large-detent sheet titled `Scan QR Code`, with Close and no Confirm button, laid out like the Home app's Add Accessory scanner.
+
+| Element | Specification |
+|---|---|
+| Camera view | Square, full sheet width minus 16 pt margins (354 pt on iPhone Pro), radius 32. Live camera feed. |
+| Code frame | Four white corner brackets, 40 pt long and 4 pt thick with a 20 pt radius, framing a 228 pt square in the center. They follow the detected code. |
+| Instruction | `Point the camera at the QR code in the clistreamd terminal.` in Headline, centered. Below it, in Subheadline secondary: `Open clistreamd in a terminal to show the code. Invitations last three minutes.` |
+| Fallback | **Paste Invitation** (`doc.on.clipboard`) as a 50 pt glass capsule at the bottom. |
+| Detected code | A valid `clistream://` link closes the scanner and opens the Add Server sheet with the invitation filled in and the Server section showing, ready for review and **Pair**. Any other code leaves the scanner open. |
+| No camera | When scanning is unavailable, the camera view shows `ContentUnavailableView` with `qrcode.viewfinder`, title `Camera Unavailable` and `Paste the invitation instead.` When access is denied, the title is `Allow Camera Access` with `Turn on camera access for CLIStream in Settings to scan QR codes.` and an **Open Settings** button. |
+
+Build the camera view with VisionKit's `DataScannerViewController`, recognizing `.barcode(symbologies: [.qr])`, in a `UIViewControllerRepresentable`. Check `isSupported` and `isAvailable` before starting. The iOS target's `NSCameraUsageDescription` reads `CLIStream uses the camera to scan pairing codes from clistreamd.`
 
 On iPad and the Duo inner screen, Ports opens as the trailing inspector instead of a sheet: heading `Ports` in Title 2, the same grouped rows, and the footer `Forwards keep running when you close this inspector.`
 
@@ -88,7 +103,7 @@ Alerts follow the kit: 300 pt wide, radius 34, left-aligned title in Headline Bo
 
 ## Empty state
 
-`ContentUnavailableView`: `network` symbol in accent (56 pt), title `No Servers` (Title 2 Bold), message `Open an invitation from clistreamd, or paste one. Invitations last three minutes.` Two 50 pt capsule buttons at the bottom: **Paste Invitation** (glass, accent text) and **Add Server** (accent fill).
+`ContentUnavailableView`: `network` symbol in accent (56 pt), title `No Servers` (Title 2 Bold), message `Scan the QR code that clistreamd shows, or paste its invitation. Invitations last three minutes.` Two 50 pt capsule buttons at the bottom: **Paste Invitation** (glass, accent text) and **Scan QR Code** (accent fill, with `qrcode.viewfinder`). Add Server stays in the toolbar.
 
 ## Features this design introduces on iOS
 
@@ -97,6 +112,7 @@ Alerts follow the kit: 300 pt wide, radius 34, left-aligned title in Headline Bo
 | Floating key bar | Replaces the Session › Keys submenu and the flat key row with one glass capsule above the keyboard. |
 | Swipe actions | Restart and Stop from the servers list without opening the terminal. |
 | Bottom search | Filters the servers list, as on the Mac. |
+| Scan QR Code | Scans the QR code that clistreamd shows with the device camera and opens the Add Server sheet with the invitation, on iPhone, iPad and both Duo screens. Scanning with the system Camera app keeps working as before. |
 | Paste Invitation | Reads a `clistream://` link from the pasteboard into the Add Server sheet. |
 | Show in Files | Opens the session workspace in the Files app. Requires the iOS Files extension that [Native Apple clients](../../apple-client-design.md#finder-workspaces) lists as deferred. |
 | Remove Server… | Long-press a server header, as on the Mac. |
@@ -111,6 +127,7 @@ Alerts follow the kit: 300 pt wide, radius 34, left-aligned title in Headline Bo
 | Session menu, dark | `IPhoneMenu` | `iphone/terminal-keys.png` |
 | Ports sheet | `IPhonePorts` | `iphone/port-forwards.png` |
 | Add Server sheet, link pasted | `IPhonePair` | `iphone/add-server.png` |
+| Scan QR Code | `IPhoneScan` | none |
 | Restart sheet | `IPhoneCommand` | `iphone/edit-command.png` |
 | Stop alert | `IPhoneStop` | `iphone/stop-confirmation.png` |
 | First launch | `IPhoneEmpty` | `iphone/welcome.png` |

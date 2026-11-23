@@ -27,6 +27,7 @@ Each iOS board on the canvas renders one of the two components with these props.
 | `IPhoneMenu` | Phone | `screen="terminal"` `appearance="dark"` `menu="session"` |
 | `IPhonePorts` | Phone | `screen="terminal"` `sheet="ports"` |
 | `IPhonePair` | Phone | `sheet="pair"` |
+| `IPhoneScan` | Phone | `sheet="scan"` |
 | `IPhoneCommand` | Phone | `screen="terminal"` `sheet="command"` |
 | `IPhoneStop` | Phone | `screen="terminal"` `alert="stop"` |
 | `IPhoneEmpty` | Phone | `screen="empty"` |

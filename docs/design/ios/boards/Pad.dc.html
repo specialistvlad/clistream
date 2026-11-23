@@ -14,6 +14,7 @@
 <style>
 body{margin:0}
 button{font:inherit;color:inherit;cursor:default}
+.sf-qrcode-viewfinder{-webkit-mask-image:url(/_blob/187590152f11b97313f7a2fa1f895f8d);mask-image:url(/_blob/187590152f11b97313f7a2fa1f895f8d)}
 </style>
 </helmet>
 <div style="width: {{boardW}}; height: {{boardH}}; box-sizing: border-box; padding: 40px; background: {{t.desk}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; color: {{t.label}}; -webkit-font-smoothing: antialiased">
@@ -26,6 +27,7 @@ button{font:inherit;color:inherit;cursor:default}
 </sc-if>
 <div style="position: absolute; left: 16px; right: 16px; top: {{sideTop}}; display: flex; align-items: center; justify-content: space-between">
 <div style="height: 44px; display: flex; align-items: center; padding: 0 4px; border-radius: 22px; background: {{t.glass}}; box-shadow: {{t.glassShadow}}">
+<button type="button" aria-label="Scan QR Code" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-qrcode-viewfinder" aria-hidden="true" style="width: 20px; height: 19px"></span></button>
 <button type="button" aria-label="Add Server" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-plus" aria-hidden="true" style="width: 19px; height: 18px"></span></button>
 <button type="button" aria-label="Layout and grouping" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-list-bullet-indent" aria-hidden="true" style="width: 22px; height: 14px"></span></button>
 </div>
