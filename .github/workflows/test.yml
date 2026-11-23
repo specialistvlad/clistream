@@ -88,16 +88,17 @@ jobs:
             exit 2
           fi
           simulator() {
-            local selected id model
-            selected=$(xcrun simctl list devices available --json | jq -er --args '
+            local selected id model runtime
+            selected=$(xcrun simctl list devices available --json | jq -er --arg suite "$DEVICE" --args '
               [.devices | to_entries[] | select(.key | contains("iOS-27-"))]
               | sort_by(.key | capture("iOS-(?<version>[0-9]+(?:-[0-9]+)*)").version | split("-") | map(tonumber))
-              | reverse
-              | first(.[] as $runtime | $ARGS.positional[] as $model | $runtime.value[] | select(.name == $model))
+              | (if $suite == "shared" then . else reverse end)
+              | first(.[] as $runtime | $ARGS.positional[] as $model | $runtime.value[]
+                  | select(.name == $model) | [.udid, .name, $runtime.key])
                 // error("none of the requested iOS 27 simulators are installed")
-              | [.udid, .name] | @tsv' "$@") || return 1
-            IFS=$'\t' read -r id model <<< "$selected"
-            echo "Selected $model" >&2
+              | @tsv' "$@") || return 1
+            IFS=$'\t' read -r id model runtime <<< "$selected"
+            echo "Selected $model on $runtime" >&2
             xcrun simctl rename "$id" "CLIStream CI $model" || return 1
             echo "$id"
           }
