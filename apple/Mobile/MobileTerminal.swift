@@ -115,7 +115,7 @@ struct MobileTerminal: View {
       Text(
         (filesError.map { $0 + "\n\n" } ?? "") + "Open Files and go to "
           + FinderWorkspace.filesPath(target, in: workspace)
-          + ". If CLIStream is hidden, tap Edit in Browse and enable CLIStream under Locations.")
+          + ". If CLIStream is hidden, tap Edit in Browse and enable CLIStream under Locations. Tap Turn On if Files asks.")
     }
     .modifier(PortsPresentation(connection: connection, session: item, presented: $ports))
     .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) {

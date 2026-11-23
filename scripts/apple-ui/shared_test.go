@@ -71,7 +71,8 @@ exit "$FIRST_CODE"
 	}
 }
 
-func TestSharedTabletRecoversOnlyBeforeAnyNativeTestStarted(t *testing.T) {
+func TestSharedViewerRecoversOnlyBeforeAnyNativeTestStarted(t *testing.T) {
+	const disconnected = "Failed to establish communication with the test runner. (Underlying Error: Channel disconnected)"
 	for _, tc := range []struct {
 		name, viewer, host, message string
 		total, attempts             int
@@ -79,7 +80,10 @@ func TestSharedTabletRecoversOnlyBeforeAnyNativeTestStarted(t *testing.T) {
 		{"first runner terminated", "pad", "github-hosted", "Test crashed with signal term while preparing to run tests.", 0, 2},
 		{"assertion ran", "pad", "github-hosted", "Test crashed with signal term while preparing to run tests.", 1, 1},
 		{"other initialization error", "pad", "github-hosted", "Timed out waiting for a child echo", 0, 1},
-		{"phone already joined", "phone", "github-hosted", "Test crashed with signal term while preparing to run tests.", 0, 1},
+		{"phone other failure", "phone", "github-hosted", "Test crashed with signal term while preparing to run tests.", 0, 1},
+		{"phone never connected", "phone", "github-hosted", disconnected, 0, 2},
+		{"phone case started", "phone", "github-hosted", disconnected, 1, 1},
+		{"phone local process", "phone", "", disconnected, 0, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()

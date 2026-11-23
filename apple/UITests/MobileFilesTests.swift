@@ -73,6 +73,10 @@ extension NativeSessionTests {
       tap("Done")
     }
     tap("CLIStream")
+    // A visible location can still be disabled on first use. Files asks for
+    // consent after the user selects it, including in the iPad sidebar.
+    let turnOn = files.buttons["Turn On"].firstMatch
+    if turnOn.wait(for: \.isHittable, toEqual: true, timeout: 4) { turnOn.tap() }
     for part in components {
       let directory = fileItem(part)
       XCTAssertTrue(directory.wait(for: \.isHittable, toEqual: true, timeout: 20), part)

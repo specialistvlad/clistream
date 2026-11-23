@@ -227,12 +227,18 @@ func testSharedViewer(ctx context.Context, name, id, plan, destination, suite st
 			// XCTest finished successfully; one of its detached helpers held a pipe open.
 			err = nil
 		}
-		if err == nil || attempt != 0 || name != "pad" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" ||
-			!bytes.Contains(diagnostics.Bytes(), []byte("Test crashed with signal term while preparing to run tests.")) {
+		if err == nil || attempt != 0 || id == "" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" {
 			return err
 		}
-		// Only the first iPad can recover here, before any viewer has paired.
-		// Never retry a testcase that Xcode actually started.
+		log := diagnostics.Bytes()
+		padTerminated := name == "pad" && bytes.Contains(log, []byte("Test crashed with signal term while preparing to run tests."))
+		phoneDisconnected := name == "phone" && bytes.Contains(log, []byte("Failed to establish communication with the test runner.")) &&
+			bytes.Contains(log, []byte("Channel disconnected"))
+		if !padTerminated && !phoneDisconnected {
+			return err
+		}
+		// A paired peer remains at the rendezvous. Recover only the simulator
+		// whose XCTest process never started a case.
 		summaryCtx, cancelSummary := context.WithTimeout(ctx, 30*time.Second)
 		data, readErr := sharedCommand(summaryCtx, "xcrun", "xcresulttool", "get", "test-results", "summary", "--path", bundle).Output()
 		cancelSummary()
@@ -240,14 +246,14 @@ func testSharedViewer(ctx context.Context, name, id, plan, destination, suite st
 		if readErr != nil || json.Unmarshal(data, &summary) != nil || summary.TotalTestCount == nil || *summary.TotalTestCount != 0 {
 			return err
 		}
-		fmt.Println("iPad runner terminated before its first test. Rebooting the isolated iPad and retrying once.")
+		fmt.Printf("%s runner lost during startup. Rebooting its simulator and retrying once.\n", name)
 		if err := os.Rename(bundle, bundle+".startup"); err != nil {
 			return err
 		}
-		if err := prepareStage(ctx, "Shut down the isolated iPad after runner startup failure", 90*time.Second, "xcrun", "simctl", "shutdown", id); err != nil {
+		if err := prepareStage(ctx, "Shut down "+name+" after runner startup failure", 90*time.Second, "xcrun", "simctl", "shutdown", id); err != nil {
 			return err
 		}
-		if err := prepareStage(ctx, "Boot iPad after runner startup failure", 5*time.Minute,
+		if err := prepareStage(ctx, "Boot "+name+" after runner startup failure", 5*time.Minute,
 			"apple/boot-simulator.sh", id); err != nil {
 			return err
 		}

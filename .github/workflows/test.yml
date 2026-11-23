@@ -145,27 +145,6 @@ jobs:
           name: native-report-${{ matrix.device }}
           path: native-reports/*.json
           if-no-files-found: ignore
-      - name: Verify the file provider against a Linux workspace
-        if: ${{ !cancelled() && steps.build-apple.outcome == 'success' && ((matrix.device == 'macOS' && (!inputs.cases || contains(inputs.cases, 'testFinderWorkspaceRoundTrip'))) || (matrix.device == 'iPad' && (!inputs.cases || contains(inputs.cases, 'testFilesWorkspaceRoundTrip')))) }}
-        env:
-          TEST_RUNNER_CLISTREAM_EXPECT_OFFLINE_SERVER: ${{ steps.native-ui.outcome == 'success' && '1' || '0' }}
-        run: |
-          if ! docker info >/dev/null 2>&1; then
-            brew install docker colima qemu
-            # CLIStream uses QUIC. Colima's default SSH forwarder carries TCP only.
-            colima start --vm-type qemu --port-forwarder grpc --cpu 2 --memory 3 --disk 10
-          fi
-          if [[ "${{ matrix.device }}" == macOS ]]; then
-            apple/test-linux-host.sh macOS
-          else
-            CLISTREAM_LINUX_CASE=testFilesWorkspaceRoundTrip apple/test-linux-host.sh iOS
-          fi
-      - name: Inspect Finder registration on failure
-        if: failure() && matrix.device == 'macOS'
-        run: |
-          /usr/bin/pluginkit -m -ADv -i com.vlk.clistream.acceptance.finder || true
-          /usr/bin/log show --style compact --last 65m --predicate 'subsystem == "com.vlk.clistream" AND category IN {"Finder", "FileProvider"}' | tail -150
-          /usr/bin/log show --style compact --last 65m --predicate 'process == "fileproviderd" AND eventMessage CONTAINS[c] "com.vlk.clistream.acceptance"' | tail -40
       - name: Collect gallery screenshots
         if: always() && matrix.device != 'shared'
         run: |
@@ -231,6 +210,27 @@ jobs:
             done
           done
           exit "$missing"
+      - name: Verify the file provider against a Linux workspace
+        if: ${{ !cancelled() && steps.build-apple.outcome == 'success' && ((matrix.device == 'macOS' && (!inputs.cases || contains(inputs.cases, 'testFinderWorkspaceRoundTrip'))) || (matrix.device == 'iPad' && (!inputs.cases || contains(inputs.cases, 'testFilesWorkspaceRoundTrip')))) }}
+        env:
+          TEST_RUNNER_CLISTREAM_EXPECT_OFFLINE_SERVER: ${{ steps.native-ui.outcome == 'success' && '1' || '0' }}
+        run: |
+          if ! docker info >/dev/null 2>&1; then
+            brew install docker colima qemu
+            # CLIStream uses QUIC. Colima's default SSH forwarder carries TCP only.
+            colima start --vm-type qemu --port-forwarder grpc --cpu 2 --memory 3 --disk 10
+          fi
+          if [[ "${{ matrix.device }}" == macOS ]]; then
+            apple/test-linux-host.sh macOS
+          else
+            CLISTREAM_LINUX_CASE=testFilesWorkspaceRoundTrip apple/test-linux-host.sh iOS
+          fi
+      - name: Inspect Finder registration on failure
+        if: failure() && matrix.device == 'macOS'
+        run: |
+          /usr/bin/pluginkit -m -ADv -i com.vlk.clistream.acceptance.finder || true
+          /usr/bin/log show --style compact --last 65m --predicate 'subsystem == "com.vlk.clistream" AND category IN {"Finder", "FileProvider"}' | tail -150
+          /usr/bin/log show --style compact --last 65m --predicate 'process == "fileproviderd" AND eventMessage CONTAINS[c] "com.vlk.clistream.acceptance"' | tail -40
       - name: Record individual XCTest outcomes
         if: always()
         run: |
@@ -242,6 +242,12 @@ jobs:
             report="results/$name.json"
             go run ./scripts/apple-report "$bundle" > "$report"
             cat "$report"
+            if [[ $name == linux-host-* ]] && jq -e '.cases[] | select(.result == "Failed" and (.test | contains("testFilesWorkspaceRoundTrip")))' "$report" >/dev/null; then
+              staging=$(mktemp -d "$RUNNER_TEMP/linux-files.XXXXXX")
+              xcrun xcresulttool export attachments --path "$bundle" --test-id 'NativeSessionTests/testFilesWorkspaceRoundTrip()' --output-path "$staging" >/dev/null
+              jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | startswith("files-checkpoint-window_")) | .exportedFileName' "$staging/manifest.json" |
+                while read -r file; do cp "$staging/$file" results/linux-files-checkpoint-window.png; done
+            fi
             jq -r '.cases[] | select(.result == "Failed" and (.test | test("testTerminalKeysAndAttachOnly|testConcurrentViewers"))) | .test' "$report" |
               while IFS= read -r test; do
                 staging=$(mktemp -d "$RUNNER_TEMP/control-receipt.XXXXXX")
