@@ -12,6 +12,7 @@ packages:
 settings:
   base:
     CLISTREAM_APP_ID: com.vlk.clistream
+    CLISTREAM_APP_GROUP: "$(TeamIdentifierPrefix)$(CLISTREAM_APP_ID).workspace"
     PRODUCT_BUNDLE_IDENTIFIER: "$(CLISTREAM_APP_ID)"
     MARKETING_VERSION: 0.1.0
     CURRENT_PROJECT_VERSION: 1
@@ -44,13 +45,35 @@ targets:
       base:
         TARGETED_DEVICE_FAMILY: "1,2"
   CLIStream-macOS:
-    sources: [Desktop]
+    sources: [Desktop, FinderShared]
     templates: [Client]
     platform: macOS
+    dependencies:
+      - target: CLIStream-Finder
+        embed: true
     settings:
       base:
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_ENTITLEMENTS: Mac.entitlements
+
+  CLIStream-Finder:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: FinderExtension
+        excludes: [Info.plist, Finder.entitlements]
+      - path: FinderShared
+    dependencies:
+      - framework: build/Core.xcframework
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(CLISTREAM_APP_ID).finder"
+        PRODUCT_NAME: CLIStreamFinder
+        SKIP_INSTALL: YES
+        INFOPLIST_FILE: FinderExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: FinderExtension/Finder.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
 
   CLIStream-UITests:
     type: bundle.ui-testing

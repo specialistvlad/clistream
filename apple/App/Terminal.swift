@@ -67,9 +67,12 @@ private func visibleText(in view: TerminalView) -> String {
 
   struct LiveTerminal: NSViewRepresentable {
     let connection: Connection
+    var suppressCursor = false
     func makeCoordinator() -> TerminalDelegate { TerminalDelegate(connection) }
     func makeNSView(context: Context) -> TerminalView {
-      let view = connection.terminal ?? AccessibleTerminal(frame: .zero)
+      let view = connection.terminal ?? AccessibleTerminal(
+        frame: .zero, font: .monospacedSystemFont(ofSize: 12.5, weight: .regular))
+      if connection.terminal == nil { view.getTerminal().setCursorStyle(.steadyBlock) }
       view.terminalDelegate = context.coordinator
       view.setAccessibilityElement(true)
       view.setAccessibilityRole(.textArea)
@@ -79,7 +82,9 @@ private func visibleText(in view: TerminalView) -> String {
       if !connection.readOnly { DispatchQueue.main.async { view.window?.makeFirstResponder(view) } }
       return view
     }
-    func updateNSView(_ view: TerminalView, context: Context) {}
+    func updateNSView(_ view: TerminalView, context: Context) {
+      if suppressCursor { view.hideCursor(source: view.getTerminal()) }
+    }
   }
 #else
   private final class TouchTerminal: TerminalView {

@@ -60,6 +60,9 @@ final class Connection: ObservableObject {
       var dir = try FileManager.default.url(
         for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
       ).appendingPathComponent("CLIStream", isDirectory: true)
+      #if os(macOS)
+        dir = try FinderWorkspace.enrollmentRoot(legacy: dir)
+      #endif
       try FileManager.default.createDirectory(
         at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
       var attributes = URLResourceValues()
@@ -116,6 +119,8 @@ final class Connection: ObservableObject {
         item.revision = row.Revision
         item.editable = row.EditableCommand
         item.hasResult = row.RunResult
+        item.workspace = row.Workspace
+        item.exitCode = row.Exit
         return item
       }
       status = r.Error ?? (sessions.isEmpty ? "No active sessions" : "")

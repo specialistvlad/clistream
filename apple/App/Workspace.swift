@@ -21,7 +21,7 @@ struct WorkspaceSession: Identifiable {
   @Published private(set) var profiles = [ServerProfile]()
   @Published private(set) var rows = [String: [SessionInfo]]()
   @Published private(set) var errors = [String: String]()
-  private(set) var samples = [String: Int64]()
+  @Published private(set) var samples = [String: Int64]()
   private var watchers = [String: Task<Void, Never>]()
   private var terminals = [String: Connection]()
   var sessions: [WorkspaceSession] {
@@ -56,6 +56,7 @@ struct WorkspaceSession: Identifiable {
         let profile = profiles.remove(at: index)
         profiles.insert(profile, at: 0)
       }
+      updateFinder()
     } catch { pairing.pairingError = error.localizedDescription }
   }
   func rename(_ profile: ServerProfile, to value: String) {
@@ -63,8 +64,10 @@ struct WorkspaceSession: Identifiable {
     guard !name.isEmpty, let i = profiles.firstIndex(where: { $0.id == profile.id }) else { return }
     profiles[i].name = name
     UserDefaults.standard.set(name, forKey: "server-name-" + profile.id)
+    updateFinder()
   }
   func enroll(_ link: String) async {
+    pairing.pairingError = nil
     let info = Core.inspect(link)
     guard let pin = info.Pin, pin.count == 64, pin.allSatisfy(\.isHexDigit) else {
       pairing.pairingError = info.Error ?? "Invalid server invitation"
@@ -90,6 +93,7 @@ struct WorkspaceSession: Identifiable {
         profiles.insert(updated, at: 0)
         UserDefaults.standard.set(pin, forKey: "last-paired-server")
         watch(updated)
+        updateFinder()
       }
     } catch { pairing.pairingError = error.localizedDescription }
   }
@@ -100,18 +104,66 @@ struct WorkspaceSession: Identifiable {
       let connection = Connection(profile: profile.directory)
       while !Task.isCancelled {
         await connection.refresh()
-        guard !Task.isCancelled, self != nil else { return }
-        if self?.errors[profile.id] != connection.listError {
-          self?.errors[profile.id] = connection.listError
-        }
-        if connection.listError.isEmpty && self?.rows[profile.id] != connection.sessions {
-          self?.rows[profile.id] = connection.sessions
-        }
-        self?.samples[profile.id] = connection.listError.isEmpty ? connection.latency : nil
+        guard !Task.isCancelled else { return }
+        self?.receive(connection, from: profile)
         try? await Task.sleep(for: .seconds(2))
       }
     }
   }
+  private func receive(_ connection: Connection, from profile: ServerProfile) {
+    guard watchers[profile.id] != nil else { return }
+    let errorChanged = errors[profile.id] != connection.listError
+    let rowsChanged = connection.listError.isEmpty && rows[profile.id] != connection.sessions
+    if errorChanged { errors[profile.id] = connection.listError }
+    if rowsChanged { rows[profile.id] = connection.sessions }
+    if errorChanged || rowsChanged { updateFinder() }
+    let sample = connection.listError.isEmpty ? connection.latency : nil
+    if samples[profile.id] != sample { samples[profile.id] = sample }
+  }
+
+  private func updateFinder() {
+    #if os(macOS)
+      guard pairing.profile == nil else { return }
+      do {
+        try FinderWorkspace.update(servers: profiles, sessions: sessions, errors: errors)
+      } catch {
+        // A Finder registration failure must not interrupt a live terminal.
+        NSLog("CLIStream Finder catalog: %@", error.localizedDescription)
+      }
+    #endif
+  }
+
+  #if os(macOS)
+    func remove(_ profile: ServerProfile) throws {
+      guard profiles.contains(where: { $0.id == profile.id }) else { return }
+      let root = URL(fileURLWithPath: try pairing.directory).standardizedFileURL
+      let directory = URL(fileURLWithPath: profile.directory).standardizedFileURL
+      let fm = FileManager.default
+      if directory.path == root.path {
+        // A legacy profile shares this directory with all subsequent enrollments.
+        for file in ["key.pem", "server.json"] {
+          let url = directory.appendingPathComponent(file)
+          if fm.fileExists(atPath: url.path) { try fm.removeItem(at: url) }
+        }
+      } else {
+        guard directory.deletingLastPathComponent().path == root.appendingPathComponent("Servers").path
+        else { throw CocoaError(.fileWriteNoPermission) }
+        if fm.fileExists(atPath: directory.path) { try fm.removeItem(at: directory) }
+      }
+      watchers.removeValue(forKey: profile.id)?.cancel()
+      for id in Array(terminals.keys) where id.hasPrefix(profile.id + "/") { detach(id) }
+      profiles.removeAll { $0.id == profile.id }
+      rows.removeValue(forKey: profile.id)
+      samples.removeValue(forKey: profile.id)
+      errors.removeValue(forKey: profile.id)
+      UserDefaults.standard.removeObject(forKey: "server-name-" + profile.id)
+      if UserDefaults.standard.string(forKey: "last-paired-server") == profile.id {
+        UserDefaults.standard.removeObject(forKey: "last-paired-server")
+      }
+      updateFinder()
+    }
+  #endif
+
   func terminal(_ row: WorkspaceSession) -> Connection {
     if let current = terminals[row.id] { return current }
     let current = Connection(profile: row.server.directory)

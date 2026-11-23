@@ -33,6 +33,33 @@ final class ClientTests: XCTestCase {
     XCTAssertEqual(try Data(contentsOf: key), original)
   }
 
+  #if os(macOS)
+    @MainActor func testRemovingLegacyServerPreservesOtherPairings() async throws {
+      let root = try await profile("PIPE")
+      let workspace = Workspace(directory: root)
+      workspace.load()
+      let legacy = try XCTUnwrap(workspace.profiles.first)
+      let invitation = try await fixtureResponse("SECOND")
+      await workspace.enroll(invitation)
+      let other = try XCTUnwrap(workspace.profiles.first { $0.id != legacy.id })
+      let otherKey = URL(fileURLWithPath: other.directory).appendingPathComponent("key.pem")
+      let identity = try Data(contentsOf: otherKey)
+
+      workspace.rename(legacy, to: "Remove this server")
+      try workspace.remove(legacy)
+      XCTAssertFalse(FileManager.default.fileExists(atPath: root + "/key.pem"))
+      XCTAssertFalse(FileManager.default.fileExists(atPath: root + "/server.json"))
+      XCTAssertNil(UserDefaults.standard.string(forKey: "server-name-" + legacy.id))
+      XCTAssertEqual(try Data(contentsOf: otherKey), identity)
+
+      let reopened = Workspace(directory: root)
+      reopened.load()
+      XCTAssertEqual(reopened.profiles.map(\.id), [other.id])
+      try reopened.remove(other)
+      XCTAssertFalse(FileManager.default.fileExists(atPath: other.directory))
+    }
+  #endif
+
   func session(_ key: String = "SESSION") throws -> String {
     try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_" + key])
   }

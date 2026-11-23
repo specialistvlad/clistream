@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+  <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+  <key>CFBundleName</key><string>CLIStream Finder</string>
+  <key>CFBundleDisplayName</key><string>CLIStream</string>
+  <key>CFBundlePackageType</key><string>XPC!</string>
+  <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+  <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+  <key>NSLocalNetworkUsageDescription</key><string>Access the workspaces on your paired CLIStream servers.</string>
+  <key>NSExtension</key>
+  <dict>
+    <key>NSExtensionPointIdentifier</key><string>com.apple.fileprovider-nonui</string>
+    <key>NSExtensionFileProviderDocumentGroup</key><string>$(CLISTREAM_APP_GROUP)</string>
+    <key>NSExtensionPrincipalClass</key><string>$(PRODUCT_MODULE_NAME).WorkspaceProvider</string>
+    <key>NSExtensionFileProviderSupportsEnumeration</key><true/>
+    <key>NSExtensionFileProviderSupportsFailingUploadOnConflict</key><true/>
+  </dict>
+</dict>
+</plist>

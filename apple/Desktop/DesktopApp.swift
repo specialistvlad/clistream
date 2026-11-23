@@ -3,146 +3,201 @@ import SwiftUI
 
 @main struct DesktopApp: App {
   var body: some Scene {
-    WindowGroup("CLIStream") { DesktopBrowser() }
-      .defaultSize(width: 960, height: 560)
-      .defaultLaunchBehavior(.presented)
-      .commands { SidebarCommands() }
-  }
-}
-
-@MainActor private final class DesktopSelection: ObservableObject {
-  @Published var row: WorkspaceSession?
-  weak var window: NSWindow?
-  private static var auxiliaryWindows = [ObjectIdentifier: NSWindow]()
-  func closed(_ window: NSWindow) {
-    Self.auxiliaryWindows.removeValue(forKey: ObjectIdentifier(window))
-    // A window owns its suspended terminals until another window opens them.
-    for case let key as NSString in Self.owners.keyEnumerator().allObjects
-    where Self.owners.object(forKey: key) === self {
-      Self.owners.removeObject(forKey: key)
-      Workspace.shared.detach(key as String)
+    WindowGroup("CLIStream", id: "workspace", for: UUID.self) { $windowID in
+      DesktopBrowser(windowID: windowID)
     }
-    row = nil
+    .defaultSize(width: 1200, height: 740)
+    .defaultLaunchBehavior(.presented)
+    .commands { SidebarCommands(); DesktopCommands() }
   }
-  private static let owners = NSMapTable<NSString, DesktopSelection>.strongToWeakObjects()
-  init(_ row: WorkspaceSession? = nil) { self.row = row }
-  func bind(_ window: NSWindow) {
-    self.window = window
-    window.tabbingIdentifier = "CLIStream"
-    if let row { Self.owners.setObject(self, forKey: row.id as NSString) }
-  }
-  func activate(_ next: WorkspaceSession) {
-    Workspace.shared.activate(next)
-    if let owner = Self.owners.object(forKey: next.id as NSString), owner.row?.id == next.id,
-      let existing = owner.window,
-      existing.isVisible || existing.tabGroup != nil
-    {
-      existing.tabGroup?.selectedWindow = existing
-      existing.makeKeyAndOrderFront(nil)
-      let connection = Workspace.shared.terminal(next)
-      connection.focusInput.send()
-      if let terminal = connection.terminal { existing.makeFirstResponder(terminal) }
-      return
-    }
-    row = next
-    Self.owners.setObject(self, forKey: next.id as NSString)
-  }
-  func open(_ next: WorkspaceSession, tab: Bool) {
-    if let owner = Self.owners.object(forKey: next.id as NSString), owner.row?.id == next.id,
-      let existing = owner.window
-    {
-      if tab, let window, window !== existing,
-        window.tabGroup !== existing.tabGroup || window.tabGroup == nil
-      {
-        window.addTabbedWindow(existing, ordered: .above)
-      } else if !tab, let group = existing.tabGroup, group.windows.count > 1 {
-        group.removeWindow(existing)
-      }
-      existing.tabGroup?.selectedWindow = existing
-      existing.makeKeyAndOrderFront(nil)
-      return
-    }
-    if tab && row == nil {
-      activate(next)
-      return
-    }
-    let state = DesktopSelection(next)
-    let child = NSWindow(
-      contentViewController: NSHostingController(rootView: DesktopBrowser(state: state)))
-    child.setContentSize(window?.contentLayoutRect.size ?? NSSize(width: 960, height: 560))
-    child.styleMask.formUnion([.resizable, .closable, .miniaturizable])
-    child.isReleasedWhenClosed = false
-    Self.auxiliaryWindows[ObjectIdentifier(child)] = child
-    state.bind(child)
-    child.title = next.item.Name
-    if tab, let window { window.addTabbedWindow(child, ordered: .above) } else { child.center() }
-    child.makeKeyAndOrderFront(nil)
-  }
-}
-
-private struct WindowReader: NSViewRepresentable {
-  let state: DesktopSelection
-  final class Reader: NSView {
-    var state: DesktopSelection?
-    override func viewDidMoveToWindow() {
-      super.viewDidMoveToWindow()
-      if let window { state?.bind(window) }
-    }
-  }
-  func makeNSView(context: Context) -> Reader {
-    let view = Reader()
-    view.state = state
-    return view
-  }
-  func updateNSView(_ nsView: Reader, context: Context) {}
 }
 
 private struct DesktopBrowser: View {
   @ObservedObject private var workspace = Workspace.shared
   @StateObject private var state: DesktopSelection
-  @State private var pairing: Pairing?
-  init(state: DesktopSelection? = nil) {
-    _state = StateObject(wrappedValue: state ?? DesktopSelection())
+  init(windowID: UUID?) {
+    _state = StateObject(wrappedValue: DesktopSelection.take(windowID))
+  }
+  var body: some View {
+    let current: WorkspaceSession? = state.row.flatMap { selected in
+      guard workspace.profiles.contains(where: { $0.id == selected.server.id }) else { return nil }
+      return workspace.sessions.first { $0.id == selected.id } ?? selected
+    }
+    DesktopWindow(state: state, workspace: workspace,
+                  connection: current.map(workspace.terminal) ?? workspace.pairing, row: current)
+      .background(DesktopWindowReader(state: state))
+      .task { workspace.load() }
+      .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { event in
+        if let closed = event.object as? NSWindow, closed === state.window { state.closed() }
+      }
+      .onChange(of: workspace.profiles.map(\.id)) { _, ids in
+        if let row = state.row, !ids.contains(row.server.id) {
+          state.row = nil
+          state.selection = nil
+          state.ports = false
+          state.sheet = nil
+        }
+      }
+  }
+}
+
+private struct DesktopWindow: View {
+  @ObservedObject var state: DesktopSelection
+  @ObservedObject var workspace: Workspace
+  @ObservedObject var connection: Connection
+  let row: WorkspaceSession?
+  @AppStorage("workspace-list") private var flat = false
+  @AppStorage("workspace-group") private var grouping = "Server"
+  @Environment(\.openWindow) private var openWindow
+  private var selectedServer: ServerProfile? {
+    if case .server(let id) = state.selection { return workspace.profiles.first { $0.id == id } }
+    return row?.server
+  }
+  private var actions: DesktopContext {
+    DesktopContext(state: state, row: row, server: selectedServer,
+      revoked: row.map { workspace.revoked($0.server) } == true, attached: connection.attached,
+      openWindow: openWindow)
   }
   var body: some View {
     NavigationSplitView {
-      WorkspaceSidebar(
-        workspace: workspace, selected: state.row?.id, activate: state.activate,
-        openElsewhere: state.open, pairing: $pairing
-      )
-      .navigationSplitViewColumnWidth(min: 210, ideal: 265, max: 400)
+      DesktopSidebar(workspace: workspace, state: state, flat: flat, grouping: grouping)
+        .navigationSplitViewColumnWidth(min: 210, ideal: 256, max: 400)
     } detail: {
-      if let row = state.row {
-        WorkspaceTerminal(connection: workspace.terminal(row), workspace: workspace, row: row).id(
-          row.id
-        )
-        .navigationTitle(row.item.Name)
-        .navigationSubtitle(
-          row.item.Host + " · "
-            + (workspace.profiles.first { $0.id == row.server.id }?.name ?? row.server.name))
-      } else {
-        ContentUnavailableView {
-          Text(workspace.profiles.isEmpty ? "Pair with a server" : "Select a CLI")
-        } description: {
-          Text(
-            workspace.profiles.isEmpty
-              ? "Use an invitation from clistreamd."
-              : "Choose a program in the sidebar to open its terminal.")
-        } actions: {
-          if workspace.profiles.isEmpty { Button("Add Server…") { pairing = Pairing() } }
+      Group {
+        if let row {
+          DesktopTerminal(row: row, workspace: workspace, connection: connection, state: state, actions: actions)
+            .id(row.id)
+        } else { emptyContent }
+      }
+      .navigationTitle(row?.item.Name ?? "Servers")
+      .navigationSubtitle(row.map { $0.item.Host + " — " + $0.server.name }
+        ?? (workspace.profiles.isEmpty ? "None paired" : ""))
+      .toolbar { toolbar }
+
+    }
+    .inspector(isPresented: $state.ports) {
+      if let row {
+        DesktopPorts(connection: connection, item: row.item)
+          .inspectorColumnWidth(min: 230, ideal: 280, max: 400)
+      }
+    }
+    .focusedSceneValue(\.desktopContext, actions)
+    .onChange(of: grouping) { _, _ in workspace.focus(row?.id) }
+    .onChange(of: flat) { _, _ in workspace.focus(row?.id) }
+    .onOpenURL { url in
+      guard url.scheme == "clistream" else { return }
+      NSApp.activate()
+      state.window?.makeKeyAndOrderFront(nil)
+      state.pair(url.absoluteString)
+    }
+    .sheet(item: $state.sheet) { sheet in
+      switch sheet {
+      case .pair(let link):
+        DesktopPairSheet(link: link) { value in
+          state.sheet = nil
+          Task {
+            await workspace.enroll(value)
+            if let error = workspace.pairing.pairingError {
+              workspace.pairing.pairingError = nil
+              state.pairingFailed(error)
+            }
+          }
+        }
+      case .command(let row, let line):
+        DesktopCommandSheet(row: row, initialLine: line) { argv in
+          state.sheet = nil
+          state.change(.launch, row: row, arguments: argv)
         }
       }
-    }.background(WindowReader(state: state))
-      .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) {
-        event in
-        if let closed = event.object as? NSWindow, closed === state.window {
-          state.closed(closed)
+    }
+    .alert(state.alert?.title ?? "", isPresented: Binding(get: { state.alert != nil },
+      set: { if !$0 { state.alert = nil } }), presenting: state.alert) { alert in
+      switch alert {
+      case .stop(let row):
+        Button("Stop", role: .destructive) { state.change(.stop, row: row) }
+        Button("Cancel", role: .cancel) {}.keyboardShortcut(.defaultAction)
+      case .restart(let row):
+        Button("Restart", role: .destructive) { state.change(.restart, row: row) }
+        Button("Cancel", role: .cancel) {}.keyboardShortcut(.defaultAction)
+      case .remove(let server):
+        Button("Remove", role: .destructive) {
+          do { try workspace.remove(server) }
+          catch { let message = error.localizedDescription; Task { state.alert = .error(message) } }
+        }
+        Button("Cancel", role: .cancel) {}.keyboardShortcut(.defaultAction)
+      case .pairError, .error:
+        Button("OK") {}.keyboardShortcut(.defaultAction)
+      }
+    } message: { alert in Text(alert.message) }
+  }
+
+  @ViewBuilder private var emptyContent: some View {
+    if workspace.profiles.isEmpty {
+      ContentUnavailableView {
+        Label("Pair with a server", systemImage: "network")
+      } description: {
+        Text("Open an invitation from clistreamd, or paste one. Invitations last three minutes.")
+      } actions: {
+        HStack {
+          Button("Paste Invitation") { actions.pasteInvitation() }
+
+          Button("Add Server…") { state.pair("") }.buttonStyle(.borderedProminent)
         }
       }
-      .modifier(
-        PairingPresentation(
-          connection: workspace.pairing, pairing: $pairing, enroll: workspace.enroll)
-      )
-      .task { workspace.load() }
+    } else {
+      ContentUnavailableView("Select a CLI", systemImage: "terminal",
+        description: Text("Choose a program in the sidebar to open its terminal."))
+    }
+  }
+
+  @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+    ToolbarItemGroup {
+      Button("Add Server", systemImage: "plus") { state.pair("") }
+        .accessibilityIdentifier("workspace-add-server")
+      Menu("Layout and grouping", systemImage: "list.bullet.indent") {
+        Picker("Layout", selection: $flat) { Text("Tree").tag(false); Text("List").tag(true) }
+          .pickerStyle(.inline)
+        Picker("Group by", selection: $grouping) { groupChoices }.pickerStyle(.inline)
+      }.accessibilityIdentifier("workspace-view-options")
+    }
+    ToolbarSpacer(.flexible)
+    if let row {
+      let item = row.item
+      if item.running && !actions.revoked {
+        ToolbarItemGroup {
+          if actions.managed {
+            Button("Restart…", systemImage: "arrow.counterclockwise") { actions.perform(.restart) }
+            Button("Stop…", systemImage: "stop") { actions.perform(.stop) }
+          }
+          if item.Mode == "pipe" {
+            Button("Send EOF", systemImage: "text.append") { actions.perform(.eof) }
+              .disabled(!connection.attached).accessibilityIdentifier("session-send-eof")
+          }
+        }
+      }
+      if !item.running && actions.managed && !actions.revoked {
+        ToolbarItem {
+          Button("Start…", systemImage: "play.fill") { actions.perform(.restart) }
+            .labelStyle(.titleAndIcon).buttonStyle(.borderedProminent)
+        }
+      } else if !actions.managed && !actions.revoked {
+        ToolbarItem { Text("Attach only").foregroundStyle(.tertiary) }
+      }
+      if actions.reconnect {
+        ToolbarItem { Button("Reconnect", systemImage: "arrow.clockwise") { actions.perform(.reconnect) } }
+      }
+      ToolbarSpacer(.fixed)
+      ToolbarItemGroup {
+        if actions.finder {
+          Button("Show in Finder", systemImage: "folder") { actions.perform(.finder) }
+            .accessibilityIdentifier("session-show-finder")
+        }
+        Toggle("Ports", systemImage: "sidebar.right", isOn: $state.ports)
+          .accessibilityIdentifier("session-ports").help("Show or hide port forwarding")
+      }
+    }
+    ToolbarItem {
+      DesktopSearchField(query: $state.query).frame(width: 160)
+    }.sharedBackgroundVisibility(.hidden)
   }
 }

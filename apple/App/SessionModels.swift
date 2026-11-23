@@ -3,10 +3,13 @@ import Foundation
 struct SessionInfo: Codable, Identifiable, Equatable {
   let ID, Name, Mode, Host, OS: String
   let Ports: [String: String]?
+  var PortAddresses: [String: String]?
   var supervisor: String?
   var revision: UInt64?
   var editable: Bool?
   var hasResult: Bool?
+  var workspace: Bool?
+  var exitCode: Int?
   var id: String { supervisor ?? self.ID }
   var running: Bool { !self.ID.isEmpty }
 
@@ -18,6 +21,8 @@ struct SupervisorInfo: Decodable {
   let Info: SessionInfo
   let EditableCommand: Bool?
   let RunResult: Bool?
+  let Workspace: Bool?
+  let Exit: Int?
 }
 
 struct Reply: Decodable {
