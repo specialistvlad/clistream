@@ -22,44 +22,55 @@ struct MobileServers: View {
   }
 
   var body: some View {
-    adaptiveList
-      .searchable(text: $query, placement: !regular ? .toolbar : .sidebar, prompt: "Search")
-      .navigationTitle("Servers")
-      .navigationBarTitleDisplayMode(closedHinge ? .inline : .automatic)
-      .safeAreaInset(edge: .trailing, spacing: 0) {
-        if closedHinge && !regular {
-          VStack {
-            serverButtons
-            Spacer()
-          }.labelStyle(.iconOnly).buttonStyle(.glass)
-            .buttonBorderShape(.circle).accessibilityIdentifier("duo-server-tools")
-        }
-      }
-      .overlay {
-        if workspace.profiles.isEmpty {
-          ContentUnavailableView {
-            Label("No Servers", systemImage: "network")
-          } description: {
-            Text(
-              "Scan the QR code that clistreamd shows, or paste its invitation. Invitations last three minutes."
-            )
-          } actions: {
-            Button("Paste Invitation", systemImage: "doc.on.clipboard", action: invitations.paste)
-              .buttonStyle(.glass)
-            Button("Scan QR Code", systemImage: "qrcode.viewfinder", action: invitations.scan)
-              .buttonStyle(.glassProminent)
+    Group {
+      if workspace.profiles.isEmpty {
+        ContentUnavailableView {
+          Label {
+            Text("No Servers")
+          } icon: {
+            Image(systemName: "network").foregroundStyle(.tint)
           }
+        } description: {
+          Text(
+            "Scan the QR code that clistreamd shows, or paste its invitation. Invitations last three minutes."
+          )
         }
+        .safeAreaInset(edge: .bottom) {
+          VStack {
+            Button(action: invitations.paste) {
+              Text("Paste Invitation").frame(maxWidth: .infinity)
+            }.buttonStyle(.glass).foregroundStyle(.tint)
+            Button(action: invitations.scan) {
+              Label("Scan QR Code", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
+            }.buttonStyle(.glassProminent)
+          }
+          .controlSize(.large).buttonBorderShape(.capsule).padding()
+        }
+      } else {
+        adaptiveList.searchable(
+          text: $query, placement: !regular ? .toolbar : .sidebar, prompt: "Search")
       }
-      .toolbar {
-        if !regular && !workspace.profiles.isEmpty {
-          DefaultToolbarItem(kind: .search, placement: .bottomBar)
-        }
-        if !closedHinge || regular {
-          ToolbarItemGroup(placement: .topBarTrailing) { serverButtons }
-        }
+    }
+    .navigationTitle("Servers")
+    .navigationBarTitleDisplayMode(closedHinge ? .inline : .automatic)
+    .safeAreaInset(edge: .trailing, spacing: 0) {
+      if closedHinge && !regular {
+        VStack {
+          serverButtons
+          Spacer()
+        }.labelStyle(.iconOnly).buttonStyle(.glass)
+          .buttonBorderShape(.circle).accessibilityIdentifier("duo-server-tools")
       }
-      .sheet(item: $renaming, content: renameSheet)
+    }
+    .toolbar {
+      if !regular && !workspace.profiles.isEmpty {
+        DefaultToolbarItem(kind: .search, placement: .bottomBar)
+      }
+      if !closedHinge || regular {
+        ToolbarItemGroup(placement: .topBarTrailing) { serverButtons }
+      }
+    }
+    .sheet(item: $renaming, content: renameSheet)
   }
 
   @ViewBuilder private var adaptiveList: some View {

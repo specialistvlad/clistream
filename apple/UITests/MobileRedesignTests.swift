@@ -65,13 +65,32 @@ extension NativeSessionTests {
     let app = XCUIApplication()
     app.launchArguments = ["--ui-test-first-launch"]
     app.launch()
-    defer { UIPasteboard.general.items = []; app.terminate() }
+    addTeardownBlock { @MainActor in
+      if self.testRun?.hasSucceeded == false && app.state == .runningForeground {
+        let screen = XCTAttachment(screenshot: app.screenshot())
+        screen.name = "mobile-invitation-window"
+        screen.lifetime = .keepAlways
+        self.add(screen)
+      }
+      _ = try await fixtureResponse("pasteboard/clear")
+      app.terminate()
+    }
+    addUIInterruptionMonitor(withDescription: "Paste from the simulator clipboard") { alert in
+      let allow = alert.buttons["Allow Paste"].firstMatch
+      guard allow.exists else { return false }
+      allow.tap()
+      return true
+    }
+    func putOnClipboard(_ source: String) async throws {
+      let result = try await fixtureResponse("pasteboard/" + source)
+      XCTAssertEqual(result, "ready")
+    }
     let scan = app.buttons["workspace-scan"].firstMatch
     XCTAssertTrue(scan.waitForExistence(timeout: 12))
     scan.tap()
     XCTAssertTrue(app.staticTexts["Camera Unavailable"].waitForExistence(timeout: 10))
     try await capture("scan-qr", app)
-    UIPasteboard.general.string = try await fixtureResponse("QR")
+    try await putOnClipboard("invitation")
     app.buttons["Paste Invitation"].firstMatch.tap()
     allowPaste(in: app)
     let confirm = pairingButton(in: app)
@@ -90,14 +109,14 @@ extension NativeSessionTests {
 
     app.terminate()
     app.launchArguments = ["--ui-test-first-launch", "--ui-test-scanned-code"]
-    UIPasteboard.general.string = "https://example.invalid/"
+    try await putOnClipboard("invalid")
     app.launch()
     scan.tap()
     allowPaste(in: app)
     XCTAssertTrue(app.staticTexts["Camera Unavailable"].waitForExistence(timeout: 10))
     XCTAssertFalse(confirm.exists)
     app.buttons["workspace-cancel"].tap()
-    UIPasteboard.general.string = try await fixtureResponse("QR")
+    try await putOnClipboard("invitation")
     scan.tap()
     allowPaste(in: app)
     XCTAssertTrue(confirm.wait(for: \.isEnabled, toEqual: true, timeout: 10))
@@ -156,7 +175,7 @@ extension NativeSessionTests {
   @MainActor private func allowPaste(in app: XCUIApplication) {
     for surface in [app, XCUIApplication(bundleIdentifier: "com.apple.springboard")] {
       let allow = surface.alerts.buttons["Allow Paste"].firstMatch
-      if allow.waitForExistence(timeout: 1) { allow.tap(); return }
+      if allow.waitForExistence(timeout: 4) { allow.tap(); return }
     }
   }
 

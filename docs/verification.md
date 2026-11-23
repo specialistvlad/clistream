@@ -16,6 +16,8 @@ The iOS and macOS schemes compiled locally with Xcode 27.1. The simulator app em
 
 Device archive signing currently requires the Apple Developer team to assign `group.com.vlk.clistream.workspace` to both `com.vlk.clistream` and `com.vlk.clistream.files`. The generated development profiles included an empty App Groups entitlement. Physical camera recognition, a signed Files-enabled device installation, the full hosted matrix and visual review of the redesigned gallery are pending.
 
+The first focused iPhone run passed Add Server and the search, swipe, stop, start and restart sequence. The camera-unavailable screen appeared, but the pasted invitation did not enable Pair. The simulator fixture now verifies the clipboard before tapping Paste. Eight captures covered the server list, swipe actions, unavailable camera and first launch in both appearances. The first-launch captures showed a redundant search field and undersized actions. The empty state now places full-width system buttons at the bottom. [iPhone results and gallery](https://github.com/specialistvlad/clistream/actions/runs/45230753695)
+
 ## Mac redesign and Finder · November 23, 2026
 
 The Go daemon, supervisor and CLI passed race-enabled tests, end-to-end tests and release archive checks on Linux and macOS. The Linux runner also passed the container deployment tests. The old-binary compatibility suite passed locally on macOS. [Linux results](https://github.com/specialistvlad/clistream/actions/runs/45136905954/job/137567468495) · [Mac results](https://github.com/specialistvlad/clistream/actions/runs/45136905954/job/137567468920)

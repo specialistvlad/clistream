@@ -366,8 +366,42 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 		}
 		w.Write(data)
 	}
-	if os.Getenv("SIMULATOR_ID") != "" {
+	if id := os.Getenv("SIMULATOR_ID"); id != "" {
 		mux.HandleFunc(path+"open-repair-invitation", issue)
+		mux.HandleFunc(path+"pasteboard/", func(w http.ResponseWriter, r *http.Request) {
+			var value []byte
+			switch strings.TrimPrefix(r.URL.Path, path+"pasteboard/") {
+			case "invitation":
+				data, err := command("clistreamd", "invite").Output()
+				if err != nil {
+					http.Error(w, "invitation unavailable", http.StatusServiceUnavailable)
+					return
+				}
+				value = bytes.TrimSpace(data)
+			case "invalid":
+				value = []byte("https://example.invalid/")
+			case "clear":
+			default:
+				http.NotFound(w, r)
+				return
+			}
+			// The XCTest runner is a background process. Set the clipboard on the
+			// selected simulator and verify its actual contents before tapping Paste.
+			copy := exec.CommandContext(r.Context(), "xcrun", "simctl", "pbcopy", id)
+			copy.Stdin = bytes.NewReader(value)
+			if err := copy.Run(); err != nil {
+				http.Error(w, "simulator pasteboard unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			if len(value) > 0 {
+				stored, err := exec.CommandContext(r.Context(), "xcrun", "simctl", "pbpaste", id).Output()
+				if err != nil || !bytes.Equal(stored, value) {
+					http.Error(w, "simulator pasteboard did not retain the text", http.StatusServiceUnavailable)
+					return
+				}
+			}
+			fmt.Fprint(w, "ready")
+		})
 	}
 	for _, op := range []string{"QR", "PIPE", "PORTS", "PTY", "FLUSH", "DRIVERS"} {
 		mux.HandleFunc(path+op, issue)
