@@ -10,6 +10,7 @@ extension NativeSessionTests {
     XCTAssertTrue(show.waitForExistence(timeout: 10))
     show.tap()
     let alert = app.alerts["Show in Files"].firstMatch
+    XCTAssertTrue(alert.waitForExistence(timeout: 15))
     let message = alert.staticTexts.allElementsBoundByIndex.map(\.label).joined(separator: " ")
     let path = try XCTUnwrap(message.components(separatedBy: "Browse → CLIStream → ").last?
       .components(separatedBy: ". If CLIStream").first)
@@ -20,7 +21,16 @@ extension NativeSessionTests {
     XCTAssertEqual(prepared, "ready")
     let files = XCUIApplication(bundleIdentifier: "com.apple.DocumentsApp")
     files.launch()
-    defer { files.terminate(); app.activate() }
+    addTeardownBlock { @MainActor in
+      if self.testRun?.hasSucceeded == false && files.state == .runningForeground {
+        let screen = XCTAttachment(screenshot: files.screenshot())
+        screen.name = "files-checkpoint-window"
+        screen.lifetime = .keepAlways
+        self.add(screen)
+      }
+      files.terminate()
+      app.activate()
+    }
     func element(_ title: String) -> XCUIElement {
       files.descendants(matching: .any).matching(NSPredicate(format: "label ==[c] %@", title)).firstMatch
     }
@@ -49,7 +59,7 @@ extension NativeSessionTests {
     if !element("CLIStream").waitForExistence(timeout: 4) {
       if element("Browse").isHittable { tap("Browse") }
       more()
-      tap("Edit")
+      if element("Edit Sidebar").isHittable { tap("Edit Sidebar") } else { tap("Edit") }
       let toggle = files.switches.matching(NSPredicate(format: "label CONTAINS[c] %@", "CLIStream")).firstMatch
       if toggle.waitForExistence(timeout: 3) {
         if (toggle.value as? String) != "1" { toggle.tap() }

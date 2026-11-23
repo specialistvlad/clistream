@@ -31,6 +31,7 @@ struct MobileTerminal: View {
   @Environment(\.closedHinge) private var closedHinge
   @State private var ports = false
   @State private var showingFiles = false
+  @State private var filesError: String?
   @State private var keyboard = false
   @State private var sample: Int64?
   @State private var grid = ""
@@ -82,7 +83,9 @@ struct MobileTerminal: View {
       }
     }
     .overlay(alignment: .bottomTrailing) {
-      if !keyboard && !outer && connection.attached { showKeyboard.padding().buttonStyle(.glass) }
+      if !keyboard && !outer && connection.attached {
+        showKeyboard.controlSize(.large).buttonStyle(.glass).buttonBorderShape(.circle).padding()
+      }
     }
     .safeAreaInset(edge: .trailing, spacing: 0) {
       if outer {
@@ -102,21 +105,27 @@ struct MobileTerminal: View {
         if regular {
           ToolbarItemGroup(placement: .topBarTrailing) { lifecycleButtons }
           ToolbarSpacer(.fixed, placement: .topBarTrailing)
+          ToolbarItemGroup(placement: .topBarTrailing) {
+            if item.workspace == true { filesButton }
+            portsButton
+          }
+          ToolbarSpacer(.fixed, placement: .topBarTrailing)
+          ToolbarItem(placement: .topBarTrailing) { sessionMenu }
+        } else {
+          ToolbarItemGroup(placement: .topBarTrailing) {
+            portsButton
+            sessionMenu
+          }
         }
-        ToolbarItemGroup(placement: .topBarTrailing) {
-          if regular && item.workspace == true { filesButton }
-          portsButton
-        }
-        if regular { ToolbarSpacer(.fixed, placement: .topBarTrailing) }
-        ToolbarItem(placement: .topBarTrailing) { sessionMenu }
       }
     }
     .alert("Show in Files", isPresented: $showingFiles) {
       Button("OK") {}
     } message: {
       Text(
-        "Open Files and go to " + FinderWorkspace.filesPath(target, in: workspace)
-          + ". If CLIStream is hidden, tap Edit in Browse and enable CLIStream under Locations.")
+        filesError
+          ?? ("Open Files and go to " + FinderWorkspace.filesPath(target, in: workspace)
+            + ". If CLIStream is hidden, tap Edit in Browse and enable CLIStream under Locations."))
     }
     .modifier(PortsPresentation(connection: connection, session: item, presented: $ports))
     .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) {
@@ -140,8 +149,18 @@ struct MobileTerminal: View {
       .labelStyle(.iconOnly).accessibilityIdentifier("show-keyboard")
   }
   private var filesButton: some View {
-    Button("Show in Files", systemImage: "folder") { showingFiles = true }
-      .accessibilityIdentifier("session-show-files")
+    Button("Show in Files", systemImage: "folder") {
+      Task {
+        do {
+          try await FinderWorkspace.prepareForBrowsing()
+          filesError = nil
+        } catch {
+          filesError = error.localizedDescription
+        }
+        showingFiles = true
+      }
+    }
+    .accessibilityIdentifier("session-show-files")
   }
   private var portsButton: some View {
     Button("Ports", systemImage: regular ? "sidebar.right" : "network") { ports.toggle() }

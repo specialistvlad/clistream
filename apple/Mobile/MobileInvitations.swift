@@ -28,7 +28,7 @@ import SwiftUI
   func takeConfirmation() -> String? {
     defer {
       confirmed = nil
-      link = ""
+      if page == nil { link = "" }
     }
     return confirmed
   }

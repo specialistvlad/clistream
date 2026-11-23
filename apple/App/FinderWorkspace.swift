@@ -115,6 +115,10 @@ import OSLog
   }
 
   #if os(iOS)
+  static func prepareForBrowsing() async throws {
+    _ = try await manager()
+  }
+
   static func filesPath(_ row: WorkspaceSession, in workspace: Workspace) -> String {
     let pin = row.server.id
     let rows = workspace.sessions.filter { $0.server.id == pin && $0.item.workspace == true }

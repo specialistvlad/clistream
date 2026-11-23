@@ -28,8 +28,8 @@ struct WorkspaceSession: Identifiable {
     let latencySamples = CurrentValueSubject<[String: Int64], Never>([:])
     var samples: [String: Int64] { latencySamples.value }
   #else
-    // The mobile status bar samples latency on its own timer. Publishing every
-    // RTT here rebuilds its parent toolbar and closes the native Keys submenu.
+    // The sidebar and terminal read latency on their own timers so each sample
+    // can update the labels without rebuilding an open menu.
     private(set) var samples = [String: Int64]()
   #endif
   private var watchers = [String: Task<Void, Never>]()
