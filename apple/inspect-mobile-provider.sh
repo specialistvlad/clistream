@@ -30,3 +30,10 @@ else
 fi
 xcrun simctl spawn "$device" log show --last 15m --style compact \
   --predicate 'subsystem == "com.vlk.clistream" AND category IN {"FileProvider", "Finder"}' 2>/dev/null | tail -20
+# State transitions and numeric errors from the system side of the same domain.
+# Never export raw fileproviderd messages, which can include paths or item IDs.
+xcrun simctl spawn "$device" log show --last 15m --style ndjson \
+  --predicate 'process == "fileproviderd" AND (messageType == error OR messageType == fault)' 2>/dev/null |
+  jq -Rr 'fromjson? | .eventMessage? | strings | select(test("clistream|workspaces"; "i"))
+    | [scan("(?:[A-Za-z]+ErrorDomain|Code[=: ]+-?[0-9]+|invalid filename|invalid name|invalid item|not materialized|no such item)"; "i")]
+    | select(length > 0) | unique | join(" ")' | sort | uniq -c | head -30

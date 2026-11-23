@@ -29,16 +29,16 @@ extension NativeSessionTests {
     files.launch()
     addTeardownBlock { @MainActor in
       if self.testRun?.hasSucceeded == false && files.state == .runningForeground {
-        let screen = XCTAttachment(screenshot: files.screenshot())
-        screen.name = "files-checkpoint-window"
-        screen.lifetime = .keepAlways
-        self.add(screen)
         if let state = try? await fixtureResponse("files/provider-state") {
           let report = XCTAttachment(string: state)
           report.name = "files-provider-state"
           report.lifetime = .keepAlways
           self.add(report)
         }
+        let screen = XCTAttachment(screenshot: files.screenshot())
+        screen.name = "files-checkpoint-window"
+        screen.lifetime = .keepAlways
+        self.add(screen)
       }
       files.terminate()
       app.activate()

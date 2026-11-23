@@ -44,8 +44,14 @@ extension NativeSessionTests {
     }
     let header = app.descendants(matching: .any).matching(
       NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "workspace-server-", "Server " + address)).firstMatch
-    let remove = app.buttons["server-remove"].firstMatch
+    let remove = app.buttons.matching(NSPredicate(
+      format: "identifier == %@ OR label == %@", "server-remove", "Remove Server…")).firstMatch
     let alert = app.alerts["Remove “" + address + "”?"].firstMatch
+    XCTAssertTrue(header.wait(for: \.isHittable, toEqual: true, timeout: 10))
+    header.tap()
+    XCTAssertTrue(row.waitForNonExistence(timeout: 5))
+    header.tap()
+    XCTAssertTrue(row.waitForExistence(timeout: 5))
     for confirmation in ["Cancel", "Remove"] {
       XCTAssertTrue(header.wait(for: \.isHittable, toEqual: true, timeout: 10))
       header.press(forDuration: 0.8)

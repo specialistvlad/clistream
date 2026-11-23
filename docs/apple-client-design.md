@@ -50,6 +50,8 @@ After removing the last file, Finder can delete the empty folder even if its dis
 
 **Show in Files** gives the selected program’s location under **Files → Browse → CLIStream → server → host → program**. In Files, enable CLIStream under **Browse → Edit → Locations** if needed. Select CLIStream and tap **Turn On** if Files asks. The Files extension uses the same remote item identities, version checks and conflict handling as Finder. Other document apps can open these files through the system picker. A stopped managed child keeps its workspace available.
 
+Files uses a full-width colon in location names such as `build：7443`. **Show in Files** reports the system's folder names when the location is enabled. Remote filenames and server addresses keep their original spelling.
+
 The app migrates existing server enrollments into its private App Group with the same keys. Removing a server removes its location from the provider catalog. Revoking a device stops remote operations. Local copies can remain on the device.
 
 ## Acceptance

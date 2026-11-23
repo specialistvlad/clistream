@@ -33,6 +33,7 @@ struct MobileTerminal: View {
   @State private var ports = false
   @State private var showingFiles = false
   @State private var filesError: String?
+  @State private var filesPath = ""
   @State private var keyboard = false
   @State private var sample: String?
   @State private var grid = ""
@@ -114,7 +115,7 @@ struct MobileTerminal: View {
     } message: {
       Text(
         (filesError.map { $0 + "\n\n" } ?? "") + "Open Files and go to "
-          + FinderWorkspace.filesPath(target, in: workspace)
+          + filesPath
           + ". If CLIStream is hidden, tap Edit in Browse and enable CLIStream under Locations. Tap Turn On if Files asks.")
     }
     .modifier(PortsPresentation(connection: connection, session: item, presented: $ports))
@@ -165,9 +166,10 @@ struct MobileTerminal: View {
     Button("Show in Files", systemImage: "folder") {
       Task {
         do {
-          try await FinderWorkspace.prepareForBrowsing(target, in: workspace)
+          filesPath = try await FinderWorkspace.prepareForBrowsing(target, in: workspace)
           filesError = nil
         } catch {
+          filesPath = FinderWorkspace.filesPath(target, in: workspace)
           filesError = error.localizedDescription
         }
         showingFiles = true

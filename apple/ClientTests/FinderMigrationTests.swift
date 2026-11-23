@@ -5,6 +5,18 @@
   @testable import CLIStream
 
   extension ClientTests {
+    #if os(iOS)
+    func testFilesLocationNamesForServersAndHosts() {
+      let names = FinderID.displayNames([
+        ("a", FinderID.locationName("build:7443")), ("b", FinderID.locationName("build：7443")),
+        ("c", FinderID.locationName(".build/host")),
+      ])
+      XCTAssertEqual(names["a"], "build：7443")
+      XCTAssertEqual(names["b"], "build：7443 (2)")
+      XCTAssertEqual(names["c"], "․build∕host")
+    }
+    #endif
+
     func testFinderResolvesOnlyTheMatchingRootEnrollment() throws {
       let files = FileManager.default
       let root = files.temporaryDirectory.appendingPathComponent(UUID().uuidString)

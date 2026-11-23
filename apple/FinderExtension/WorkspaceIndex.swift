@@ -125,7 +125,7 @@ final class WorkspaceIndex {
   // Finder names must fit on a case-insensitive volume. Keep the exact remote component
   // separately so addressing never depends on a display name or duplicate suffix.
   private func displayNames(_ nodes: [WorkspaceNode]) -> [WorkspaceNode] {
-    let names = FinderID.displayNames(nodes.map { ($0.id, $0.name) })
+    let names = FinderID.displayNames(nodes.map { ($0.id, $0.isRemote ? $0.name : FinderID.locationName($0.name)) })
     return nodes.sorted { $0.id < $1.id }.map { value in
       var node = value
       node.name = names[node.id] ?? node.name

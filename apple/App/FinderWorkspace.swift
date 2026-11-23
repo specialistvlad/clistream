@@ -115,26 +115,32 @@ import OSLog
   }
 
   #if os(iOS)
-  static func prepareForBrowsing(_ row: WorkspaceSession, in workspace: Workspace) async throws {
+  static func prepareForBrowsing(_ row: WorkspaceSession, in workspace: Workspace) async throws -> String {
     try update(servers: workspace.profiles, sessions: workspace.sessions, errors: workspace.errors)
     let manager = try await manager()
     // Files can keep an empty root from before pairing. Resolve the selected
     // item through the system when the user has already enabled the location.
     let registered = try await NSFileProviderManager.domains()
-    if registered.contains(where: { $0.identifier == FinderStorage.domain.identifier && $0.userEnabled }) {
-      try await manager.signalEnumerator(for: .workingSet)
-      let id = NSFileProviderItemIdentifier(FinderID.workspace(row.server.id, row.item.id))
-      _ = try await manager.getUserVisibleURL(for: id)
-    }
+    let logicalPath = filesPath(row, in: workspace)
+    guard registered.contains(where: { $0.identifier == FinderStorage.domain.identifier && $0.userEnabled })
+    else { return logicalPath }
+    try await manager.signalEnumerator(for: .workingSet)
+    let id = NSFileProviderItemIdentifier(FinderID.workspace(row.server.id, row.item.id))
+    let folder = try await manager.getUserVisibleURL(for: id)
+    let root = try await manager.getUserVisibleURL(for: .rootContainer)
+    let base = root.standardizedFileURL.pathComponents
+    let path = folder.standardizedFileURL.pathComponents
+    guard path.starts(with: base), path.count == base.count + 3 else { return logicalPath }
+    return (["Browse", "CLIStream"] + path.dropFirst(base.count)).joined(separator: " → ")
   }
 
   static func filesPath(_ row: WorkspaceSession, in workspace: Workspace) -> String {
     let pin = row.server.id
     let rows = workspace.sessions.filter { $0.server.id == pin && $0.item.workspace == true }
-    let servers = FinderID.displayNames(workspace.profiles.map { (FinderID.make("server", $0.id), $0.name) })
-    let hosts = FinderID.displayNames(Set(rows.map { $0.item.Host }).map { (FinderID.make("host", pin, $0), $0) })
+    let servers = FinderID.displayNames(workspace.profiles.map { (FinderID.make("server", $0.id), FinderID.locationName($0.name)) })
+    let hosts = FinderID.displayNames(Set(rows.map { $0.item.Host }).map { (FinderID.make("host", pin, $0), FinderID.locationName($0)) })
     let programs = FinderID.displayNames(rows.filter { $0.item.Host == row.item.Host }
-      .map { (FinderID.workspace(pin, $0.item.id), $0.item.Name) })
+      .map { (FinderID.workspace(pin, $0.item.id), FinderID.locationName($0.item.Name)) })
     return ["Browse", "CLIStream", servers[FinderID.make("server", pin)] ?? row.server.name,
             hosts[FinderID.make("host", pin, row.item.Host)] ?? row.item.Host,
             programs[FinderID.workspace(pin, row.item.id)] ?? row.item.Name].joined(separator: " → ")

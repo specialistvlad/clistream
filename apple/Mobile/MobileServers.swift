@@ -116,7 +116,7 @@ struct MobileServers: View {
                 }
               }
             } header: {
-              serverHeader(server)
+              serverHeader(server, isExpanded: expanded([server.id]))
             }
           }
         }
@@ -135,7 +135,7 @@ struct MobileServers: View {
                   DisclosureGroup(isExpanded: expanded([grouping, group, server.id])) {
                     ForEach(children) { leaf($0, detail: byHost ? "" : $0.item.Host) }
                   } label: {
-                    serverHeader(server)
+                    serverHeader(server, isExpanded: expanded([grouping, group, server.id]))
                   }
                 }
               }
@@ -190,27 +190,29 @@ struct MobileServers: View {
     name = server.name
     renaming = server
   }
-  private func serverHeader(_ server: ServerProfile) -> some View {
-    HStack {
-      Text(server.name)
-      Spacer()
-      TimelineView(.periodic(from: .now, by: 2)) { _ in
-        if let us = workspace.samples[server.id] {
-          Text(Self.latency(us)).monospacedDigit().font(.caption)
-        }
-      }
-    }.textCase(nil)
-    .contentShape(Rectangle())
-    .accessibilityElement(children: .combine)
-    .accessibilityLabel("Server " + server.name)
-    .accessibilityValue(workspace.samples[server.id].map(Self.latency) ?? "")
-    .accessibilityIdentifier("workspace-server-" + server.id)
-    .contextMenu {
+  private func serverHeader(_ server: ServerProfile, isExpanded: Binding<Bool>) -> some View {
+    Menu {
       Button("Rename…", systemImage: "pencil") { rename(server) }
       Button("Remove Server…", systemImage: "trash", role: .destructive) {
         actions.confirmation = .remove(server)
       }.accessibilityIdentifier("server-remove")
+    } label: {
+      HStack {
+        Text(server.name)
+        Spacer()
+        if let us = workspace.samples[server.id] {
+          Text(Self.latency(us)).monospacedDigit().font(.caption)
+        }
+      }.contentShape(Rectangle())
+    } primaryAction: {
+      isExpanded.wrappedValue.toggle()
     }
+    .menuIndicator(.hidden)
+    .buttonStyle(.plain)
+    .textCase(nil)
+    .accessibilityLabel("Server " + server.name)
+    .accessibilityValue(workspace.samples[server.id].map(Self.latency) ?? "")
+    .accessibilityIdentifier("workspace-server-" + server.id)
   }
   static func latency(_ us: Int64) -> String {
     us < 1000 ? "<1 ms" : "\(Int((Double(us) / 1000).rounded())) ms"

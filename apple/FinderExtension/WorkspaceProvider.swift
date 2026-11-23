@@ -139,6 +139,15 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
   ) -> Progress {
     perform({ _ in
       if self.index.cached(identifier.rawValue) == nil {
+        #if DEBUG && os(iOS)
+          let kind: String
+          switch identifier {
+          case .workingSet: kind = "working set"
+          case .trashContainer: kind = "trash"
+          default: kind = FinderID.server(of: identifier.rawValue) == nil ? "system item" : "workspace item"
+          }
+          self.log.notice("Files requested uncached \(kind, privacy: .public)")
+        #endif
         try self.index.discover(only: FinderID.server(of: identifier.rawValue))
       }
       let node = try self.index.require(identifier.rawValue)

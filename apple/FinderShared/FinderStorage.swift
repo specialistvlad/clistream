@@ -98,6 +98,16 @@ enum FinderID {
     parts.map { Data($0.utf8).base64EncodedString() }.joined(separator: ".")
   }
   static func workspace(_ pin: String, _ id: String) -> String { make("workspace", pin, id) }
+  static func locationName(_ name: String) -> String {
+    #if os(iOS)
+    // These are virtual location names. Keep host:port addresses and leading
+    // dots visible in Files without changing identities or remote filenames.
+    let visible = name.replacingOccurrences(of: ":", with: "：")
+    return visible.hasPrefix(".") ? "․" + visible.dropFirst() : visible
+    #else
+    return name
+    #endif
+  }
   static func displayNames(_ pairs: [(String, String)]) -> [String: String] {
     var used = Set<String>()
     var names = [String: String]()
