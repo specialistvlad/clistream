@@ -144,7 +144,28 @@ import OSLog
     let base = root.standardizedFileURL.pathComponents
     let path = folder.standardizedFileURL.pathComponents
     guard path.starts(with: base), path.count == base.count + 3 else { return logicalPath }
-    return (["Browse", "CLIStream"] + path.dropFirst(base.count)).joined(separator: " → ")
+    let components = Array(path.dropFirst(base.count))
+    // Files can enable a new domain before it has materialized its virtual
+    // folders. Resolve the visible names under a coordinated, scoped read.
+    // Only the server/host/program hierarchy is read, never the remote files.
+    try await Task.detached(priority: .userInitiated) {
+      let acquired = root.startAccessingSecurityScopedResource()
+      defer { if acquired { root.stopAccessingSecurityScopedResource() } }
+      var parent = root
+      for name in components {
+        var coordinationError: NSError?
+        var listing: Result<[URL], Error>?
+        NSFileCoordinator().coordinate(readingItemAt: parent, options: .withoutChanges, error: &coordinationError) { url in
+          listing = Result { try FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil) }
+        }
+        if let coordinationError { throw coordinationError }
+        guard let child = try listing?.get().first(where: { $0.lastPathComponent == name }) else {
+          throw CocoaError(.fileReadNoSuchFile)
+        }
+        parent = child
+      }
+    }.value
+    return (["Browse", "CLIStream"] + components).joined(separator: " → ")
   }
 
   static func filesPath(_ row: WorkspaceSession, in workspace: Workspace) -> String {

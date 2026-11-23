@@ -31,7 +31,7 @@ extension NativeSessionTests {
       alert.buttons["OK"].tap()
       return components
     }
-    var components = try workspacePath()
+    _ = try workspacePath()
     let prepared = try await fixtureResponse("files/prepare")
     XCTAssertEqual(prepared, "ready")
     let files = XCUIApplication(bundleIdentifier: "com.apple.DocumentsApp")
@@ -94,12 +94,17 @@ extension NativeSessionTests {
     if turnOn.wait(for: \.isHittable, toEqual: true, timeout: 4) {
       turnOn.tap()
       XCTAssertTrue(turnOn.waitForNonExistence(timeout: 10))
-      // Enabling a provider grants the app access to the system-assigned path.
-      app.activate()
-      components = try workspacePath(afterEnabling: true)
-      files.activate()
     }
-    for part in components {
+    // Read the path from the active domain, including when Files enabled the
+    // provider directly through Edit rather than presenting a second prompt.
+    app.activate()
+    let components = try workspacePath(afterEnabling: true)
+    files.activate()
+    for (depth, part) in components.enumerated() {
+      let screen = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+      screen.name = "files-level-\(depth)-window"
+      screen.lifetime = .deleteOnSuccess
+      add(screen)
       let directory = fileItem(part)
       XCTAssertTrue(directory.wait(for: \.isHittable, toEqual: true, timeout: 20), part)
       directory.tap()
