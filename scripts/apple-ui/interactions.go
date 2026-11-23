@@ -323,22 +323,27 @@ func poseRoute(mux *http.ServeMux, path, udid, keysFile string) {
 		}
 		return math.Abs(actual-float64(target)) <= 0.5
 	}
-	settledDisplay := func(ctx context.Context, target int) (duoScreen, float64, error) {
-		wait, cancel := context.WithTimeout(ctx, time.Minute)
+	settledDisplay := func(ctx context.Context, target int, limit time.Duration) (duoScreen, float64, error) {
+		wait, cancel := context.WithTimeout(ctx, limit)
 		defer cancel()
 		role := "inner"
 		if target == 0 {
 			role = "outer"
 		}
+		lastMeasurement := "no completed display reading"
 		for {
 			panel, angle, err := duoDisplay(wait, udid)
-			if err == nil && matchesPose(angle, target) && panel.Role == role && panel.Width > 0 && panel.Height > 0 {
-				return panel, angle, nil
+			if err == nil {
+				if matchesPose(angle, target) && panel.Role == role && panel.Width > 0 && panel.Height > 0 {
+					return panel, angle, nil
+				}
+				lastMeasurement = fmt.Sprintf("%.1f degrees, %s %s display %d, %.0fx%.0f points", angle, panel.Role, panel.State, panel.ID, panel.Width, panel.Height)
 			}
 			select {
 			case <-time.After(time.Second):
 			case <-wait.Done():
-				return duoScreen{}, 0, fmt.Errorf("active %s screen did not settle at %d degrees: %w", role, target, wait.Err())
+				fmt.Printf("Duo %s panel did not settle at %d degrees. Last measurement: %s (last read error %v)\n", role, target, lastMeasurement, err)
+				return duoScreen{}, 0, wait.Err()
 			}
 		}
 	}
@@ -361,9 +366,18 @@ func poseRoute(mux *http.ServeMux, path, udid, keysFile string) {
 			// A movement receipt can arrive while the previous panel still owns input.
 			cmd := exec.CommandContext(r.Context(), "axe", "hinge", "set", strconv.Itoa(degrees), "--udid", udid, "--timeout", "15", "--no-wait")
 			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-			_ = cmd.Run() // A lost receipt is recoverable when the measured target is correct.
-			panel, angle, err := settledDisplay(r.Context(), degrees)
+			moveErr := cmd.Run()
+			wait := time.Minute
+			if moveErr == nil && attempt == 0 {
+				// The physical hinge acknowledged this movement. Give panel migration
+				// the remaining observation budget without sending another movement.
+				wait = 2 * time.Minute
+			}
+			panel, angle, err := settledDisplay(r.Context(), degrees, wait)
 			if err != nil {
+				if moveErr == nil || r.Context().Err() != nil {
+					break
+				}
 				continue
 			}
 			fmt.Printf("Duo %s at %.1f degrees: %s %s, display %d, %.0fx%.0f points\n", name, angle, panel.Role, panel.State, panel.ID, panel.Width, panel.Height)
@@ -462,7 +476,7 @@ func poseRoute(mux *http.ServeMux, path, udid, keysFile string) {
 			return
 		}
 		filename := "duo-" + strings.ToLower(strings.ReplaceAll(name, " ", "-")) + ".png"
-		panel, angle, err := settledDisplay(r.Context(), degrees)
+		panel, angle, err := settledDisplay(r.Context(), degrees, time.Minute)
 		if err != nil {
 			http.Error(w, "requested display is not active", http.StatusConflict)
 			return
