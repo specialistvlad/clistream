@@ -21,7 +21,13 @@ struct WorkspaceSession: Identifiable {
   @Published private(set) var profiles = [ServerProfile]()
   @Published private(set) var rows = [String: [SessionInfo]]()
   @Published private(set) var errors = [String: String]()
-  @Published private(set) var samples = [String: Int64]()
+  #if os(macOS)
+    @Published private(set) var samples = [String: Int64]()
+  #else
+    // The mobile status bar samples latency on its own timer. Publishing every
+    // RTT here rebuilds its parent toolbar and closes the native Keys submenu.
+    private(set) var samples = [String: Int64]()
+  #endif
   private var watchers = [String: Task<Void, Never>]()
   private var terminals = [String: Connection]()
   var sessions: [WorkspaceSession] {

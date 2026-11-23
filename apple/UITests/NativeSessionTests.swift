@@ -305,8 +305,13 @@ final class NativeSessionTests: XCTestCase {
     XCTAssertFalse(app.buttons["Restart"].exists)
     #if os(iOS)
       openTerminalKeys(in: app)
+      let control = app.buttons["Control Key"].firstMatch
+      XCTAssertTrue(control.waitForExistence(timeout: 8))
+      // Leave the real menu open through a two-second server refresh.
+      try await Task.sleep(for: .seconds(3))
+      XCTAssertTrue(control.exists, "A latency update must preserve the active Keys menu")
       captureCurrent("terminal-keys", app)
-      activate(app.buttons["Control Key"])
+      activate(control)
       captureCurrent("control-keys", app)
       activate(app.buttons["Control-C"])
     #else
