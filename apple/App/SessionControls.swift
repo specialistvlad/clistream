@@ -122,11 +122,13 @@ struct SessionActions: ViewModifier {
           perform(.start, target: target)
         }
       }
+      .accessibilityIdentifier(session.running ? "session-restart" : "session-start")
       if session.running {
         Button("Stop…", systemImage: "stop") {
           confirmingRestart = false
           confirmation = session
         }
+        .accessibilityIdentifier("session-stop")
       }
     }
     if session.Mode == "pipe" {

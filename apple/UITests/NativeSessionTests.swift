@@ -15,6 +15,22 @@ final class NativeSessionTests: XCTestCase {
       }
       super.record(issue)
     }
+
+    @MainActor func testAddServerSheet() {
+      continueAfterFailure = false
+      let app = XCUIApplication()
+      app.launchArguments = ["--ui-test-first-launch"]
+      app.launch()
+      defer { app.terminate() }
+      XCTAssertTrue(app.staticTexts["Add a server to see its CLI apps."].waitForExistence(timeout: 12))
+      captureCurrent("welcome", app)
+      activate(app.buttons["workspace-add-server"].firstMatch)
+      let invitation = app.secureTextFields["pairing-link"].firstMatch
+      XCTAssertTrue(invitation.waitForExistence(timeout: 12))
+      XCTAssertFalse(app.buttons["workspace-confirm"].firstMatch.isEnabled)
+      activate(app.buttons["workspace-cancel"].firstMatch)
+      XCTAssertTrue(invitation.waitForNonExistence(timeout: 12))
+    }
   #endif
 
   @MainActor func testPairPreviewAndSend() async throws {
@@ -320,13 +336,25 @@ final class NativeSessionTests: XCTestCase {
       let origin = app.frame.origin
       app.coordinate(withNormalizedOffset: .zero)
         .withOffset(CGVector(dx: frame.midX - origin.x, dy: frame.midY - origin.y)).tap()
-      let item = app.buttons[title].firstMatch
-      guard item.wait(for: \.isHittable, toEqual: true, timeout: 12) else {
+      let command = title.replacingOccurrences(of: "…", with: "")
+      let identifier = "session-" + command.lowercased().replacingOccurrences(of: " ", with: "-")
+      let labels = [title, command, command + "..."]
+      let item = app.descendants(matching: .any).matching(
+        NSPredicate(format: "identifier == %@ OR label IN %@", identifier, labels)
+      ).firstMatch
+      guard item.waitForExistence(timeout: 12), item.isEnabled else {
         recordDuoFailure("session-action", in: app)
         XCTFail("The Session menu did not present " + title)
         return
       }
-      activate(item)
+      let row = item.frame.intersection(app.frame)
+      guard !row.isEmpty else {
+        recordDuoFailure("session-action", in: app)
+        XCTFail("The requested Session command was outside the active display")
+        return
+      }
+      app.coordinate(withNormalizedOffset: .zero)
+        .withOffset(CGVector(dx: row.midX - origin.x, dy: row.midY - origin.y)).tap()
     #else
       activate(app.buttons[title].firstMatch)
     #endif
@@ -723,7 +751,9 @@ final class NativeSessionTests: XCTestCase {
     #else
       app.launch()
     #endif
-    captureWelcomeIfEmpty(app)
+    #if os(macOS)
+      captureWelcomeIfEmpty(app)
+    #endif
     let link = try await invitation()
     #if os(macOS)
       if app.state == .notRunning { app.launch() }
@@ -808,26 +838,24 @@ extension XCTestCase {
     #endif
   }
 
-  @MainActor private static var inspectedFirstLaunch = false
+  #if os(macOS)
+    @MainActor private static var inspectedFirstLaunch = false
 
-  @MainActor func captureWelcomeIfEmpty(_ app: XCUIApplication) {
-    guard ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1",
-      !Self.inspectedFirstLaunch else { return }
-    Self.inspectedFirstLaunch = true
-    if app.state == .notRunning { app.launch() }
-    if app.staticTexts["Add a server to see its CLI apps."].firstMatch.waitForExistence(timeout: 3) {
-      #if os(macOS)
+    @MainActor func captureWelcomeIfEmpty(_ app: XCUIApplication) {
+      guard ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1",
+        !Self.inspectedFirstLaunch else { return }
+      Self.inspectedFirstLaunch = true
+      if app.state == .notRunning { app.launch() }
+      if app.staticTexts["Add a server to see its CLI apps."].firstMatch.waitForExistence(timeout: 3) {
         let appearance = XCUIDevice.shared.appearance
         defer { XCUIDevice.shared.appearance = appearance }
         for dark in [false, true] {
           XCUIDevice.shared.appearance = dark ? .dark : .light
           captureCurrent(dark ? "welcome-dark" : "welcome", app)
         }
-      #else
-        captureCurrent("welcome", app)
-      #endif
+      }
     }
-  }
+  #endif
 
   #if os(iOS)
     @MainActor func openTerminalKeys(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {

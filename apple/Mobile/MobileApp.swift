@@ -1,11 +1,21 @@
 import SwiftUI
 
 @main struct MobileApp: App {
-  var body: some Scene { WindowGroup { BrowserView() } }
+  private let workspace: Workspace = {
+    #if DEBUG && targetEnvironment(simulator)
+      if CommandLine.arguments.contains("--ui-test-first-launch") {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        return Workspace(directory: root.path)
+      }
+    #endif
+    return .shared
+  }()
+
+  var body: some Scene { WindowGroup { BrowserView(workspace: workspace) } }
 }
 
 struct BrowserView: View {
-  @ObservedObject private var workspace = Workspace.shared
+  @ObservedObject var workspace: Workspace
   @State private var pairing: Pairing?
   @State private var selected: WorkspaceSession?
   @State private var column = NavigationSplitViewColumn.sidebar

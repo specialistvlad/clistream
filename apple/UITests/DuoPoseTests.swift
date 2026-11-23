@@ -6,7 +6,6 @@
       continueAfterFailure = false
       let app = XCUIApplication()
       app.launch()
-      captureWelcomeIfEmpty(app)
       defer { app.terminate() }
       let link = try await fixtureResponse("QR")
       app.open(try XCTUnwrap(URL(string: link)))
