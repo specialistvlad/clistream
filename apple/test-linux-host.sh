@@ -31,7 +31,7 @@ cleanup(){
 trap cleanup EXIT
 arch=$(docker info --format '{{.Architecture}}')
 case "$arch" in aarch64) arch=arm64 ;; x86_64) arch=amd64 ;; esac
-mkdir "$stage/bin" "$stage/state"
+mkdir "$stage/bin"
 GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build -o "$stage/bin/" ./cmd/... ./scripts/apple-ui
 # Choose a loopback port. The host and container numbers must match
 # for the signed invitation and the fixture URL to work inside and outside.
@@ -40,15 +40,24 @@ let listener = try NWListener(using: .tcp, on: .any)
 listener.newConnectionHandler = { $0.cancel() }
 listener.stateUpdateHandler = { if case .ready = $0 { print(listener.port!.rawValue); exit(0) } }
 listener.start(queue: .main); dispatchMain()')
-container=$(docker run -d --rm --read-only --cap-drop ALL --tmpfs /tmp -w /work \
-  -v "$stage/bin:/work/bin:ro" -v "$stage/state:/state" \
+container=$(docker run -d --read-only --cap-drop ALL --tmpfs /tmp -w /work \
+  -v "$stage/bin:/work/bin:ro" \
   -e CLISTREAM_UI_BROKER_PORT="$port" -e CLISTREAM_UI_FIXTURE_PORT="$port" \
   -p "127.0.0.1:$port:$port/udp" -p "127.0.0.1:$port:$port/tcp" \
   debian:bookworm-slim /work/bin/apple-ui sh -ec \
-  'env | grep "^TEST_RUNNER_CLISTREAM_" > /state/env.tmp && mv /state/env.tmp /state/env && exec sleep infinity')
-for ((i=0; i<200; i++)); do [[ -f "$stage/state/env" ]] && break; sleep .1; done
-[[ -f "$stage/state/env" ]] || { docker logs "$container"; exit 1; }
-while IFS= read -r entry; do export "$entry"; done < "$stage/state/env"
+  'umask 077; env | grep "^TEST_RUNNER_CLISTREAM_" > /tmp/fixture.tmp && mv /tmp/fixture.tmp /tmp/fixture.env && exec sleep infinity')
+# Read the completed fixture environment from its tmpfs. A capability-free
+# container cannot assume write permission on directories owned by the Mac UID.
+for ((i=0; i<240; i++)); do
+  if docker cp "$container:/tmp/fixture.env" "$stage/env" >/dev/null 2>&1; then break; fi
+  [[ $(docker inspect --format '{{.State.Running}}' "$container") == true ]] || break
+  sleep .5
+done
+if [[ ! -s "$stage/env" ]]; then
+  docker inspect --format 'Linux fixture status {{.State.Status}}, exit code {{.State.ExitCode}}' "$container" >&2
+  exit 1
+fi
+while IFS= read -r entry; do export "$entry"; done < "$stage/env"
 result=$(mktemp -d "$PWD/apple/build/results-linux-ui-XXXXXXXX")
 GITHUB_ACTIONS=true apple/acceptance-xcodebuild.sh "$platform" -quiet -project apple/CLIStream.xcodeproj \
   -scheme "CLIStream-$platform" -destination "$destination" \
