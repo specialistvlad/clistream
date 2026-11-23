@@ -40,6 +40,8 @@ Finder checks paired servers independently. If one goes offline, its cached entr
 
 While the extension is running, it checks previously browsed folders for host-side changes about every ten seconds. It also refreshes on enumeration, including after reconnecting. Concurrent document saves preserve the remote original and a conflicted copy, or return a version conflict when the editing app requests one.
 
+After removing the last file, Finder can delete the empty folder even if its displayed version predates that file removal. The provider verifies that the folder still has the same identity and sends a version-checked, nonrecursive delete. A new child on the host prevents the deletion.
+
 ## Future file access
 
 The iPhone, iPad and Duo Files extension is deferred. These apps use the shared terminal and session controls described above.

@@ -7,8 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/specialistvlad/clistream/internal/wire"
+	"golang.org/x/sys/unix"
 )
 
 func TestWorkspaceConcurrentSave(t *testing.T) {
@@ -102,6 +104,64 @@ func TestWorkspaceRechecksHostDuringTransfer(t *testing.T) {
 	data, err := os.ReadFile(file)
 	if err != nil || string(data) != "edited on host" {
 		t.Fatal(string(data), err)
+	}
+}
+
+func TestWorkspaceRemoveEmptiedDirectory(t *testing.T) {
+	base := t.TempDir()
+	folder := filepath.Join(base, "folder")
+	if err := os.Mkdir(folder, 0700); err != nil {
+		t.Fatal(err)
+	}
+	child := filepath.Join(folder, "child")
+	if err := os.WriteFile(child, []byte("before"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(folder, time.Unix(1, 0), time.Unix(1, 0)); err != nil {
+		t.Fatal(err)
+	}
+	root, err := Open(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	snapshot := func() wire.FileEntry {
+		t.Helper()
+		entry, _, err := root.inspect("folder")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return entry
+	}
+	remove := func(entry wire.FileEntry) error {
+		_, err := root.changeWorkspace(wire.Message{Channel: "workspace/remove", Path: "folder", Version: entry.Version})
+		return err
+	}
+	before := snapshot()
+	if err := os.Remove(child); err != nil {
+		t.Fatal(err)
+	}
+	if err := remove(before); !errors.Is(err, errConflict) {
+		t.Fatalf("removing a stale directory: %v", err)
+	}
+	if err := os.WriteFile(child, []byte("new"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	current := snapshot()
+	if current.ID != before.ID {
+		t.Fatal("child changes replaced the directory's identity")
+	}
+	if err := remove(current); !errors.Is(err, unix.ENOTEMPTY) && !errors.Is(err, unix.EEXIST) {
+		t.Fatalf("removing a nonempty directory: %v", err)
+	}
+	if data, err := os.ReadFile(child); err != nil || string(data) != "new" {
+		t.Fatalf("new child changed: %q, %v", data, err)
+	}
+	if err := os.Remove(child); err != nil {
+		t.Fatal(err)
+	}
+	if err := remove(snapshot()); err != nil {
+		t.Fatal(err)
 	}
 }
 

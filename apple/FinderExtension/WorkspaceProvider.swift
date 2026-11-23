@@ -390,9 +390,24 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
       } catch let error as NSError where error.domain == NSFileProviderErrorDomain {
         if error.code == NSFileProviderError.Code.localVersionConflictingWithServer.rawValue {
           let current = try self.existing(at: path, in: self.index.require(node.parent))
-          throw NSError.fileProviderErrorForRejectedDeletion(of: WorkspaceItem(current))
+          let rejected = NSError.fileProviderErrorForRejectedDeletion(of: WorkspaceItem(current))
+          guard node.kind == .directory, current.kind == .directory, current.id == node.id else {
+            throw rejected
+          }
+          // Deleting a child changes its parent's host version. Finder may still
+          // have the previous version when it asks to remove the empty folder.
+          // A nonrecursive removal lets the host check emptiness atomically.
+          do {
+            _ = try WorkspaceService.request("remove", parent: current, path: path,
+              version: current.version, recursive: false, requestID: handle)
+          } catch let retry as NSError where retry.domain == NSFileProviderErrorDomain &&
+            [NSFileProviderError.Code.directoryNotEmpty.rawValue,
+             NSFileProviderError.Code.localVersionConflictingWithServer.rawValue].contains(retry.code) {
+            throw rejected
+          }
+        } else if error.code != NSFileProviderError.Code.noSuchItem.rawValue {
+          throw error
         }
-        if error.code != NSFileProviderError.Code.noSuchItem.rawValue { throw error }
       }
       self.index.remove(node.id)
     }) { result in
