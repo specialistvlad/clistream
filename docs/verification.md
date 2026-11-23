@@ -42,6 +42,8 @@ The iPhone system File Provider dump referenced the same server, host and worksp
 
 On the next shared run, the iPad paired and rendered the child, then the runner lost its mounted iOS 27.2 runtime while booting the iPhone. Xcode could no longer find the device. The shared job now selects the oldest installed iOS 27 runtime that supports each model. The individual iPhone, iPad and Duo jobs continue to select the newest. [Shared job log](https://github.com/specialistvlad/clistream/actions/runs/45257124002/job/137990021870)
 
+The hosted Duo failed during both attempts to migrate a clean iOS 27.2 simulator, before XCTest launched. The manual Test workflow now accepts an optional installed runtime version to exercise the same binary on a second iOS 27 runtime. Automatic jobs retain their device selection. [Duo startup log](https://github.com/specialistvlad/clistream/actions/runs/45275169397)
+
 ## Mac redesign and Finder · November 23, 2026
 
 The Go daemon, supervisor and CLI passed race-enabled tests, end-to-end tests and release archive checks on Linux and macOS. The Linux runner also passed the container deployment tests. The old-binary compatibility suite passed locally on macOS. [Linux results](https://github.com/specialistvlad/clistream/actions/runs/45136905954/job/137567468495) · [Mac results](https://github.com/specialistvlad/clistream/actions/runs/45136905954/job/137567468920)

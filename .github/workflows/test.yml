@@ -14,6 +14,10 @@ on:
         description: Optional comma-separated Class/testMethod names for a single-device run
         required: false
         type: string
+      runtime:
+        description: Optional installed iOS simulator version, for example 27.1
+        required: false
+        type: string
       screenshots:
         description: Capture the screen gallery during the device tests
         required: true
@@ -79,6 +83,7 @@ jobs:
         id: native-ui
         env:
           DEVICE: ${{ matrix.device }}
+          REQUESTED_RUNTIME: ${{ inputs.runtime }}
           CLISTREAM_TEST_CASES: ${{ inputs.cases }}
           TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY: ${{ (github.event_name != 'workflow_dispatch' || inputs.screenshots) && '1' || '0' }}
         run: |
@@ -89,8 +94,9 @@ jobs:
           fi
           simulator() {
             local selected id model runtime
-            selected=$(xcrun simctl list devices available --json | jq -er --arg suite "$DEVICE" --args '
+            selected=$(xcrun simctl list devices available --json | jq -er --arg suite "$DEVICE" --arg version "$REQUESTED_RUNTIME" --args '
               [.devices | to_entries[] | select(.key | contains("iOS-27-"))]
+              | map(select($version == "" or (.key | endswith("iOS-" + ($version | split(".") | join("-"))))))
               | sort_by(.key | capture("iOS-(?<version>[0-9]+(?:-[0-9]+)*)").version | split("-") | map(tonumber))
               | (if $suite == "shared" then . else reverse end)
               | first(.[] as $runtime | $ARGS.positional[] as $model | $runtime.value[]
