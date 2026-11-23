@@ -119,7 +119,9 @@ import OSLog
       let folder = try await manager.getUserVisibleURL(for: id)
       let acquired = folder.startAccessingSecurityScopedResource()
       defer { if acquired { folder.stopAccessingSecurityScopedResource() } }
-      guard NSWorkspace.shared.open(folder) else { throw CocoaError(.fileReadUnknown) }
+      guard NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path) else {
+        throw CocoaError(.fileReadUnknown)
+      }
     } catch {
       let reason = error as NSError
       logger.error("Could not open Finder workspace: \(reason.domain, privacy: .public) \(reason.code)")

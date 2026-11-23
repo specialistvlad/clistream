@@ -41,17 +41,40 @@ make build
 # Compile before booting iOS. Simulator services and the Swift compiler otherwise
 # compete for memory on a cold hosted Mac.
 result=$(mktemp -d "$PWD/apple/build/results-$platform-XXXXXXXX")
-products="$result/CLIStream.xctestproducts"
 (
   cd apple
+  buildAction=(build-for-testing)
+  if [[ $platform == iOS ]]; then
+    buildAction=(-testProductsPath "$result/CLIStream.xctestproducts" build-for-testing)
+  fi
   ./acceptance-xcodebuild.sh "$platform" -quiet -scheme "CLIStream-$platform" -derivedDataPath "build/$dd" \
     -destination "$buildDestination" -jobs 3 CLISTREAM_APP_ID=com.vlk.clistream.acceptance \
-    -testProductsPath "$products" build-for-testing
+    "${buildAction[@]}"
 )
-if [[ $platform == iOS ]]; then apple/boot-simulator.sh "$SIMULATOR_ID"; fi
+if [[ $platform == iOS ]]; then
+  apple/boot-simulator.sh "$SIMULATOR_ID"
+  testPlan=(-testProductsPath "$result/CLIStream.xctestproducts")
+else
+  # Packaged test products create a second copy of the app, with the same
+  # extension identifier. Run this exact Mac build against its embedded provider.
+  products="$PWD/apple/build/$dd/Build/Products"
+  sdkVersion=$(xcrun --sdk macosx --show-sdk-version)
+  plans=("$products"/CLIStream-macOS_macosx"$sdkVersion"-*.xctestrun)
+  [[ ${#plans[@]} -eq 1 && -f ${plans[0]} ]]
+  testPlan=(-xctestrun "${plans[0]}")
+  if [[ -n ${GITHUB_RUN_ID:-} ]]; then
+    app="$products/Debug/CLIStream.app"
+    plugin="$app/Contents/PlugIns/CLIStreamFinder.appex"
+    id=com.vlk.clistream.acceptance.finder
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app" || true
+    /usr/bin/pluginkit -a "$plugin" || true
+    /usr/bin/pluginkit -e use -i "$id" || true
+    /usr/bin/pluginkit -m -ADv -i "$id" || true
+  fi
+fi
 export GITHUB_ACTIONS=true CLISTREAM_HOSTED_TESTS=1
 run_tests() {
-  go run ./scripts/apple-ui xcodebuild -quiet -testProductsPath "$products" -destination "$destination" \
+  go run ./scripts/apple-ui xcodebuild -quiet "${testPlan[@]}" -destination "$destination" \
     -test-timeouts-enabled YES -default-test-execution-time-allowance 600 -maximum-test-execution-time-allowance 600 \
     -parallel-testing-enabled NO -collect-test-diagnostics never -resultBundlePath "$result/native.xcresult" \
     "${tests[@]}" -skip-testing:"$suite/NativeSessionTests/testConcurrentViewers" test-without-building

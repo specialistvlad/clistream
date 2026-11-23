@@ -20,8 +20,12 @@ if [[ "$platform" == macOS ]]; then
   codesign --verify --strict "$extension"
   codesign --verify --strict "$app"
   for bundle in "$app" "$extension"; do
-    group=$(codesign -d --entitlements :- "$bundle" 2>/dev/null | plutil -extract com\\.apple\\.security\\.application-groups.0 raw -)
+    entitlements=$(codesign -d --entitlements :- "$bundle" 2>/dev/null)
+    group=$(plutil -extract 'com\.apple\.security\.application-groups.0' raw - <<<"$entitlements")
     [[ "$group" == "$DEVELOPMENT_TEAM.com.vlk.clistream.workspace" ]]
+    for direction in client server; do
+      [[ $(plutil -extract "com\.apple\.security\.network\.$direction" raw - <<<"$entitlements") == true ]]
+    done
   done
 fi
 if [[ ${ARCHIVE_ONLY:-0} == 1 ]]; then echo "$archive"; exit 0; fi

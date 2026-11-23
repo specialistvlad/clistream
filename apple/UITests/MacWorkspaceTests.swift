@@ -145,7 +145,12 @@ extension NativeSessionTests {
   }
 
   @MainActor func clickMacMenuItem(_ title: String, in app: XCUIApplication) throws {
-    try visibleMacMenuItem(title, in: app).click()
+    // Menu tracking can dismiss the AX element at mouse-down. Resolve its screen
+    // position once and finish the physical click there.
+    let item = try visibleMacMenuItem(title, in: app)
+    let point = item.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).screenPoint
+    let origin = app.windows.firstMatch.coordinate(withNormalizedOffset: .zero)
+    origin.withOffset(CGVector(dx: point.x - origin.screenPoint.x, dy: point.y - origin.screenPoint.y)).click()
   }
 
   @MainActor private func captureMenu(

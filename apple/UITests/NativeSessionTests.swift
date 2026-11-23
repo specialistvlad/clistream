@@ -4,6 +4,22 @@ import XCTest
 #endif
 
 final class NativeSessionTests: XCTestCase {
+  #if os(macOS)
+    @MainActor override func tearDown() async throws {
+      if let run = testRun, run.failureCount + run.unexpectedExceptionCount > 0 {
+        let app = XCUIApplication()
+        if app.state == .runningForeground || app.state == .runningBackground {
+          let diagnostic = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+          let method = name.components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .first(where: { $0.hasPrefix("test") }) ?? "interaction"
+          diagnostic.name = "failed-desktop-" + method
+          diagnostic.lifetime = .keepAlways
+          add(diagnostic)
+        }
+      }
+      try await super.tearDown()
+    }
+  #endif
   @MainActor func testPairPreviewAndSend() async throws {
     let app = try await openPipe()
     func togglePort(_ name: String) {

@@ -53,6 +53,19 @@ private func visibleText(in view: TerminalView) -> String {
 
 #if os(macOS)
   private final class AccessibleTerminal: TerminalView {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+      // SwiftUI command menus participate in AppKit's key-equivalent pass
+      // ahead of keyDown. Preserve the terminal's control-letter bindings.
+      let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+      if window?.firstResponder === self, modifiers == .control,
+        let letter = event.characters(byApplyingModifiers: [])?.lowercased().utf8,
+        letter.count == 1, let byte = letter.first, (97...122).contains(byte) {
+        if getTerminal().keyboardEnhancementFlags.isEmpty { send([byte - 96]) }
+        else { keyDown(with: event) }
+        return true
+      }
+      return super.performKeyEquivalent(with: event)
+    }
     override func mouseDown(with event: NSEvent) {
       window?.makeFirstResponder(self)
       super.mouseDown(with: event)

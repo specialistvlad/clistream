@@ -134,6 +134,8 @@ jobs:
               while IFS=$'\t' read -r file name; do cp "$staging/$file" "results/$name.png"; done
             jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | startswith("finder-open-error-message_")) | .exportedFileName' "$staging/manifest.json" |
               while IFS= read -r file; do cp "$staging/$file" results/finder-open-error-message.txt; done
+            jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | startswith("failed-desktop-")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0])] | @tsv' "$staging/manifest.json" |
+              while IFS=$'\t' read -r file name; do cp "$staging/$file" "results/$name.png"; done
             jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | test("^gallery-[a-z-]+_[0-9]+_[A-Fa-f0-9-]+\\.png$")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0] | ltrimstr("gallery-"))] | @tsv' "$staging/manifest.json" |
               while IFS=$'\t' read -r file name; do cp "$staging/$file" "gallery/$name.png"; done
           done
