@@ -8,6 +8,7 @@ struct MobileServers: View {
   @ObservedObject var invitations: MobileInvitations
   @Environment(\.closedHinge) private var closedHinge
   @Environment(\.regularWorkspace) private var regular
+  @Environment(\.dynamicTypeSize) private var textSize
   @AppStorage("workspace-list") private var flat = false
   @AppStorage("workspace-group") private var grouping = "Server"
   @State private var query = ""
@@ -91,11 +92,15 @@ struct MobileServers: View {
           if query.isEmpty || !rows.isEmpty {
             Section(isExpanded: expanded([server.id])) {
               if let error = workspace.errors[server.id], !error.isEmpty {
-                HStack {
+                let layout = textSize.isAccessibilitySize
+                  ? AnyLayout(VStackLayout(alignment: .leading))
+                  : AnyLayout(HStackLayout())
+                layout {
                   Label("Offline", systemImage: "wifi.slash").foregroundStyle(.secondary)
-                  Spacer()
-                  Button("Retry") { workspace.retry(server) }.buttonStyle(.borderless)
-                    .accessibilityIdentifier("retry-server")
+                  if !textSize.isAccessibilitySize { Spacer() }
+                  Button { workspace.retry(server) } label: {
+                    Text("Retry").font(.body).fixedSize()
+                  }.buttonStyle(.borderless).accessibilityIdentifier("retry-server")
                 }
               }
               if flat {
