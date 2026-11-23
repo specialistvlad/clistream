@@ -1,5 +1,21 @@
 import SwiftUI
 
+struct InvitationPasteButton: View {
+  private struct Invitation: Transferable {
+    let value: String
+    static var transferRepresentation: some TransferRepresentation {
+      ProxyRepresentation(importing: { (text: String) in Self(value: text) })
+      ProxyRepresentation(importing: { (url: URL) in Self(value: url.absoluteString) })
+    }
+  }
+  let review: (String) -> Void
+  var body: some View {
+    PasteButton(payloadType: Invitation.self) { items in
+      if let invitation = items.first { review(invitation.value) }
+    }
+  }
+}
+
 @MainActor final class MobileInvitations: ObservableObject {
   enum Page { case review, scan }
   @Published var page: Page?
@@ -9,10 +25,6 @@ import SwiftUI
   func add(_ value: String = "") {
     link = value
     page = .review
-  }
-  func paste() {
-    let board = UIPasteboard.general
-    add(board.string ?? board.url?.absoluteString ?? "")
   }
   func scan() { page = .scan }
   @discardableResult func scanned(_ value: String) -> Bool {
@@ -78,7 +90,7 @@ private struct MobileInvitationSheet: View {
             SecureField("Pairing link", text: $flow.link, prompt: Text("clistream://host/?token=…"))
               .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
               .accessibilityIdentifier("pairing-link")
-            Button("Paste Invitation", systemImage: "doc.on.clipboard", action: flow.paste)
+            InvitationPasteButton(review: flow.add).accessibilityIdentifier("pairing-paste-invitation")
             Button("Scan QR Code", systemImage: "qrcode.viewfinder", action: flow.scan)
           } header: {
             Text("Invitation")

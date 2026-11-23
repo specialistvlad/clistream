@@ -413,18 +413,6 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 		}
 		mux.HandleFunc(path+"pasteboard/", prepareInput)
 		mux.HandleFunc(path+"scan-sample/", prepareInput)
-		mux.HandleFunc(path+"accept-paste", func(w http.ResponseWriter, r *http.Request) {
-			// SpringBoard can show consent while the app's synchronous paste action
-			// is waiting. Operate only its named paste button on the isolated device.
-			ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-			defer cancel()
-			err := exec.CommandContext(ctx, "axe", "tap", "--label", "Allow Paste", "--wait-timeout", "12", "--udid", id).Run()
-			if err != nil {
-				fmt.Fprint(w, "no consent button")
-				return
-			}
-			fmt.Fprint(w, "allowed")
-		})
 	}
 	for _, op := range []string{"QR", "PIPE", "PORTS", "PTY", "FLUSH", "DRIVERS"} {
 		mux.HandleFunc(path+op, issue)

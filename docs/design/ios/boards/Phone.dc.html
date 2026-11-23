@@ -106,7 +106,7 @@ button{font:inherit;color:inherit;cursor:default}
 <p style="margin: 0; font-size: 17px; line-height: 22px; color: {{t.secondary}}">Scan the QR code that clistreamd shows, or paste its invitation. Invitations last three minutes.</p>
 </div>
 <div style="position: absolute; left: 36px; right: 36px; bottom: 44px; display: flex; flex-direction: column; gap: 10px">
-<button type="button" style="height: 50px; border-radius: 25px; border: none; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; font-size: 17px; font-weight: 600; color: {{accent}}">Paste Invitation</button>
+<button type="button" style="height: 50px; border-radius: 25px; border: none; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; font-size: 17px; font-weight: 600; color: {{accent}}">Paste</button>
 <button type="button" style="height: 50px; border-radius: 25px; border: none; background: {{accent}}; font-size: 17px; font-weight: 600; color: #FFFFFF; display: flex; align-items: center; justify-content: center; gap: 8px"><span class="sf sf-qrcode-viewfinder" aria-hidden="true" style="width: 20px; height: 19px"></span>Scan QR Code</button>
 </div>
 </sc-if>
@@ -225,7 +225,7 @@ button{font:inherit;color:inherit;cursor:default}
 </div>
 <p style="position: absolute; left: 28px; right: 28px; top: 458px; margin: 0; text-align: center; font-size: 17px; font-weight: 600; line-height: 22px">Point the camera at the QR code in the clistreamd terminal.</p>
 <p style="position: absolute; left: 28px; right: 28px; top: 514px; margin: 0; text-align: center; font-size: 15px; line-height: 20px; color: {{t.secondary}}">Open clistreamd in a terminal to show the code. Invitations last three minutes.</p>
-<button type="button" style="position: absolute; left: 20px; right: 20px; bottom: 34px; height: 50px; border-radius: 25px; border: none; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; font-size: 17px; font-weight: 600; color: {{accent}}; display: flex; align-items: center; justify-content: center; gap: 8px"><span class="sf sf-doc-on-clipboard" aria-hidden="true" style="width: 17px; height: 20px"></span>Paste Invitation</button>
+<button type="button" style="position: absolute; left: 20px; right: 20px; bottom: 34px; height: 50px; border-radius: 25px; border: none; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; font-size: 17px; font-weight: 600; color: {{accent}}; display: flex; align-items: center; justify-content: center; gap: 8px"><span class="sf sf-doc-on-clipboard" aria-hidden="true" style="width: 17px; height: 20px"></span>Paste</button>
 </sc-if>
 </div>
 </sc-if>
@@ -338,7 +338,7 @@ class Component extends DCLogic {
         group([cell('web', { sub: 'TCP · 127.0.0.1:8080', toggle: true, first: true }), cell('127.0.0.1:8081', { monoTitle: true, copy: true }), cell('metrics', { sub: 'UDP · 127.0.0.1:9125', toggle: false })], '', 'Forwards keep running when you close this sheet.')
       ] },
       pair: { title: 'Add Server', confirm: true, confirmLabel: 'Pair', height: '790px', groups: [
-        group([cell('•••••••••••••••••••••••••', { first: true }), cell('Paste Invitation', { accent: true, icon: 'sf-doc-on-clipboard' }), cell('Scan QR Code', { accent: true, icon: 'sf-qrcode-viewfinder' })], 'Invitation', 'Scan or paste the invitation from clistreamd. Invitations last three minutes.'),
+        group([cell('•••••••••••••••••••••••••', { first: true }), cell('Paste', { accent: true, icon: 'sf-doc-on-clipboard' }), cell('Scan QR Code', { accent: true, icon: 'sf-qrcode-viewfinder' })], 'Invitation', 'Scan or paste the invitation from clistreamd. Invitations last three minutes.'),
         group([cell('Address', { detail: '192.168.1.20:7443', first: true }), cell('Identity', { detail: '4F2A 91C3 … 7D0E', mono: true })], 'Server', 'Check the server before pairing. This device can then control every CLI on it.')
       ] },
       scan: { title: 'Scan QR Code', confirm: false, confirmLabel: '', height: '790px', groups: [] },

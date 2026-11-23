@@ -37,9 +37,9 @@ struct MobileServers: View {
         }
         .safeAreaInset(edge: .bottom) {
           VStack {
-            Button(action: invitations.paste) {
-              Text("Paste Invitation").frame(maxWidth: .infinity)
-            }.buttonStyle(.glass).foregroundStyle(.tint)
+            InvitationPasteButton(review: invitations.add)
+              .accessibilityIdentifier("welcome-paste-invitation")
+              .buttonStyle(.glass).frame(maxWidth: .infinity)
             Button(action: invitations.scan) {
               Label("Scan QR Code", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
             }.buttonStyle(.glassProminent)

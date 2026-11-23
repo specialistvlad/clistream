@@ -82,26 +82,37 @@ extension NativeSessionTests {
     try await capture("scan-qr", app)
     let copied = try await fixtureResponse("pasteboard/invitation")
     XCTAssertEqual(copied, "ready")
-    async let consent = fixtureResponse("accept-paste")
-    app.buttons["scanner-paste-invitation"].firstMatch.tap()
-    _ = try await consent
+    let paste = app.buttons["scanner-paste-invitation"].firstMatch
+    XCTAssertTrue(paste.wait(for: \.isEnabled, toEqual: true, timeout: 12))
+    paste.tap()
     let confirm = pairingButton(in: app)
     guard confirm.wait(for: \.isEnabled, toEqual: true, timeout: 12) else {
       let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
       screenshot.name = "mobile-invitation-window"
       screenshot.lifetime = .keepAlways
       add(screenshot)
-      XCTFail("Paste Invitation did not present the reviewed server")
+      XCTFail("Paste did not present the reviewed server")
       return
     }
     XCTAssertTrue(app.descendants(matching: .any)["pairing-identity"].firstMatch.exists)
     try await capture("add-server", app)
     app.buttons["workspace-cancel"].tap()
     XCTAssertTrue(app.staticTexts["No Servers"].waitForExistence(timeout: 10))
+    app.buttons["welcome-paste-invitation"].firstMatch.tap()
+    XCTAssertTrue(confirm.wait(for: \.isEnabled, toEqual: true, timeout: 12))
+    app.buttons["workspace-cancel"].tap()
+    app.buttons["workspace-add-server"].firstMatch.tap()
+    app.buttons["pairing-paste-invitation"].firstMatch.tap()
+    XCTAssertTrue(confirm.wait(for: \.isEnabled, toEqual: true, timeout: 12))
+  }
 
-    app.terminate()
-    app.launchArguments += ["--ui-test-camera-denied"]
+  @MainActor func testCameraDenialAndScannedInvitationReview() async throws {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    app.launchArguments = ["--ui-test-first-launch", "--ui-test-camera-denied"]
     app.launch()
+    addTeardownBlock { @MainActor in app.terminate() }
+    let scan = app.buttons["workspace-scan"].firstMatch
     scan.tap()
     XCTAssertTrue(app.staticTexts["Allow Camera Access"].waitForExistence(timeout: 10))
     XCTAssertTrue(app.buttons["Open Settings"].exists)
@@ -112,6 +123,7 @@ extension NativeSessionTests {
     app.launch()
     scan.tap()
     XCTAssertTrue(app.staticTexts["Camera Unavailable"].waitForExistence(timeout: 10))
+    let confirm = pairingButton(in: app)
     XCTAssertFalse(confirm.exists)
     app.buttons["workspace-cancel"].tap()
     _ = try await fixtureResponse("scan-sample/invitation")

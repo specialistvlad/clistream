@@ -39,7 +39,7 @@ struct MobileScanner: View {
       }.multilineTextAlignment(.center).padding()
     }
     .safeAreaInset(edge: .bottom) {
-      Button("Paste Invitation", systemImage: "doc.on.clipboard", action: flow.paste)
+      InvitationPasteButton(review: flow.add)
         .accessibilityIdentifier("scanner-paste-invitation").buttonStyle(.glass).controlSize(.large).padding()
     }
     .navigationTitle("Scan QR Code").navigationBarTitleDisplayMode(.inline)

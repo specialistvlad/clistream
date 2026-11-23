@@ -71,7 +71,7 @@ Sheets follow the kit: inset 8 pt from the screen edges, radius 40, grabber, a g
 | Sheet | Detent | Content |
 |---|---|---|
 | Ports | Medium | One row per export: name, `TCP · 127.0.0.1:8080` subtitle, 64 × 28 toggle. An enabled forward adds a row with the local address in SF Mono and a **Copy** circle. Footer: `Forwards keep running when you close this sheet.` No Confirm button. |
-| Add Server | Large | **Invitation** section: masked link field, **Paste Invitation** (`doc.on.clipboard`) and **Scan QR Code** (`qrcode.viewfinder`). Footer: `Scan or paste the invitation from clistreamd. Invitations last three minutes.` **Server** section after a valid link: Address and Identity (SF Mono fingerprint). Footer: `Check the server before pairing. This device can then control every CLI on it.` Confirm reads **Pair**. |
+| Add Server | Large | **Invitation** section: masked link field, **Paste** (`doc.on.clipboard`) and **Scan QR Code** (`qrcode.viewfinder`). Footer: `Scan or paste the invitation from clistreamd. Invitations last three minutes.` **Server** section after a valid link: Address and Identity (SF Mono fingerprint). Footer: `Check the server before pairing. This device can then control every CLI on it.` Confirm reads **Pair**. |
 | Restart or Start | Medium | **Command** section with the SF Mono command field. Footer: `Quote arguments that contain spaces. Use "" for an empty argument. Restarting ends the current run for everyone connected.` Confirm reads **Restart** or **Start**. |
 
 ### Scan QR Code
@@ -83,7 +83,7 @@ Scan QR Code opens a large-detent sheet titled `Scan QR Code`, with Close and no
 | Camera view | Square, full sheet width minus 16 pt margins (354 pt on iPhone Pro), radius 32. Live camera feed. |
 | Code frame | Four white corner brackets, 40 pt long and 4 pt thick with a 20 pt radius, framing a 228 pt square in the center. They follow the detected code. |
 | Instruction | `Point the camera at the QR code in the clistreamd terminal.` in Headline, centered. Below it, in Subheadline secondary: `Open clistreamd in a terminal to show the code. Invitations last three minutes.` |
-| Fallback | **Paste Invitation** (`doc.on.clipboard`) as a 50 pt glass capsule at the bottom. |
+| Fallback | **Paste** (`doc.on.clipboard`) as a 50 pt glass capsule at the bottom. |
 | Detected code | A valid `clistream://` link closes the scanner and opens the Add Server sheet with the invitation filled in and the Server section showing, ready for review and **Pair**. Any other code leaves the scanner open. |
 | No camera | When scanning is unavailable, the camera view shows `ContentUnavailableView` with `qrcode.viewfinder`, title `Camera Unavailable` and `Paste the invitation instead.` When access is denied, the title is `Allow Camera Access` with `Turn on camera access for CLIStream in Settings to scan QR codes.` and an **Open Settings** button. |
 
@@ -103,7 +103,7 @@ Alerts follow the kit: 300 pt wide, radius 34, left-aligned title in Headline Bo
 
 ## Empty state
 
-`ContentUnavailableView`: `network` symbol in accent (56 pt), title `No Servers` (Title 2 Bold), message `Scan the QR code that clistreamd shows, or paste its invitation. Invitations last three minutes.` Two 50 pt capsule buttons at the bottom: **Paste Invitation** (glass, accent text) and **Scan QR Code** (accent fill, with `qrcode.viewfinder`). Add Server stays in the toolbar.
+`ContentUnavailableView`: `network` symbol in accent (56 pt), title `No Servers` (Title 2 Bold), message `Scan the QR code that clistreamd shows, or paste its invitation. Invitations last three minutes.` Two 50 pt capsule buttons at the bottom: **Paste** (glass, accent text) and **Scan QR Code** (accent fill, with `qrcode.viewfinder`). Add Server stays in the toolbar.
 
 ## Features this design introduces on iOS
 
@@ -113,7 +113,7 @@ Alerts follow the kit: 300 pt wide, radius 34, left-aligned title in Headline Bo
 | Swipe actions | Restart and Stop from the servers list without opening the terminal. |
 | Bottom search | Filters the servers list, as on the Mac. |
 | Scan QR Code | Scans the QR code that clistreamd shows with the device camera and opens the Add Server sheet with the invitation, on iPhone, iPad and both Duo screens. Scanning with the system Camera app keeps working as before. |
-| Paste Invitation | Reads a `clistream://` link from the pasteboard into the Add Server sheet. |
+| Paste | Apple’s system Paste button accepts a copied invitation as text or a URL and opens Add Server for review. Pair confirms enrollment. |
 | Show in Files | Exposes the writable session workspace in the Files app. **Show in Files** displays its exact path under Browse → CLIStream and directions for enabling the location. [Native Apple clients](../../apple-client-design.md#files-workspaces-on-iphone-ipad-and-duo) |
 | Remove Server… | Long-press a server header, as on the Mac. |
 

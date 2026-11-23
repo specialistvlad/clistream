@@ -55,7 +55,7 @@ You are implementing the iOS 27 redesign of the CLIStream app on its three targe
    3. Terminal toolbar per target: inline title and subtitle, Ports and Session on iPhone, capsule groups on iPad and the Duo inner screen, stacked circles on the Duo outer screen. On iPad and the Duo inner screen, connection status and PTY size move into the navigation subtitle and the bottom status line goes away.
    4. Key bar: the floating glass capsule above the keyboard, the Show Keyboard circle, horizontal overflow for `~ | / -` and F1–F8.
    5. Session menu: control row and actions, replacing the Keys submenu.
-   6. Sheets and inspector: Ports (sheet on compact, inspector on regular), Add Server with Paste Invitation and Scan QR Code, Restart and Start.
+   6. Sheets and inspector: Ports (sheet on compact, inspector on regular), Add Server with Paste and Scan QR Code, Restart and Start.
    7. Scan QR Code: the VisionKit scanner sheet, its unavailable and denied states, the camera usage string, and the hand-off to Add Server.
    8. Alerts and empty state: Stop, Remove Server, pairing error, first launch.
    9. Show in Files per step 3.
@@ -68,6 +68,6 @@ You are implementing the iOS 27 redesign of the CLIStream app on its three targe
    ```
 
    Build the macOS scheme the same way after any change to shared code.
-5. **Update the tests.** Adjust `SessionTests`, `NativeSessionTests` and `DuoPoseTests` to the new list, toolbar, key bar and menu. Add cases for swipe Restart and Stop, the key bar keys, search filtering, Paste Invitation, the Ports inspector on regular width and the Duo outer toolbar column. Simulators have no camera, so cover Scan QR Code through its button, the `Camera Unavailable` state and a test hook that hands a scanned link to Add Server. Done when every spec.md feature has a test that would fail without it.
+5. **Update the tests.** Adjust `SessionTests`, `NativeSessionTests` and `DuoPoseTests` to the new list, toolbar, key bar and menu. Add cases for swipe Restart and Stop, the key bar keys, search filtering, Paste, the Ports inspector on regular width and the Duo outer toolbar column. Simulators have no camera, so cover Scan QR Code through its button, the `Camera Unavailable` state and a test hook that hands a scanned link to Add Server. Done when every spec.md feature has a test that would fail without it.
 6. **Update the docs.** Bring `docs/apple-client-design.md` (pairing, touch-only operation and session controls), the README feature table, `docs/requirements.md` where behavior changes, and `docs/implementation-plan.md` in line with the shipped behavior. Change spec.md only where the owner approves a deviation. Done when every document describes what the app now does.
 7. **Verify on the hosted matrix.** Push to `main` as AGENTS.md describes. The Test workflow runs macOS, iPhone, iPad, Duo and the shared four-client suite. Rerun single devices or cases with **Actions › Test › Run workflow**. Compare the iPhone, iPad and Duo gallery screenshots with each row of spec.md's Screens table, light and dark, including the Duo's closed, partially open and open poses. Record commands, run links and results in `docs/verification.md`. Done when all five matrix jobs pass and every Screens row has a matching screenshot.
