@@ -73,6 +73,7 @@ func report(bundle string) error {
 					"not hittable", "not in the foreground", "failed to type",
 					"failed to click", "failed to tap", "failed to install or launch",
 					"timed out waiting for ax loaded notification", "(ipc/mig) server died",
+					"runtime path not found",
 					"invalid device state", "timed out", "xctasserttrue failed", "xctassertequal failed",
 				} {
 					if strings.Contains(reason, kind) {

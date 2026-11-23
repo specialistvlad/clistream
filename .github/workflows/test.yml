@@ -55,7 +55,7 @@ jobs:
     env:
       CLISTREAM_MAC_DEVELOPMENT_TEAM: ${{ vars.CLISTREAM_MAC_DEVELOPMENT_TEAM }}
     # A cold iOS runtime must finish migrating before the per-case watchdogs start.
-    timeout-minutes: ${{ (matrix.device == 'Duo' || matrix.device == 'macOS') && 95 || 65 }}
+    timeout-minutes: ${{ (matrix.device == 'Duo' || matrix.device == 'macOS' || matrix.device == 'iPad') && 95 || 65 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -117,6 +117,20 @@ jobs:
               apple/test-native.sh ;;
             Duo) SIMULATOR_ID="$(simulator 'iPhone Duo')" apple/test-native.sh ;;
           esac
+      - name: Report native failures before starting the Linux VM
+        if: ${{ failure() && steps.native-ui.outcome == 'failure' && (matrix.device == 'macOS' || matrix.device == 'iPad') }}
+        run: |
+          mkdir -p native-reports
+          for bundle in apple/build/results-*/*.xcresult; do
+            [[ -f "$bundle/Info.plist" ]] || continue
+            go run ./scripts/apple-report "$bundle" > "native-reports/$(basename "$bundle" .xcresult).json"
+          done
+      - uses: actions/upload-artifact@v4
+        if: ${{ failure() && steps.native-ui.outcome == 'failure' && (matrix.device == 'macOS' || matrix.device == 'iPad') }}
+        with:
+          name: native-report-${{ matrix.device }}
+          path: native-reports/*.json
+          if-no-files-found: ignore
       - name: Verify the file provider against a Linux workspace
         if: ${{ !cancelled() && steps.build-apple.outcome == 'success' && ((matrix.device == 'macOS' && (!inputs.cases || contains(inputs.cases, 'testFinderWorkspaceRoundTrip'))) || (matrix.device == 'iPad' && (!inputs.cases || contains(inputs.cases, 'testFilesWorkspaceRoundTrip')))) }}
         env:

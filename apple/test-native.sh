@@ -84,9 +84,13 @@ if ! run_tests; then
       ((.failureKinds // []) |
         index("timed out waiting for ax loaded notification") != null or
         (index("failed to install or launch") != null and index("(ipc/mig) server died") != null));
-    any(.cases[]; runnerInitialization) and
-    all(.cases[]; runnerInitialization or
-      ((.test | startswith("ClientTests/")) and (.result == "Passed" or .result == "Skipped")))
+    def missingRuntime:
+      (.test == "CLIStream encountered an error" or .test == "CLIStreamUITests-Runner encountered an error") and
+      .result == "Failed" and ((.failureKinds // []) | index("runtime path not found") != null);
+    (any(.cases[]; runnerInitialization) and
+      all(.cases[]; runnerInitialization or
+        ((.test | startswith("ClientTests/")) and (.result == "Passed" or .result == "Skipped")))) or
+      (.cases | length > 0 and all(.[]; missingRuntime))
   ' "$result/first-attempt.json" >/dev/null || exit 1
   mv "$result/native.xcresult" "$result/runner-initialization.xcresult"
   echo "Restarting the isolated simulator after a test runner initialization failure."
