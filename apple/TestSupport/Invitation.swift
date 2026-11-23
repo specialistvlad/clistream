@@ -27,12 +27,20 @@ func fixtureResponse(
     request.timeoutInterval = 17 * 60
   } else if purpose == "EXPIRED" || purpose.hasPrefix("pose/") {
     request.timeoutInterval = 310
-  } else if purpose.hasPrefix("pose-screenshot/") || purpose.hasPrefix("appearance/") {
+  } else if purpose == "HID" || purpose.hasPrefix("pose-screenshot/") || purpose.hasPrefix("appearance/") {
     request.timeoutInterval = 120
   } else {
     request.timeoutInterval = 45
   }
-  let (data, response) = try await URLSession.shared.data(for: request)
+  let data: Data
+  let response: URLResponse
+  do {
+    (data, response) = try await URLSession.shared.data(for: request)
+  } catch let error as URLError {
+    // Report the failing test step. The underlying URL contains a private fixture path.
+    XCTFail("Fixture operation \(purpose) failed with URL error \(error.errorCode)", file: file, line: line)
+    throw URLError(error.code)
+  }
   let status = (response as? HTTPURLResponse)?.statusCode
   if status != 200 { await onHTTPFailure?() }
   XCTAssertEqual(status, 200, "Fixture operation \(purpose)", file: file, line: line)

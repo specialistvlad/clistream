@@ -157,13 +157,19 @@ func interactionRoutes(mux *http.ServeMux, path, root string, link []byte) error
 	mux.HandleFunc(path+"WORD", touch)
 	mux.HandleFunc(path+"EXTEND", touch)
 	mux.HandleFunc(path+"HID", func(w http.ResponseWriter, r *http.Request) {
+		keys := filepath.Join(root, "keys")
+		before, err := os.ReadFile(keys)
+		if err != nil {
+			http.Error(w, "terminal input unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		if err := exec.CommandContext(r.Context(), "axe", "key-combo", "--modifiers", "224", "--key", "7", "--udid", udid).Run(); err != nil {
 			http.Error(w, "keyboard delivery failed", 500)
 			return
 		}
 		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
-			data, _ := os.ReadFile(filepath.Join(root, "keys"))
-			if bytes.Contains(data, []byte{4}) {
+			data, _ := os.ReadFile(keys)
+			if len(data) > len(before) && bytes.Contains(data[len(before):], []byte{4}) {
 				fmt.Fprint(w, "delivered")
 				return
 			}
