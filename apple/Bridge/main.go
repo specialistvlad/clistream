@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"slices"
 	"strings"
 	"sync"
@@ -228,6 +229,10 @@ func CSCall(raw *C.char) *C.char {
 	}
 	if e != nil {
 		r.Error = e.Error()
+		var timeout net.Error
+		if q.Op == "command" && errors.As(e, &timeout) && timeout.Timeout() {
+			r.ErrorKind = "transport-timeout"
+		}
 	}
 	b, _ := json.Marshal(r)
 	return C.CString(string(b))

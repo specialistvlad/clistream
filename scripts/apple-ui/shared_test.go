@@ -33,14 +33,17 @@ func TestSharedPadUsesTheVisibleTerminalAndItsKeyboard(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
 	t.Setenv("INPUT_LOG", filepath.Join(dir, "input"))
+	t.Setenv("AX_WELCOME", `{"data":{"result":{"AXLabel":"CLIStream","children":[
+{"AXLabel":"Add Server","frame":{"x":30,"y":20,"width":10,"height":10}}]}}}`)
 	t.Setenv("AX_SCREEN", `{"data":{"result":[{"type":"Application","children":[
 {"AXUniqueId":"workspace-confirm","AXLabel":"Pair device"},
+{"type":"SecureTextField","AXLabel":"Pairing link","frame":{"x":40,"y":50,"width":20,"height":10}},
 {"AXUniqueId":"session-terminal","AXValue":"preview-ready\nout:shared-cli\nout:shared-mac\nout:shared-phone\nout:shared-pad\nout:independent-phone"}]}]}}`)
 	for name, stub := range map[string]string{
 		"xcrun": "#!/bin/sh\nexit 0\n",
 		"axe": `#!/bin/sh
 case "$*" in
-  *describe-ui*) printf '%s\n' "$AX_SCREEN" ;;
+  *describe-ui*) if [ -s "$INPUT_LOG" ]; then printf '%s\n' "$AX_SCREEN"; else printf '%s\n' "$AX_WELCOME"; fi ;;
   *'type --stdin'*) IFS= read -r link || :; [ "$link" = 'clistream://example' ] || exit 1; echo "$*" >> "$INPUT_LOG" ;;
   *) echo "$*" >> "$INPUT_LOG" ;;
 esac
@@ -75,7 +78,7 @@ esac
 	if err != nil {
 		t.Fatal(err)
 	}
-	const gestures = "tap --id workspace-add-server\ntap --id pairing-link\ntype --stdin --layout us\ntap --label Pair device\ntap --id session-child\ntap --id session-terminal\ntype shared-pad\nkey 40"
+	const gestures = "tap -x 35.0 -y 25.0\ntap -x 50.0 -y 55.0\ntype --stdin --layout us\ntap --label Pair device\ntap --id session-child\ntap --id session-terminal\ntype shared-pad\nkey 40"
 	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
 	want := strings.Split(gestures, "\n")
 	if len(lines) != len(want) {
@@ -91,15 +94,52 @@ esac
 func TestTabletScreenReadsOnlyVisibleTerminalEcho(t *testing.T) {
 	raw := []byte(`{"data":{"result":{"children":[
 {"type":"Text","AXValue":"out:shared-phone"},
-{"hidden":true,"AXUniqueId":"session-terminal","AXValue":"out:shared-pad"},
+{"hidden":true,"children":[{"AXUniqueId":"session-terminal","AXValue":"out:shared-pad"},
+{"AXLabel":"Add Server","frame":{"x":20,"y":20,"width":10,"height":10}}]},
 {"AXUniqueId":"session-terminal","AXValue":"out:shared-cli"}
 ]}}}`)
-	text, err := readTabletTerminal(raw)
+	screen, err := readTabletScreen(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if text != "out:shared-cli" {
-		t.Fatalf("unexpected selected terminal text: %s", text)
+	if screen.terminal != "out:shared-cli" || screen.add.visible() {
+		t.Fatalf("unexpected visible elements: %+v", screen)
+	}
+}
+
+func TestTabletCanOpenPairingWithCollapsedSidebar(t *testing.T) {
+	for _, tc := range []struct{ name, control, want string }{
+		{"system sidebar toggle", `{"AXLabel":"Show Sidebar","frame":{"x":6,"y":6,"width":8,"height":8}}`, "tap -x 10.0 -y 10.0"},
+		{"app keyboard shortcut", `{"AXLabel":"Select a CLI"}`, "key-combo --modifiers 227 --key 14"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("PATH", dir)
+			t.Setenv("SCREEN_FILE", filepath.Join(dir, "screen"))
+			const stub = "#!/bin/sh\nIFS= read -r screen < \"$SCREEN_FILE\" || :\nprintf '%s' \"$screen\"\n"
+			if err := os.WriteFile(filepath.Join(dir, "axe"), []byte(stub), 0700); err != nil {
+				t.Fatal(err)
+			}
+			screen := func(node string) {
+				t.Helper()
+				if err := os.WriteFile(os.Getenv("SCREEN_FILE"), []byte(`{"data":{"result":`+node+`}}`), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			screen(tc.control)
+			var calls []string
+			input := func(_ context.Context, args ...string) error {
+				calls = append(calls, strings.Join(args, " "))
+				screen(`{"AXLabel":"Pair a server","children":[{"AXUniqueId":"pairing-link","frame":{"x":10,"y":10,"width":4,"height":4}}]}`)
+				return nil
+			}
+			if err := openTabletInvitation(t.Context(), "tablet", input); err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Join(calls, "\n"); got != tc.want+"\ntap -x 12.0 -y 12.0" {
+				t.Fatal(got)
+			}
+		})
 	}
 }
 

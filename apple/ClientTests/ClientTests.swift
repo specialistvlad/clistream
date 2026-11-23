@@ -7,6 +7,47 @@ import XCTest
 
 /// Runs in the built app on macOS or in the iOS simulator. All calls use its linked Go client.
 final class ClientTests: XCTestCase {
+  func testCommandLookupRetry() async {
+    var target = SessionInfo(ID: "child", Name: "sh", Mode: "pipe", Host: "mac", OS: "darwin", Ports: nil)
+    target.supervisor = "supervisor"
+    target.revision = 17
+    let timeout = Reply(Error: "deadline exceeded", ErrorKind: "transport-timeout")
+    let command = Reply(Command: [Data("/bin/sh".utf8)])
+    func perform(_ action: SessionAction, _ first: Reply, then second: Reply = Reply(),
+                 cancel: Bool = false) async -> (Int, Reply) {
+      var calls = 0
+      let reply = await Core.action(action, directory: "/fixture", target: target,
+                                    arguments: nil, columns: nil, rows: nil) { fields in
+        XCTAssertEqual(fields["Op"] as? String, action.rawValue)
+        XCTAssertEqual(fields["Dir"] as? String, "/fixture")
+        XCTAssertEqual(fields["ID"] as? String, "supervisor")
+        XCTAssertEqual(fields["Run"] as? String, "child")
+        XCTAssertEqual(fields["Revision"] as? UInt64, 17)
+        calls += 1
+        if cancel { withUnsafeCurrentTask { $0?.cancel() } }
+        return calls == 1 ? first : second
+      }
+      return (calls, reply)
+    }
+    let (successAttempts, recovered) = await perform(.command, timeout, then: command)
+    XCTAssertEqual(successAttempts, 2)
+    XCTAssertEqual(recovered.Command, command.Command)
+    let (attempts, exhausted) = await perform(.command, timeout, then: timeout)
+    XCTAssertEqual(attempts, 2)
+    XCTAssertEqual(exhausted.ErrorKind, "transport-timeout")
+    for action: SessionAction in [.launch, .restart, .start, .stop, .result] {
+      let (attempts, _) = await perform(action, timeout)
+      XCTAssertEqual(attempts, 1, action.rawValue)
+    }
+    for reply in [command, Reply(Error: "deadline exceeded"),
+                  Reply(Error: "stale supervisor"), Reply(Error: "client authorization required")] {
+      let (attempts, _) = await perform(.command, reply)
+      XCTAssertEqual(attempts, 1)
+    }
+    let cancelled = await Task { await perform(.command, timeout, cancel: true) }.value
+    XCTAssertEqual(cancelled.0, 1)
+  }
+
   func profile(_ fixture: String) async throws -> String {
     let link = try await fixtureResponse(fixture)
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

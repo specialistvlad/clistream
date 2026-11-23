@@ -31,6 +31,7 @@ struct Reply: Decodable {
   var Command: [Data]?
   var Run: String?
   var Error: String?
+  var ErrorKind: String?
   var Handle: String?
   var Sessions: [SessionInfo]?
   var Address: String?

@@ -256,7 +256,13 @@ final class NativeSessionTests: XCTestCase {
     #endif
     action("Restart…", app)
     let field = app.textFields["command-line"].firstMatch
-    if !field.waitForExistence(timeout: 12) {
+    // Opening the review sheet may need a second read after a transport timeout.
+    // Surface a rejected read immediately, and keep the UI and output assertions.
+    let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+      field.exists || app.alerts["Session action failed"].firstMatch.exists
+    }, object: nil)
+    let outcome = await XCTWaiter.fulfillment(of: [settled], timeout: 60)
+    if outcome != .completed || !field.exists {
       let attachment = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
       attachment.name = "command-review-window"
       attachment.lifetime = .keepAlways

@@ -47,7 +47,8 @@ extension Core {
 
   static func action(
     _ action: SessionAction, directory: String, target: SessionInfo,
-    arguments: [Data]?, columns: Int?, rows: Int?
+    arguments: [Data]?, columns: Int?, rows: Int?,
+    transport: ([String: Any]) async -> Reply = Core.request
   ) async -> Reply {
     var fields: [String: Any] = [
       "Op": action.rawValue, "Dir": directory, "ID": target.id,
@@ -58,6 +59,13 @@ extension Core {
       fields["Cols"] = columns
       fields["Rows"] = rows
     }
-    return await request(fields)
+    guard !Task.isCancelled else { return Reply(Error: CancellationError().localizedDescription) }
+    let reply = await transport(fields)
+    // The command lookup only reads the reviewed run. A lost reply to a
+    // lifecycle mutation cannot tell us whether the supervisor applied it.
+    if action == .command, reply.ErrorKind == "transport-timeout", !Task.isCancelled {
+      return await transport(fields)
+    }
+    return reply
   }
 }
