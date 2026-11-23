@@ -290,6 +290,7 @@ final class NativeSessionTests: XCTestCase {
     XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
     try await capture("terminal", app)
     XCTAssertFalse(app.buttons["Restart"].exists)
+    let previous = try await fixtureResponse("CONTROL-COUNT")
     #if os(iOS)
       openTerminalKeys(in: app)
       let control = app.buttons["Control Key"].firstMatch
@@ -302,12 +303,44 @@ final class NativeSessionTests: XCTestCase {
       captureCurrent("control-keys", app)
       activate(app.buttons["Control-C"])
     #else
-      view.click()
-      view.typeKey("c", modifierFlags: .control)
+      sendControlC(to: view, in: app)
     #endif
-    let received = XCTNSPredicateExpectation(
-      predicate: NSPredicate(format: "value CONTAINS %@", "[03]"), object: view)
-    XCTAssertEqual(XCTWaiter.wait(for: [received], timeout: 12), .completed)
+    try await verifyControlC(in: view, previous: previous)
+  }
+
+  #if os(macOS)
+    @MainActor private func sendControlC(to terminal: XCUIElement, in app: XCUIApplication) {
+      terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.3)).click()
+      app.typeKey("c", modifierFlags: .control)
+    }
+  #endif
+
+  @MainActor private func verifyControlC(in terminal: XCUIElement, previous: String) async throws {
+    let before = try XCTUnwrap(Int(previous))
+    // The child prints each received byte in hex. Ignore grid wraps within
+    // a four-character marker, including when a remote viewer resizes the PTY.
+    let rendered = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+      (terminal.value as? String)?.replacingOccurrences(of: "\n", with: "").contains("[03]") == true
+    }, object: nil)
+    let screenEcho = await XCTWaiter.fulfillment(of: [rendered], timeout: 12) == .completed
+    let rawCount = try await fixtureResponse("CONTROL-COUNT")
+    let after = try XCTUnwrap(Int(rawCount))
+    guard after == before + 1 && screenEcho else {
+      // This fixture also exercises pointer reporting. Keep only the known
+      // terminal evidence: no URLs, arbitrary typed text, or other AX content.
+      let screen = terminal.value as? String ?? ""
+      let unwrapped = screen.replacingOccurrences(of: "\n", with: "")
+      let markers = ["[03]", "[63]", "[1b]"].map { marker in
+        marker + "=" + String(unwrapped.components(separatedBy: marker).count - 1)
+      }
+      let receipt = "bytes before \(before), after \(after); echo \(screenEcho); ready \(screen.contains("Terminal ready")); pointer \(screen.contains("pointer-")); markers \(markers.joined(separator: " "))"
+      let evidence = XCTAttachment(string: receipt)
+      evidence.name = "control-input-receipt"
+      evidence.lifetime = .keepAlways
+      add(evidence)
+      XCTFail("Control-C delivery or display failed. " + receipt)
+      return
+    }
   }
 
   #if os(macOS)
@@ -484,11 +517,10 @@ final class NativeSessionTests: XCTestCase {
       let pty = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PTY_ID"])
       activate(app.descendants(matching: .any)["session-" + pty].firstMatch)
       let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
-      activate(terminal)
-      terminal.typeKey("c", modifierFlags: .control)
-      let received = XCTNSPredicateExpectation(
-        predicate: NSPredicate(format: "value CONTAINS %@", "[03]"), object: terminal)
-      XCTAssertEqual(XCTWaiter.wait(for: [received], timeout: 12), .completed)
+      expectOutput("Terminal ready", in: app)
+      let previous = try await fixtureResponse("CONTROL-COUNT")
+      sendControlC(to: terminal, in: app)
+      try await verifyControlC(in: terminal, previous: previous)
       let invitation = try await fixtureResponse("SECOND")
       let otherSession = try await fixtureResponse("SECOND-ID")
       try await enterInvitation(invitation, in: app)

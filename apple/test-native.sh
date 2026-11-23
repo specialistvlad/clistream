@@ -74,22 +74,26 @@ run_tests() {
     "${tests[@]}" -skip-testing:"$suite/NativeSessionTests/testConcurrentViewers" test-without-building
 }
 if ! run_tests; then
-  # CoreSimulator occasionally finishes booting while XCTest still cannot
-  # initialize the accessibility service. Start a fresh fixture after rebooting
-  # only if this runner failure prevented every UI case from starting.
+  # A cold simulator can lose its installation service or fail to initialize
+  # XCTest accessibility. Reboot once only if no UI case started.
   [[ $platform == iOS && -n ${GITHUB_RUN_ID:-} ]] || exit 1
   go run ./scripts/apple-report "$result/native.xcresult" > "$result/first-attempt.json"
   jq -e '
     def runnerInitialization:
       (.test | startswith("CLIStreamUITests-Runner")) and .result == "Failed" and
-      ((.failureKinds // []) | index("timed out waiting for ax loaded notification") != null);
+      ((.failureKinds // []) |
+        index("timed out waiting for ax loaded notification") != null or
+        (index("failed to install or launch") != null and index("(ipc/mig) server died") != null));
     any(.cases[]; runnerInitialization) and
     all(.cases[]; runnerInitialization or
       ((.test | startswith("ClientTests/")) and (.result == "Passed" or .result == "Skipped")))
   ' "$result/first-attempt.json" >/dev/null || exit 1
   mv "$result/native.xcresult" "$result/runner-initialization.xcresult"
-  echo "Restarting the isolated simulator after XCTest accessibility initialization timed out."
-  xcrun simctl shutdown "$SIMULATOR_ID"
+  echo "Restarting the isolated simulator after a test runner initialization failure."
+  if ! xcrun simctl shutdown "$SIMULATOR_ID"; then
+    xcrun simctl list devices --json |
+      jq -e --arg id "$SIMULATOR_ID" 'any(.devices[][]; .udid == $id and .state == "Shutdown")' >/dev/null
+  fi
   apple/boot-simulator.sh "$SIMULATOR_ID"
   run_tests
 fi

@@ -170,6 +170,13 @@ jobs:
             report="results/$name.json"
             go run ./scripts/apple-report "$bundle" > "$report"
             cat "$report"
+            jq -r '.cases[] | select(.result == "Failed" and (.test | test("testTerminalKeysAndAttachOnly|testConcurrentViewers"))) | .test' "$report" |
+              while IFS= read -r test; do
+                staging=$(mktemp -d "$RUNNER_TEMP/control-receipt.XXXXXX")
+                xcrun xcresulttool export attachments --path "$bundle" --test-id "$test" --output-path "$staging" >/dev/null
+                jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | startswith("control-input-receipt_")) | .exportedFileName' "$staging/manifest.json" |
+                  while IFS= read -r file; do cat "$staging/$file"; done
+              done
             if jq -e '.cases[] | select(.result == "Failed" and (.test | contains("testTouchNavigationAndEditing")))' "$report" >/dev/null; then
               staging=$(mktemp -d "$RUNNER_TEMP/audit.XXXXXX")
               xcrun xcresulttool export attachments --path "$bundle" --test-id 'SessionTests/testTouchNavigationAndEditing()' --output-path "$staging" >/dev/null

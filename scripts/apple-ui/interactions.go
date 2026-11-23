@@ -45,6 +45,15 @@ func interactionRoutes(mux *http.ServeMux, path, root string, link []byte) error
 		}
 		fmt.Fprint(w, "reset")
 	})
+	mux.HandleFunc(path+"CONTROL-COUNT", func(w http.ResponseWriter, _ *http.Request) {
+		data, err := os.ReadFile(filepath.Join(root, "keys"))
+		if err != nil {
+			http.Error(w, "terminal input unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		// Expose only the count of ETX bytes received by this fixture child.
+		fmt.Fprint(w, bytes.Count(data, []byte{3}))
+	})
 	grids := func() []string {
 		data, _ := os.ReadFile(filepath.Join(root, "grid"))
 		return strings.Split(strings.TrimSpace(string(data)), "\n")

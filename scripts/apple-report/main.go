@@ -72,7 +72,7 @@ func report(bundle string) error {
 					"failed to get matching snapshots", "failed to get snapshot",
 					"not hittable", "not in the foreground", "failed to type",
 					"failed to click", "failed to tap", "failed to install or launch",
-					"timed out waiting for ax loaded notification",
+					"timed out waiting for ax loaded notification", "(ipc/mig) server died",
 					"invalid device state", "timed out", "xctasserttrue failed", "xctassertequal failed",
 				} {
 					if strings.Contains(reason, kind) {
