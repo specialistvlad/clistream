@@ -10,8 +10,10 @@ final class NativeSessionTests: XCTestCase {
       let row = app.descendants(matching: .any)["forward-" + name].firstMatch
       XCTAssertTrue(row.waitForExistence(timeout: 15))
       #if os(iOS)
-        let control = row.switches.firstMatch
-        activate(control.exists ? control : row)
+        let nested = row.switches.firstMatch
+        let control = nested.exists ? nested : row
+        XCTAssertTrue(control.wait(for: \.isEnabled, toEqual: true, timeout: 12))
+        activate(control)
       #else
         activate(row)
       #endif
@@ -280,8 +282,9 @@ final class NativeSessionTests: XCTestCase {
 
   @MainActor func testTerminalKeysAndAttachOnly() async throws {
     let app = try await openPipe(terminal: true)
-    _ = try await fixtureResponse("RESET")
     let view = app.descendants(matching: .any)["session-terminal"].firstMatch
+    XCTAssertTrue(view.wait(for: \.isHittable, toEqual: true, timeout: 15))
+    _ = try await fixtureResponse("RESET")
     let ready = XCTNSPredicateExpectation(
       predicate: NSPredicate(format: "value CONTAINS %@", "Terminal ready"), object: view)
     XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
@@ -658,8 +661,18 @@ extension XCTestCase {
       XCTAssertTrue(menu.waitForExistence(timeout: 12), file: file, line: line)
       menu.tap()
       let keys = app.buttons["Keys"].firstMatch
-      XCTAssertTrue(keys.waitForExistence(timeout: 12), file: file, line: line)
-      keys.tap()
+      guard keys.wait(for: \.isHittable, toEqual: true, timeout: 12) else {
+        XCTFail("The Session menu did not present its Keys row", file: file, line: line)
+        return
+      }
+      // Resolve the visible row once. Its accessibility object is replaced as
+      // UIKit animates from the parent menu into the submenu.
+      let frame = keys.frame
+      let origin = app.frame.origin
+      app.coordinate(withNormalizedOffset: .zero)
+        .withOffset(CGVector(dx: frame.midX - origin.x, dy: frame.midY - origin.y)).tap()
+      XCTAssertTrue(app.buttons["Hide Keyboard"].firstMatch.waitForExistence(timeout: 10),
+                    "The Keys submenu did not open", file: file, line: line)
     }
   #endif
 

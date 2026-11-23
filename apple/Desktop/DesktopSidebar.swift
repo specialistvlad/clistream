@@ -135,36 +135,25 @@ struct DesktopSidebar: View {
       .accessibilityElement(children: .combine)
       .accessibilityIdentifier("session-" + item.id)
       .contentShape(Rectangle())
-      .overlay {
-        DesktopRowMenu { menuEntries(for: row) }
-          .accessibilityHidden(true)
-      }
-      .contextMenu { DesktopAccessibleMenu(entries: menuEntries(for: row)) }
-    }
-  }
-  private func menuEntries(for row: WorkspaceSession) -> [DesktopMenuEntry] {
-    let item = row.item
-    let revoked = workspace.revoked(row.server)
-    var entries: [DesktopMenuEntry] = [
-      .command("Open in New Tab") { state.open(row, tab: true, using: openWindow) },
-      .command("Open in New Window") { state.open(row, tab: false, using: openWindow) }
-    ]
-    if !revoked && (item.revision ?? 0) > 0 {
-      entries.append(.separator)
-      entries.append(.command(item.running ? "Restart…" : "Start…",
-        item.running ? "arrow.counterclockwise" : "play.fill") {
-        state.perform(.restart, on: row, using: openWindow)
-      })
-      if item.running {
-        entries.append(.command("Stop…", "stop") { state.perform(.stop, on: row, using: openWindow) })
+      .contextMenu {
+        Button("Open in New Tab") { state.open(row, tab: true, using: openWindow) }
+        Button("Open in New Window") { state.open(row, tab: false, using: openWindow) }
+        if !revoked && (item.revision ?? 0) > 0 {
+          Divider()
+          Button(item.running ? "Restart…" : "Start…", systemImage: item.running ? "arrow.counterclockwise" : "play.fill") {
+            state.perform(.restart, on: row, using: openWindow)
+          }
+          if item.running {
+            Button("Stop…", systemImage: "stop") { state.perform(.stop, on: row, using: openWindow) }
+          }
+        }
+        Divider()
+        Button("Show Ports") { state.perform(.ports, on: row, using: openWindow) }
+        if !revoked && item.workspace == true {
+          Button("Show in Finder") { state.perform(.finder, on: row, using: openWindow) }
+        }
       }
     }
-    entries.append(.separator)
-    entries.append(.command("Show Ports") { state.perform(.ports, on: row, using: openWindow) })
-    if !revoked && item.workspace == true {
-      entries.append(.command("Show in Finder") { state.perform(.finder, on: row, using: openWindow) })
-    }
-    return entries
   }
 }
 

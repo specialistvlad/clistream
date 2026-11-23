@@ -150,7 +150,13 @@ extension NativeSessionTests {
   }
 
   @MainActor func visibleMacMenuItem(_ title: String, in app: XCUIApplication) throws -> XCUIElement {
-    XCTAssertTrue(waitForMacMenu(title, in: app, visible: true), title)
+    if !waitForMacMenu(title, in: app, visible: true) {
+      let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+      attachment.name = "failed-desktop-menu-" + title.filter(\.isLetter)
+      attachment.lifetime = .keepAlways
+      add(attachment)
+      XCTFail("The menu did not present " + title)
+    }
     return try XCTUnwrap(app.menuItems.matching(identifier: title).allElementsBoundByIndex.first(where: { $0.isHittable }))
   }
 
