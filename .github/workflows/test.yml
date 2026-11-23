@@ -76,6 +76,7 @@ jobs:
       - id: build-apple
         run: make apple
       - name: Run app-hosted and UI tests
+        id: native-ui
         env:
           DEVICE: ${{ matrix.device }}
           CLISTREAM_TEST_CASES: ${{ inputs.cases }}
@@ -109,6 +110,8 @@ jobs:
           esac
       - name: Verify Finder against a Linux workspace
         if: ${{ !cancelled() && steps.build-apple.outcome == 'success' && matrix.device == 'macOS' && (!inputs.cases || contains(inputs.cases, 'testFinderWorkspaceRoundTrip')) }}
+        env:
+          TEST_RUNNER_CLISTREAM_EXPECT_OFFLINE_SERVER: ${{ steps.native-ui.outcome == 'success' && '1' || '0' }}
         run: |
           if ! docker info >/dev/null 2>&1; then
             brew install docker colima qemu

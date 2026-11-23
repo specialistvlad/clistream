@@ -133,6 +133,11 @@ extension NativeSessionTests {
     let changed = try await checkpoint("host-edit")
     XCTAssertEqual(changed, "edited")
     app.activate()
+    if ProcessInfo.processInfo.environment["CLISTREAM_EXPECT_OFFLINE_SERVER"] == "1" {
+      // The Mac-hosted fixture has shut down, while the Linux session stays active.
+      XCTAssertTrue(app.buttons["retry-server"].firstMatch.waitForExistence(timeout: 15),
+                    "Expected the saved Mac server to be offline during the Linux Finder round trip")
+    }
     app.typeKey(".", modifierFlags: .command)
     let stop = app.buttons["Stop"].firstMatch
     XCTAssertTrue(stop.waitForExistence(timeout: 10))
