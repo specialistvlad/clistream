@@ -3,26 +3,93 @@ import AppKit
 import XCTest
 
 extension NativeSessionTests {
+  @MainActor private func rememberProviderWindow(_ app: XCUIApplication, name: String) {
+    let image = XCTAttachment(screenshot: app.screenshot())
+    image.name = name + "-window"
+    image.lifetime = .keepAlways
+    add(image)
+    let detail: String
+    if name == "finder-open-error" {
+      let dialog = [app.alerts.firstMatch, app.dialogs.firstMatch, app.sheets.firstMatch].first { $0.exists }
+      detail = dialog?.debugDescription ?? "No error dialog appeared."
+    } else {
+      detail = app.windows.firstMatch.debugDescription
+    }
+    let hierarchy = XCTAttachment(string: detail)
+    hierarchy.name = name + "-message"
+    hierarchy.lifetime = .keepAlways
+    add(hierarchy)
+  }
+
+  @MainActor private func enableFinderDomain(_ finder: XCUIApplication) throws {
+    // Fresh CI accounts must give the same consent as someone installing the app.
+    finder.activate()
+    finder.typeKey("n", modifierFlags: .command)
+    let window = finder.windows.firstMatch
+    let name = NSPredicate(format: "label == %@ OR value == %@ OR title == %@",
+                           "CLIStream", "CLIStream", "CLIStream")
+    let location = window.outlines.descendants(matching: .any).matching(name).firstMatch
+    if location.waitForExistence(timeout: 5) {
+      location.click()
+      let enable = window.buttons["Enable"].firstMatch
+      if enable.waitForExistence(timeout: 5) {
+        enable.click()
+        let confirm = finder.sheets.buttons["Enable"].firstMatch
+        if confirm.waitForExistence(timeout: 2) { confirm.click() }
+        return
+      }
+    }
+    rememberProviderWindow(finder, name: "finder-locations")
+
+    let settings = XCUIApplication(bundleIdentifier: "com.apple.systempreferences")
+    let url = try XCTUnwrap(URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension"))
+    XCTAssertTrue(NSWorkspace.shared.open(url))
+    XCTAssertTrue(settings.wait(for: .runningForeground, timeout: 15))
+    let pane = settings.windows.firstMatch
+    let category = pane.descendants(matching: .any)["By Category"].firstMatch
+    if category.waitForExistence(timeout: 3) { category.click() }
+    let providers = pane.staticTexts.matching(
+      NSPredicate(format: "label == %@ OR value == %@", "File Providers", "File Providers")).firstMatch
+    if providers.waitForExistence(timeout: 8) {
+      // The category's trailing info button is in the same settings row.
+      let rows = pane.descendants(matching: .any).containing(.staticText, identifier: "File Providers")
+      let row = rows.allElementsBoundByIndex.reversed().first { $0.buttons.count == 1 }
+      if let row { row.buttons.firstMatch.click() } else { providers.doubleClick() }
+    }
+    let control = pane.descendants(matching: .any).matching(NSPredicate(
+      format: "(elementType == %d OR elementType == %d) AND (label CONTAINS[c] %@ OR title CONTAINS[c] %@ OR identifier CONTAINS[c] %@)",
+      XCUIElement.ElementType.switch.rawValue, XCUIElement.ElementType.checkBox.rawValue,
+      "CLIStream", "CLIStream", "CLIStream")).firstMatch
+    guard control.waitForExistence(timeout: 8) else {
+      rememberProviderWindow(settings, name: "finder-settings")
+      throw NSError(domain: "FinderAcceptance", code: 1, userInfo: [
+        NSLocalizedDescriptionKey: "System Settings did not offer CLIStream in File Providers."
+      ])
+    }
+    if control.value as? String != "1" { control.click() }
+    let done = pane.buttons["Done"].firstMatch
+    if done.exists { done.click() }
+  }
+
   @MainActor func testFinderWorkspaceRoundTrip() async throws {
     let app = try await openPipe()
     let show = app.descendants(matching: .any)["session-show-finder"].firstMatch
     XCTAssertTrue(show.waitForExistence(timeout: 15))
     show.click()
     let finder = XCUIApplication(bundleIdentifier: "com.apple.finder")
-    guard finder.wait(for: .runningForeground, timeout: 75) else {
-      let image = XCTAttachment(screenshot: app.screenshot())
-      image.name = "finder-open-error-window"
-      image.lifetime = .keepAlways
-      add(image)
-      let dialog = [app.alerts.firstMatch, app.dialogs.firstMatch, app.sheets.firstMatch]
-        .first(where: { $0.exists })
-      let message = dialog?.staticTexts.allElementsBoundByIndex
-        .map { ($0.value as? String) ?? $0.label }.joined(separator: " ") ?? "No error dialog appeared."
-      let note = XCTAttachment(string: message)
-      note.name = "finder-open-error-message"
-      note.lifetime = .keepAlways
-      add(note)
-      XCTFail("Finder did not open the workspace. \(message)")
+    if !finder.wait(for: .runningForeground, timeout: 10) {
+      let permission = app.staticTexts.matching(NSPredicate(
+        format: "value CONTAINS %@ OR label CONTAINS %@", "File Providers", "File Providers")).firstMatch
+      if permission.exists {
+        app.buttons["OK"].firstMatch.click()
+        try enableFinderDomain(finder)
+        app.activate()
+        show.click()
+      }
+    }
+    guard finder.wait(for: .runningForeground, timeout: 15) else {
+      rememberProviderWindow(app, name: "finder-open-error")
+      XCTFail("Finder did not open the workspace. See the window and accessibility attachments.")
       return
     }
     let window = finder.windows.firstMatch

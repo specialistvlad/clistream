@@ -21,6 +21,10 @@ if [[ "$platform" == macOS ]]; then
   codesign --verify --strict "$app"
   for bundle in "$app" "$extension"; do
     entitlements=$(codesign -d --entitlements :- "$bundle" 2>/dev/null)
+    if plutil -extract 'com\.apple\.developer\.fileprovider\.testing-mode' raw - <<<"$entitlements" >/dev/null 2>&1; then
+      echo "A shipping bundle contains the development-only File Provider testing capability." >&2
+      exit 1
+    fi
     group=$(plutil -extract 'com\.apple\.security\.application-groups.0' raw - <<<"$entitlements")
     [[ "$group" == "$DEVELOPMENT_TEAM.com.vlk.clistream.workspace" ]]
     for direction in client server; do

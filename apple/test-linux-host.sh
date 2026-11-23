@@ -11,6 +11,7 @@ case "${1:-iOS}" in
     testCase=testPairPreviewAndSend
     dd=accept-ios ;;
   macOS)
+    export CLISTREAM_FINDER_ACCEPTANCE=1
     platform=macOS
     destination="platform=macOS,arch=$(uname -m)"
     target=CLIStream-MacUITests

@@ -48,6 +48,14 @@ enum FinderStorage {
     let domain = NSFileProviderDomain(
       identifier: NSFileProviderDomainIdentifier("workspaces"), displayName: "CLIStream")
     domain.supportsSyncingTrash = false
+    #if DEBUG
+      if let task = SecTaskCreateFromSelf(nil),
+        SecTaskCopyValueForEntitlement(
+          task, "com.apple.developer.fileprovider.testing-mode" as CFString, nil) as? Bool == true
+      {
+        domain.testingModes = [.alwaysEnabled]
+      }
+    #endif
     return domain
   }
 }

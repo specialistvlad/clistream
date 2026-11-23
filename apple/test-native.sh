@@ -37,6 +37,9 @@ if [[ -n ${CLISTREAM_TEST_CASES:-} ]]; then
     tests+=("-only-testing:$target/$test_case")
   done
 fi
+if [[ $platform == macOS && ( -z ${CLISTREAM_TEST_CASES:-} || $CLISTREAM_TEST_CASES == *testFinderWorkspaceRoundTrip* ) ]]; then
+  export CLISTREAM_FINDER_ACCEPTANCE=1
+fi
 make build
 # Compile before booting iOS. Simulator services and the Swift compiler otherwise
 # compete for memory on a cold hosted Mac.
@@ -62,15 +65,6 @@ else
   plans=("$products"/CLIStream-macOS_macosx"$sdkVersion"-*.xctestrun)
   [[ ${#plans[@]} -eq 1 && -f ${plans[0]} ]]
   testPlan=(-xctestrun "${plans[0]}")
-  if [[ -n ${GITHUB_RUN_ID:-} ]]; then
-    app="$products/Debug/CLIStream.app"
-    plugin="$app/Contents/PlugIns/CLIStreamFinder.appex"
-    id=com.vlk.clistream.acceptance.finder
-    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app" || true
-    /usr/bin/pluginkit -a "$plugin" || true
-    /usr/bin/pluginkit -e use -i "$id" || true
-    /usr/bin/pluginkit -m -ADv -i "$id" || true
-  fi
 fi
 export GITHUB_ACTIONS=true CLISTREAM_HOSTED_TESTS=1
 run_tests() {

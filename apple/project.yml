@@ -54,7 +54,8 @@ targets:
     settings:
       base:
         ENABLE_HARDENED_RUNTIME: YES
-        CODE_SIGN_ENTITLEMENTS: Mac.entitlements
+        CLISTREAM_MAC_ENTITLEMENTS: Mac.entitlements
+        CODE_SIGN_ENTITLEMENTS: "$(CLISTREAM_MAC_ENTITLEMENTS)"
 
   CLIStream-Finder:
     type: app-extension

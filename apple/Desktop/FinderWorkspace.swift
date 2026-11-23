@@ -125,6 +125,12 @@ import OSLog
     } catch {
       let reason = error as NSError
       logger.error("Could not open Finder workspace: \(reason.domain, privacy: .public) \(reason.code)")
+      if reason.domain == NSFileProviderErrorDomain && reason.code == NSFileProviderError.Code.domainDisabled.rawValue {
+        throw NSError(domain: reason.domain, code: reason.code, userInfo: [
+          NSLocalizedDescriptionKey:
+            "In System Settings, open General › Login Items & Extensions › File Providers and turn on CLIStream. Then choose Show in Finder again."
+        ])
+      }
       throw error
     }
   }
