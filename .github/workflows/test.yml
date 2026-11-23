@@ -110,11 +110,15 @@ jobs:
               IPAD_SIMULATOR_ID=$(simulator 'iPad mini (A17 Pro)' 'iPad (A16)' 'iPad Pro 13-inch (M5)')
               go run ./scripts/apple-ui shared ;;
             iPhone) SIMULATOR_ID="$(simulator 'iPhone 18 Pro')" apple/test-native.sh ;;
-            iPad) SIMULATOR_ID="$(simulator 'iPad Pro 13-inch (M5)')" apple/test-native.sh ;;
+            iPad)
+              export SIMULATOR_ID
+              SIMULATOR_ID="$(simulator 'iPad Pro 13-inch (M5)')"
+              echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
+              apple/test-native.sh ;;
             Duo) SIMULATOR_ID="$(simulator 'iPhone Duo')" apple/test-native.sh ;;
           esac
-      - name: Verify Finder against a Linux workspace
-        if: ${{ !cancelled() && steps.build-apple.outcome == 'success' && matrix.device == 'macOS' && (!inputs.cases || contains(inputs.cases, 'testFinderWorkspaceRoundTrip')) }}
+      - name: Verify the file provider against a Linux workspace
+        if: ${{ !cancelled() && steps.build-apple.outcome == 'success' && ((matrix.device == 'macOS' && (!inputs.cases || contains(inputs.cases, 'testFinderWorkspaceRoundTrip'))) || (matrix.device == 'iPad' && (!inputs.cases || contains(inputs.cases, 'testFilesWorkspaceRoundTrip')))) }}
         env:
           TEST_RUNNER_CLISTREAM_EXPECT_OFFLINE_SERVER: ${{ steps.native-ui.outcome == 'success' && '1' || '0' }}
         run: |
@@ -123,7 +127,11 @@ jobs:
             # CLIStream uses QUIC. Colima's default SSH forwarder carries TCP only.
             colima start --vm-type qemu --port-forwarder grpc --cpu 2 --memory 3 --disk 10
           fi
-          apple/test-linux-host.sh macOS
+          if [[ "${{ matrix.device }}" == macOS ]]; then
+            apple/test-linux-host.sh macOS
+          else
+            CLISTREAM_LINUX_CASE=testFilesWorkspaceRoundTrip apple/test-linux-host.sh iOS
+          fi
       - name: Inspect Finder registration on failure
         if: failure() && matrix.device == 'macOS'
         run: |

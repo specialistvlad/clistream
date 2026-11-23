@@ -13,11 +13,11 @@ final class SessionTests: XCTestCase {
       let link = try await fixtureResponse("EXPIRED")
       let url = try XCTUnwrap(URL(string: link))
       app.open(url)
-      tap(app.buttons["Pair device"])
-      let alert = app.alerts["Couldn’t pair this device"]
+      tap(app.buttons["workspace-confirm"])
+      let alert = app.alerts["Couldn’t Pair This Device"]
       XCTAssertTrue(alert.waitForExistence(timeout: 10))
       XCTAssertTrue(
-        alert.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "fresh")).firstMatch
+        alert.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "new one")).firstMatch
           .exists)
     }
 
@@ -33,21 +33,20 @@ final class SessionTests: XCTestCase {
       let url = try XCTUnwrap(URL(string: invitation))
       app.open(url)
       XCTAssertTrue(app.staticTexts[address].waitForExistence(timeout: 10))
-      tap(app.buttons["Cancel"])
+      tap(app.buttons["workspace-cancel"])
       tap(app.buttons["workspace-add-server"])
       let field = app.secureTextFields["pairing-link"]
       XCTAssertTrue(field.waitForExistence(timeout: 10))
-      captureCurrent("add-server", app)
       field.tap()
       field.typeText(invitation)
       XCTAssertTrue(app.staticTexts[address].waitForExistence(timeout: 10))
-      tap(app.buttons["Pair device"])
+      tap(app.buttons["workspace-confirm"])
       XCTAssertTrue(
         app.descendants(matching: .any)["session-" + session].firstMatch.waitForExistence(
           timeout: 12))
       captureCurrent("servers-tree", app)
       app.open(url)
-      tap(app.buttons["Pair device"])
+      tap(app.buttons["workspace-confirm"])
       XCTAssertTrue(
         app.descendants(matching: .any)["session-" + session].firstMatch.waitForExistence(
           timeout: 12))
@@ -88,21 +87,7 @@ final class SessionTests: XCTestCase {
       func selectKey(_ name: String, on panel: String = "outer") async throws {
         let keyboardVisibility = ["Show Keyboard": true, "Hide Keyboard": false][name]
         let keyboard = app.keyboards.firstMatch
-        if duo {
-          if let keyboardVisibility {
-            XCTAssertTrue(keyboard.wait(for: \.exists, toEqual: !keyboardVisibility, timeout: 10))
-          }
-          let result = try await fixtureResponse("duo-key/" + panel + "/" + name)
-          if result == "input enqueued" {
-            XCTAssertNotNil(keyboardVisibility, "Only a keyboard visibility change can verify this receipt")
-          } else {
-            XCTAssertEqual(result, "delivered")
-          }
-        } else {
-          openTerminalKeys(in: app)
-          if name == "Control-C" { tap(app.buttons["Control Key"]) }
-          tap(app.buttons[name])
-        }
+        touchTerminalKey(name, in: app)
         if let keyboardVisibility {
           XCTAssertTrue(keyboard.wait(for: \.exists, toEqual: keyboardVisibility, timeout: 10))
         }
@@ -125,12 +110,26 @@ final class SessionTests: XCTestCase {
         }
         try await selectKey("Hide Keyboard")
       }
-      for name in ["Up Arrow", "Down Arrow", "Right Arrow", "Left Arrow", "Escape", "Control-C"] {
+      var keyChecks = ["Up Arrow", "Down Arrow", "Right Arrow", "Left Arrow", "Escape", "Control-C", "Tab", "~", "|", "/", "-"]
+      if UIDevice.current.userInterfaceIdiom == .pad { keyChecks += (1...8).map { "F" + String($0) } }
+      for name in keyChecks {
+        let label = ["~": "tilde", "|": "pipe", "/": "slash", "-": "dash"][name] ?? name
+        let route = "key-count/" + label
+        let raw = try await fixtureResponse(route)
+        let before = try XCTUnwrap(Int(raw))
         try await selectKey(name)
+        var count = before
+        for _ in 0..<12 {
+          let value = try await fixtureResponse(route)
+          if let observed = Int(value) { count = observed }
+          if count != before { break }
+          try await Task.sleep(for: .milliseconds(150))
+        }
+        XCTAssertEqual(count, before + 1, name + " must reach the child exactly once")
       }
       // A windowed iPad can keep its horizontal size class through rotation.
       // Start with the software keyboard up and measure both grid dimensions.
-      try await selectKey("Show Keyboard")
+      if !app.keyboards.firstMatch.exists { try await selectKey("Show Keyboard") }
       let portrait = view.frame.size
       let firstGrid = try await fixtureResponse("GRID")
       if duo {
@@ -186,8 +185,7 @@ final class SessionTests: XCTestCase {
         addTeardownBlock { @MainActor in await setVoiceOver(initiallyEnabled) }
         await setVoiceOver(false)
         let app = try await pairedApp(session: "CLISTREAM_SESSION")
-        openTerminalKeys(in: app)
-        tap(app.buttons["Hide Keyboard"])
+        touchTerminalKey("Hide Keyboard", in: app)
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
         await setVoiceOver(true)
         XCTAssertTrue(voice.isEnabled)
@@ -242,8 +240,7 @@ final class SessionTests: XCTestCase {
       let app = try await pairedApp(session: "CLISTREAM_UI_PTY", scrollList: true)
       let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
       assertText("scroll-ready", in: terminal)
-      openTerminalKeys(in: app)
-      tap(app.buttons["Hide Keyboard"])
+      touchTerminalKey("Hide Keyboard", in: app)
       XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 12))
       let started = try await fixtureResponse("HISTORY")
       XCTAssertEqual(started, "released")
@@ -262,7 +259,6 @@ final class SessionTests: XCTestCase {
           for: [XCTNSPredicateExpectation(predicate: history, object: terminal)],
           timeout: 15), .completed, "A downward drag did not expose earlier terminal lines")
       openTerminalKeys(in: app)
-      tap(app.buttons["Show Keyboard"])
       XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 6))
       tap(app.buttons["Session"])
       tap(app.buttons["Detach"])
@@ -281,8 +277,7 @@ final class SessionTests: XCTestCase {
       tap(app.descendants(matching: .any)["Paste"].firstMatch)
       terminal.typeText("\n")
       assertText("out:copyword", in: terminal)
-      openTerminalKeys(in: app)
-      tap(app.buttons["Hide Keyboard"])
+      touchTerminalKey("Hide Keyboard", in: app)
       XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
       try app.performAccessibilityAudit(for: [.sufficientElementDescription, .contrast, .dynamicType]) { issue in
         let element = issue.element

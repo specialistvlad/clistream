@@ -1,0 +1,104 @@
+#if os(iOS)
+import XCTest
+
+extension NativeSessionTests {
+  @MainActor func testFilesWorkspaceRoundTrip() async throws {
+    continueAfterFailure = false
+    let app = try await openPipe()
+    let show = app.buttons["session-show-files"].firstMatch
+    if !show.isHittable { app.buttons["Session"].firstMatch.tap() }
+    XCTAssertTrue(show.waitForExistence(timeout: 10))
+    show.tap()
+    let alert = app.alerts["Show in Files"].firstMatch
+    let message = alert.staticTexts.allElementsBoundByIndex.map(\.label).joined(separator: " ")
+    let path = try XCTUnwrap(message.components(separatedBy: "Browse → CLIStream → ").last?
+      .components(separatedBy: ". If CLIStream").first)
+    let components = path.components(separatedBy: " → ")
+    XCTAssertEqual(components.count, 3)
+    alert.buttons["OK"].tap()
+    let prepared = try await fixtureResponse("files/prepare")
+    XCTAssertEqual(prepared, "ready")
+    let files = XCUIApplication(bundleIdentifier: "com.apple.DocumentsApp")
+    files.launch()
+    defer { files.terminate(); app.activate() }
+    func element(_ title: String) -> XCUIElement {
+      files.descendants(matching: .any).matching(NSPredicate(format: "label ==[c] %@", title)).firstMatch
+    }
+    func tap(_ title: String, file: StaticString = #filePath, line: UInt = #line) {
+      let target = element(title)
+      XCTAssertTrue(target.wait(for: \.isHittable, toEqual: true, timeout: 12), title, file: file, line: line)
+      target.tap()
+    }
+    func fileItem(_ stem: String) -> XCUIElement {
+      files.descendants(matching: .any).matching(NSPredicate(
+        format: "label ==[c] %@ OR label BEGINSWITH[c] %@ OR label BEGINSWITH[c] %@",
+        stem, stem + ".", stem + ",")).firstMatch
+    }
+    func more() {
+      let menu = files.buttons.matching(NSPredicate(format: "label IN %@", ["More", "More Options", "More Actions"])).firstMatch
+      XCTAssertTrue(menu.waitForExistence(timeout: 10))
+      menu.tap()
+    }
+    func checkpoint(_ step: String) async throws {
+      let observed = try await fixtureResponse("files/" + step)
+      XCTAssertEqual(observed, step)
+    }
+    if element("Continue").waitForExistence(timeout: 2) { tap("Continue") }
+    if element("Browse").isHittable { tap("Browse") }
+    if element("Show Sidebar").isHittable { tap("Show Sidebar") }
+    if !element("CLIStream").waitForExistence(timeout: 4) {
+      if element("Browse").isHittable { tap("Browse") }
+      more()
+      tap("Edit")
+      let toggle = files.switches.matching(NSPredicate(format: "label CONTAINS[c] %@", "CLIStream")).firstMatch
+      if toggle.waitForExistence(timeout: 3) {
+        if (toggle.value as? String) != "1" { toggle.tap() }
+      } else { tap("CLIStream") }
+      tap("Done")
+    }
+    tap("CLIStream")
+    for part in components {
+      let directory = fileItem(part)
+      XCTAssertTrue(directory.wait(for: \.isHittable, toEqual: true, timeout: 20), part)
+      directory.tap()
+    }
+    let original = fileItem("CLIStream Marker")
+    XCTAssertTrue(original.wait(for: \.isHittable, toEqual: true, timeout: 20))
+    original.press(forDuration: 0.8)
+    tap("Duplicate")
+    let copy = files.descendants(matching: .any).matching(NSPredicate(
+      format: "label BEGINSWITH[c] %@ OR label BEGINSWITH[c] %@", "CLIStream Marker 2", "CLIStream Marker copy")).firstMatch
+    XCTAssertTrue(copy.wait(for: \.isHittable, toEqual: true, timeout: 20))
+    copy.press(forDuration: 0.8)
+    if !element("Rotate Left").isHittable { tap("Quick Actions") }
+    tap("Rotate Left")
+    copy.press(forDuration: 0.8)
+    tap("Rename")
+    let field = files.textFields.firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 8))
+    field.typeText("CLIStream Edited\n")
+    try await checkpoint("renamed")
+    more()
+    tap("New Folder")
+    XCTAssertTrue(field.waitForExistence(timeout: 8))
+    field.typeText("CLIStream Folder\n")
+    try await checkpoint("folder")
+    let edited = fileItem("CLIStream Edited")
+    edited.press(forDuration: 0.8)
+    tap("Move")
+    let folder = fileItem("CLIStream Folder")
+    if !folder.waitForExistence(timeout: 3) {
+      tap("CLIStream")
+      for part in components { fileItem(part).tap() }
+    }
+    folder.tap()
+    tap("Move")
+    try await checkpoint("moved")
+    folder.tap()
+    edited.press(forDuration: 0.8)
+    tap("Delete")
+    if files.alerts.buttons["Delete"].firstMatch.exists { files.alerts.buttons["Delete"].firstMatch.tap() }
+    try await checkpoint("deleted")
+  }
+}
+#endif

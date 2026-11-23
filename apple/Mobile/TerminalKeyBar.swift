@@ -18,6 +18,7 @@ final class TerminalKeyBar: UIView {
     let glass = UIVisualEffectView(effect: effect)
     glass.cornerConfiguration = .capsule()
     let scroll = UIScrollView()
+    scroll.accessibilityIdentifier = "terminal-key-strip"
     scroll.showsHorizontalScrollIndicator = false
     scroll.alwaysBounceHorizontal = false
     addSubview(glass)

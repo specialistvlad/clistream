@@ -47,7 +47,8 @@ struct MobileScanner: View {
     .task(id: scenePhase) {
       guard scenePhase == .active else { return }
       #if DEBUG && targetEnvironment(simulator)
-      if let sample = ProcessInfo.processInfo.environment["CLISTREAM_TEST_SCANNED_LINK"], flow.scanned(sample) { return }
+      if CommandLine.arguments.contains("--ui-test-scanned-code"),
+         let sample = UIPasteboard.general.string, flow.scanned(sample) { return }
       if CommandLine.arguments.contains("--ui-test-camera-denied") { camera = .denied; return }
       #endif
       guard DataScannerViewController.isSupported else { camera = .unavailable; return }

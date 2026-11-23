@@ -8,7 +8,7 @@ case "${1:-iOS}" in
     platform=iOS
     destination="platform=iOS Simulator,id=$SIMULATOR_ID"
     target=CLIStream-UITests
-    testCase=testPairPreviewAndSend
+    testCase=${CLISTREAM_LINUX_CASE:-testPairPreviewAndSend}
     dd=accept-ios ;;
   macOS)
     export CLISTREAM_FINDER_ACCEPTANCE=1

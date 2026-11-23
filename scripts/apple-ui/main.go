@@ -276,6 +276,7 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 	path := "/" + hex.EncodeToString(secret[:]) + "/"
 	mux := http.NewServeMux()
 	finderRoutes(mux, path, workspace)
+	mobileFileRoutes(mux, path, workspace)
 	// Cases share the same published supervisor. An interrupted lifecycle or
 	// Finder case may leave its child stopped. Restore the fixture before the
 	// next case, without replacing a running child or discarding its replay.

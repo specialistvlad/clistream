@@ -85,7 +85,7 @@ struct MobileTerminal: View {
         VStack {
           portsButton
           sessionMenu
-          showKeyboard
+          if !keyboard { showKeyboard }
           Spacer()
         }.labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
         .accessibilityIdentifier("duo-terminal-tools")

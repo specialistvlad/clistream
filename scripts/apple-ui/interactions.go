@@ -56,6 +56,24 @@ func interactionRoutes(mux *http.ServeMux, path, root string, link []byte) error
 		// Expose only the count of ETX bytes received by this fixture child.
 		fmt.Fprint(w, bytes.Count(data, []byte{3}))
 	})
+	// The PTY child records actual bytes. Report counts only for known key sequences.
+	keys := map[string]string{"Up Arrow": "\x1b[A", "Down Arrow": "\x1b[B", "Right Arrow": "\x1b[C", "Left Arrow": "\x1b[D",
+		"Escape": "\x1b", "Control-C": "\x03", "Tab": "\t", "tilde": "~", "pipe": "|", "slash": "/", "dash": "-",
+		"F1": "\x1bOP", "F2": "\x1bOQ", "F3": "\x1bOR", "F4": "\x1bOS", "F5": "\x1b[15~", "F6": "\x1b[17~",
+		"F7": "\x1b[18~", "F8": "\x1b[19~"}
+	mux.HandleFunc(path+"key-count/", func(w http.ResponseWriter, r *http.Request) {
+		sequence, ok := keys[strings.TrimPrefix(r.URL.Path, path+"key-count/")]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		data, err := os.ReadFile(filepath.Join(root, "keys"))
+		if err != nil {
+			http.Error(w, "PTY unavailable", 503)
+			return
+		}
+		fmt.Fprint(w, bytes.Count(data, []byte(sequence)))
+	})
 	grids := func() []string {
 		data, _ := os.ReadFile(filepath.Join(root, "grid"))
 		return strings.Split(strings.TrimSpace(string(data)), "\n")

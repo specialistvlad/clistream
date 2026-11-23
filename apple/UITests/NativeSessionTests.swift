@@ -16,14 +16,14 @@ final class NativeSessionTests: XCTestCase {
       super.record(issue)
     }
 
-    @MainActor func testAddServerSheet() {
+    @MainActor func testAddServerSheet() async throws {
       continueAfterFailure = false
       let app = XCUIApplication()
       app.launchArguments = ["--ui-test-first-launch"]
       app.launch()
       defer { app.terminate() }
-      XCTAssertTrue(app.staticTexts["Add a server to see its CLI apps."].waitForExistence(timeout: 12))
-      captureCurrent("welcome", app)
+      XCTAssertTrue(app.staticTexts["No Servers"].waitForExistence(timeout: 12))
+      try await capture("welcome", app)
       activate(app.buttons["workspace-add-server"].firstMatch)
       let invitation = app.secureTextFields["pairing-link"].firstMatch
       XCTAssertTrue(invitation.waitForExistence(timeout: 12))
@@ -219,7 +219,11 @@ final class NativeSessionTests: XCTestCase {
     expectOutput("out:after-start", in: app)
     action("Restart…", app)
     XCTAssertTrue(app.textFields["command-line"].waitForExistence(timeout: 10))
-    activate(app.buttons["Cancel"].firstMatch)
+    #if os(iOS)
+      activate(app.buttons["workspace-cancel"].firstMatch)
+    #else
+      activate(app.buttons["Cancel"].firstMatch)
+    #endif
     expectOutput("out:after-start", in: app)
   }
 
@@ -423,13 +427,10 @@ final class NativeSessionTests: XCTestCase {
       openTerminalKeys(in: app)
       let control = app.buttons["Control Key"].firstMatch
       XCTAssertTrue(control.waitForExistence(timeout: 8))
-      // Leave the real menu open through a two-second server refresh.
-      try await Task.sleep(for: .seconds(3))
-      XCTAssertTrue(control.exists, "A latency update must preserve the active Keys menu")
-      captureCurrent("terminal-keys", app)
       activate(control)
-      captureCurrent("control-keys", app)
-      activate(app.buttons["Control-C"])
+      XCTAssertEqual(control.value as? String, "On")
+      app.typeText("c")
+      XCTAssertEqual(control.value as? String, "Off")
     #else
       sendControlC(to: view, in: app)
     #endif
@@ -565,7 +566,7 @@ final class NativeSessionTests: XCTestCase {
       app.activate()
       app.typeKey(.return, modifierFlags: [])
     #else
-      XCTAssertTrue(app.alerts["Couldn’t pair this device"].waitForExistence(timeout: 12))
+      XCTAssertTrue(app.alerts["Couldn’t Pair This Device"].waitForExistence(timeout: 12))
       captureCurrent("pairing-error", app)
       activate(app.buttons["OK"].firstMatch)
     #endif
@@ -661,7 +662,7 @@ final class NativeSessionTests: XCTestCase {
       if !readyToPair {
         let detail = XCTAttachment(string: """
           App foreground: \(app.state == .runningForeground)
-          App pairing error: \(app.alerts["Couldn’t pair this device"].exists)
+          App pairing error: \(app.alerts["Couldn’t Pair This Device"].exists)
           Terminal visible: \(app.descendants(matching: .any)["session-terminal"].firstMatch.exists)
           System alert: \(springboard.alerts.firstMatch.exists)
           System Open action: \(systemOpen.exists)
@@ -881,7 +882,7 @@ extension XCTestCase {
     #if os(macOS)
       return app.buttons["Pair"].firstMatch
     #else
-      return app.buttons["Pair device"].firstMatch
+      return app.buttons["workspace-confirm"].firstMatch
     #endif
   }
 
@@ -906,29 +907,27 @@ extension XCTestCase {
 
   #if os(iOS)
     @MainActor func openTerminalKeys(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
-      let menu = app.buttons["Session"].firstMatch
-      guard menu.wait(for: \.isHittable, toEqual: true, timeout: 12) else {
-        recordDuoFailure("session-menu", in: app)
-        XCTFail("The Session menu was unavailable", file: file, line: line)
-        return
+      if !app.keyboards.firstMatch.exists {
+        let show = app.buttons["Show Keyboard"].firstMatch
+        XCTAssertTrue(show.waitForExistence(timeout: 12), file: file, line: line)
+        show.tap()
       }
-      menu.tap()
-      let keys = app.buttons["Keys"].firstMatch
-      guard keys.wait(for: \.isHittable, toEqual: true, timeout: 12) else {
-        recordDuoFailure("keys-row", in: app)
-        XCTFail("The Session menu did not present its Keys row", file: file, line: line)
-        return
+      XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 12), file: file, line: line)
+    }
+
+    @MainActor func touchTerminalKey(_ name: String, in app: XCUIApplication, file: StaticString = #filePath,
+                                     line: UInt = #line) {
+      if name == "Show Keyboard" { openTerminalKeys(in: app, file: file, line: line); return }
+      openTerminalKeys(in: app, file: file, line: line)
+      let strip = app.scrollViews["terminal-key-strip"].firstMatch
+      let key = app.buttons[name == "Control-C" ? "Control Key" : name].firstMatch
+      if !key.isHittable && strip.exists {
+        strip.swipeRight()
+        for _ in 0..<4 where !key.isHittable { strip.swipeLeft() }
       }
-      // Resolve the visible row once. Its accessibility object is replaced as
-      // UIKit animates from the parent menu into the submenu.
-      let frame = keys.frame
-      let origin = app.frame.origin
-      app.coordinate(withNormalizedOffset: .zero)
-        .withOffset(CGVector(dx: frame.midX - origin.x, dy: frame.midY - origin.y)).tap()
-      if !app.buttons["Hide Keyboard"].firstMatch.waitForExistence(timeout: 10) {
-        recordDuoFailure("keys-submenu", in: app)
-        XCTFail("The Keys submenu did not open", file: file, line: line)
-      }
+      XCTAssertTrue(key.wait(for: \.isHittable, toEqual: true, timeout: 8), file: file, line: line)
+      key.tap()
+      if name == "Control-C" { app.typeText("c") }
     }
   #endif
 

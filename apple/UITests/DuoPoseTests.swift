@@ -9,7 +9,7 @@
       defer { app.terminate() }
       let link = try await fixtureResponse("QR")
       app.open(try XCTUnwrap(URL(string: link)))
-      app.buttons["Pair device"].tap()
+      app.buttons["workspace-confirm"].tap()
       let id = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PTY_ID"])
       let row = app.descendants(matching: .any)["session-" + id].firstMatch
       XCTAssertTrue(row.waitForExistence(timeout: 15))
