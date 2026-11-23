@@ -67,11 +67,6 @@ final class WorkspaceIndex {
     }
     return state.changes.filter { $0.sequence > since }
   }
-  func changedContainers(after sequence: Int) -> Set<String> {
-    Set(
-      state.changes.lazy.filter { $0.sequence > sequence }
-        .flatMap { [$0.oldParent, $0.parent].compactMap { $0 } })
-  }
   var all: [WorkspaceNode] { Array(state.nodes.values) }
   private func record(_ id: String, old: String?, new: String?) {
     state.sequence += 1

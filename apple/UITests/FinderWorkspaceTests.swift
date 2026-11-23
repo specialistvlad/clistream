@@ -3,13 +3,50 @@ import AppKit
 import XCTest
 
 extension NativeSessionTests {
+  private func registerAcceptanceProvider() throws {
+    let id = "com.vlk.clistream.acceptance"
+    let running = NSRunningApplication.runningApplications(withBundleIdentifier: id)
+    let bundle = try XCTUnwrap(running.first?.bundleURL)
+    let plugin = bundle.appendingPathComponent("Contents/PlugIns/CLIStreamFinder.appex")
+    XCTAssertTrue(FileManager.default.fileExists(atPath: plugin.path))
+    // XCTest launches from its test products. Register those exact products and
+    // enable the provider for this disposable runner, just as on installation.
+    let launchServices = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+    for (tool, arguments) in [(launchServices, ["-f", bundle.path]),
+                              ("/usr/bin/pluginkit", ["-a", plugin.path]),
+                              ("/usr/bin/pluginkit", ["-e", "use", "-i", id + ".finder"])] {
+      let process = Process()
+      process.executableURL = URL(fileURLWithPath: tool)
+      process.arguments = arguments
+      try process.run()
+      process.waitUntilExit()
+      XCTAssertEqual(process.terminationStatus, 0, "Could not register acceptance extension with \(tool)")
+    }
+  }
+
   @MainActor func testFinderWorkspaceRoundTrip() async throws {
     let app = try await openPipe()
+    try registerAcceptanceProvider()
     let show = app.descendants(matching: .any)["session-show-finder"].firstMatch
     XCTAssertTrue(show.waitForExistence(timeout: 15))
     show.click()
     let finder = XCUIApplication(bundleIdentifier: "com.apple.finder")
-    XCTAssertTrue(finder.wait(for: .runningForeground, timeout: 20))
+    guard finder.wait(for: .runningForeground, timeout: 20) else {
+      let image = XCTAttachment(screenshot: app.screenshot())
+      image.name = "finder-open-error-window"
+      image.lifetime = .keepAlways
+      add(image)
+      let dialog = [app.alerts.firstMatch, app.dialogs.firstMatch, app.sheets.firstMatch]
+        .first(where: { $0.exists })
+      let message = dialog?.staticTexts.allElementsBoundByIndex
+        .map { ($0.value as? String) ?? $0.label }.joined(separator: " ") ?? "No error dialog appeared."
+      let note = XCTAttachment(string: message)
+      note.name = "finder-open-error-message"
+      note.lifetime = .keepAlways
+      add(note)
+      XCTFail("Finder did not open the workspace. \(message)")
+      return
+    }
     let window = finder.windows.firstMatch
     XCTAssertTrue(window.waitForExistence(timeout: 10))
 

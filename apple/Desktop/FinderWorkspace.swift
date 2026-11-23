@@ -6,7 +6,6 @@ import OSLog
   private static let logger = Logger(subsystem: "com.vlk.clistream", category: "Finder")
   private static var registration: Task<NSFileProviderManager, Error>?
   private static var migrated: URL?
-  private static var hierarchy: Set<String> = []
   private static var lastSignature: [String]?
 
   static func enrollmentRoot(legacy: URL) throws -> URL {
@@ -95,39 +94,36 @@ import OSLog
       let url = try FinderStorage.container().appendingPathComponent("finder-servers.json")
       try JSONEncoder().encode(entries).write(to: url, options: .atomic)
     }
-    var containers = Set(servers.map { FinderID.make("server", $0.id) })
     let workspaces = sessions.filter { $0.item.workspace == true }
-    containers.formUnion(workspaces.map { FinderID.make("host", $0.server.id, $0.item.Host) })
     let signature =
       (entries.map { FinderID.make($0.pin, $0.name, errors[$0.pin] ?? "") }
       + workspaces.map { FinderID.make($0.id, $0.item.Host, $0.item.Name) }).sorted()
     guard lastSignature != signature else { return }
-    let affected = hierarchy.union(containers)
-    hierarchy = containers
     lastSignature = signature
-    guard !servers.isEmpty || !previous.isEmpty || !affected.isEmpty else { return }
+    guard !servers.isEmpty || !previous.isEmpty else { return }
     Task {
       do {
         let manager = try await manager()
-        for item in [NSFileProviderItemIdentifier.rootContainer, .workingSet]
-          + affected.map(NSFileProviderItemIdentifier.init(rawValue:))
-        {
-          try await manager.signalEnumerator(for: item)
-        }
+        try await manager.signalEnumerator(for: .workingSet)
       } catch {
-        logger.error("Could not refresh Finder: \(error.localizedDescription, privacy: .public)")
+        let reason = error as NSError
+        logger.error("Finder registration or refresh failed: \(reason.domain, privacy: .public) \(reason.code)")
       }
     }
   }
 
-  static func show(serverID: String, host: String, workspaceID: String) async throws {
-    let manager = try await manager()
-    // A host that has never been browsed can have no active enumerator yet.
-    try? await manager.signalEnumerator(for: .init(FinderID.make("host", serverID, host)))
-    let id = NSFileProviderItemIdentifier(FinderID.workspace(serverID, workspaceID))
-    let folder = try await manager.getUserVisibleURL(for: id)
-    let acquired = folder.startAccessingSecurityScopedResource()
-    defer { if acquired { folder.stopAccessingSecurityScopedResource() } }
-    guard NSWorkspace.shared.open(folder) else { throw CocoaError(.fileReadUnknown) }
+  static func show(serverID: String, workspaceID: String) async throws {
+    do {
+      let manager = try await manager()
+      let id = NSFileProviderItemIdentifier(FinderID.workspace(serverID, workspaceID))
+      let folder = try await manager.getUserVisibleURL(for: id)
+      let acquired = folder.startAccessingSecurityScopedResource()
+      defer { if acquired { folder.stopAccessingSecurityScopedResource() } }
+      guard NSWorkspace.shared.open(folder) else { throw CocoaError(.fileReadUnknown) }
+    } catch {
+      let reason = error as NSError
+      logger.error("Could not open Finder workspace: \(reason.domain, privacy: .public) \(reason.code)")
+      throw error
+    }
   }
 }

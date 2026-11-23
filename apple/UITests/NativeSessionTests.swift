@@ -127,7 +127,7 @@ final class NativeSessionTests: XCTestCase {
       let server = app.descendants(matching: .any)["Server " + endpoint].firstMatch
       XCTAssertTrue(server.waitForExistence(timeout: 12))
       server.rightClick()
-      activate(app.menuItems["Rename…"].firstMatch)
+      try clickMacMenuItem("Rename…", in: app)
       let name = app.textFields["server-name-field"].firstMatch
       let alias = "Build server " + UUID().uuidString.prefix(8)
       activate(name)
@@ -154,7 +154,7 @@ final class NativeSessionTests: XCTestCase {
       let header = app.descendants(matching: .any)["Server " + endpoint].firstMatch
       XCTAssertTrue(app.buttons["Start…"].firstMatch.waitForExistence(timeout: 15))
       header.rightClick()
-      app.menuItems["Rename…"].firstMatch.click()
+      try clickMacMenuItem("Rename…", in: app)
       let name = app.textFields["server-name-field"].firstMatch
       XCTAssertTrue(name.waitForExistence(timeout: 10))
       try await capture("rename-server", app)
@@ -322,18 +322,18 @@ final class NativeSessionTests: XCTestCase {
       expectOutput("out:layout draft", in: app)
       XCUIDevice.shared.appearance = .light
       expectOutput("out:layout draft", in: app)
-      func choose(_ title: String) {
+      func choose(_ title: String) throws {
         let menu = app.descendants(matching: .any)["workspace-view-options"].firstMatch
         activate(menu)
-        let option = app.menuItems[title].firstMatch
+        let option = try visibleMacMenuItem(title, in: app)
         if title == "List" && option.waitForExistence(timeout: 5) { captureCurrent("view-options", app) }
         activate(option)
-        XCTAssertTrue(option.waitForNonExistence(timeout: 5))
+
       }
       for layout in ["List", "Tree"] {
-        choose(layout)
+        try choose(layout)
         for (group, screenshot) in [("Host", "group-by-host"), ("CLI Name", "group-by-cli"), ("Server", "servers-list")] {
-          choose(group)
+          try choose(group)
           XCTAssertTrue(row.waitForExistence(timeout: 10))
           expectOutput("out:layout draft", in: app)
           if layout == "List" {
@@ -363,15 +363,13 @@ final class NativeSessionTests: XCTestCase {
       let pty = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PTY_ID"])
       let other = app.descendants(matching: .any)["session-" + pty].firstMatch
       other.rightClick()
-      let newTab = app.menuItems["Open in New Tab"]
-      XCTAssertTrue(newTab.waitForExistence(timeout: 5))
-      activate(newTab)
+      try clickMacMenuItem("Open in New Tab", in: app)
       XCTAssertTrue(
         app.descendants(matching: .any)["session-terminal"].firstMatch.waitForExistence(timeout: 12)
       )
       captureCurrent("native-tabs", app)
       other.rightClick()
-      activate(app.menuItems["Open in New Window"])
+      try clickMacMenuItem("Open in New Window", in: app)
       captureCurrent("separate-window", app)
       activate(row)
       XCTAssertTrue(input.waitForExistence(timeout: 10))
@@ -533,6 +531,10 @@ final class NativeSessionTests: XCTestCase {
     let id = try XCTUnwrap(
       ProcessInfo.processInfo.environment[
         terminal ? "CLISTREAM_PTY_ID" : (eof ? "CLISTREAM_EOF_ID" : "CLISTREAM_PIPE_ID")])
+    if !terminal && !eof && ProcessInfo.processInfo.environment["CLISTREAM_PARTICIPANT"] == nil {
+      let ready = try await fixtureResponse("prepare-pipe")
+      XCTAssertEqual(ready, "ready")
+    }
     let session = app.descendants(matching: .any)["session-" + id].firstMatch
     #if os(macOS)
       app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]

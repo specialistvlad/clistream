@@ -8,21 +8,9 @@ final class WorkspaceEnumerator: NSObject, NSFileProviderEnumerator {
   init(container: NSFileProviderItemIdentifier, provider: WorkspaceProvider) {
     self.container = container
     self.provider = provider
-    super.init()
-    provider.queue.async {
-      if provider.index.cached(container.rawValue)?.kind == .file {
-        provider.observedDocuments[container.rawValue, default: 0] += 1
-      }
-    }
   }
   func invalidate() {
-    provider.queue.async {
-      guard !self.invalidated else { return }
-      self.invalidated = true
-      if let count = self.provider.observedDocuments[self.container.rawValue] {
-        self.provider.observedDocuments[self.container.rawValue] = count > 1 ? count - 1 : nil
-      }
-    }
+    provider.queue.async { self.invalidated = true }
   }
 
   private func refresh() throws -> [WorkspaceNode] {

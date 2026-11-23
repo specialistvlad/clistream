@@ -50,10 +50,32 @@ products="$result/CLIStream.xctestproducts"
 )
 if [[ $platform == iOS ]]; then apple/boot-simulator.sh "$SIMULATOR_ID"; fi
 export GITHUB_ACTIONS=true CLISTREAM_HOSTED_TESTS=1
-go run ./scripts/apple-ui xcodebuild -quiet -testProductsPath "$products" -destination "$destination" \
-  -test-timeouts-enabled YES -default-test-execution-time-allowance 600 -maximum-test-execution-time-allowance 600 \
-  -parallel-testing-enabled NO -collect-test-diagnostics never -resultBundlePath "$result/native.xcresult" \
-  "${tests[@]}" -skip-testing:"$suite/NativeSessionTests/testConcurrentViewers" test-without-building
+run_tests() {
+  go run ./scripts/apple-ui xcodebuild -quiet -testProductsPath "$products" -destination "$destination" \
+    -test-timeouts-enabled YES -default-test-execution-time-allowance 600 -maximum-test-execution-time-allowance 600 \
+    -parallel-testing-enabled NO -collect-test-diagnostics never -resultBundlePath "$result/native.xcresult" \
+    "${tests[@]}" -skip-testing:"$suite/NativeSessionTests/testConcurrentViewers" test-without-building
+}
+if ! run_tests; then
+  # CoreSimulator occasionally finishes booting while XCTest still cannot
+  # initialize the accessibility service. Start a fresh fixture after rebooting
+  # only if this runner failure prevented every UI case from starting.
+  [[ $platform == iOS && -n ${GITHUB_RUN_ID:-} ]] || exit 1
+  go run ./scripts/apple-report "$result/native.xcresult" > "$result/first-attempt.json"
+  jq -e '
+    def runnerInitialization:
+      (.test | startswith("CLIStreamUITests-Runner")) and .result == "Failed" and
+      ((.failureKinds // []) | index("timed out waiting for ax loaded notification") != null);
+    any(.cases[]; runnerInitialization) and
+    all(.cases[]; runnerInitialization or
+      ((.test | startswith("ClientTests/")) and (.result == "Passed" or .result == "Skipped")))
+  ' "$result/first-attempt.json" >/dev/null || exit 1
+  mv "$result/native.xcresult" "$result/runner-initialization.xcresult"
+  echo "Restarting the isolated simulator after XCTest accessibility initialization timed out."
+  xcrun simctl shutdown "$SIMULATOR_ID"
+  apple/boot-simulator.sh "$SIMULATOR_ID"
+  run_tests
+fi
 go run ./scripts/apple-report "$result/native.xcresult" | tee "$result/cases.json"
 if [[ -n ${CLISTREAM_TEST_CASES:-} ]]; then
   for test_case in "${cases[@]}"; do

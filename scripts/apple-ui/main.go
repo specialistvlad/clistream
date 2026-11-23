@@ -191,6 +191,25 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 	path := "/" + hex.EncodeToString(secret[:]) + "/"
 	mux := http.NewServeMux()
 	finderRoutes(mux, path, workspace)
+	// Cases share the same published supervisor. An interrupted lifecycle or
+	// Finder case may leave its child stopped. Restore the fixture before the
+	// next case, without replacing a running child or discarding its replay.
+	mux.HandleFunc(path+"prepare-pipe", func(w http.ResponseWriter, _ *http.Request) {
+		raw, err := command("clistream", "list").Output()
+		var rows []registration
+		if err == nil && json.Unmarshal(raw, &rows) == nil {
+			for _, row := range rows {
+				if row.ID == pipe.ID {
+					if row.Run == "" && command("clistream", row.ID, "start").Run() != nil {
+						break
+					}
+					fmt.Fprint(w, "ready")
+					return
+				}
+			}
+		}
+		http.Error(w, "fixture pipe unavailable", http.StatusServiceUnavailable)
+	})
 	if args[0] == "shared" || os.Getenv("CLISTREAM_HOSTED_TESTS") == "1" {
 		stopSecond, err := secondServer(root, bin, mux, path, launch)
 		if err != nil {

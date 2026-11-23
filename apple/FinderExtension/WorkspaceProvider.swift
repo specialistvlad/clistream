@@ -7,7 +7,6 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
   let queue = DispatchQueue(label: "com.vlk.clistream.finder.index", qos: .utility)
   let index = WorkspaceIndex()
   let manager: NSFileProviderManager?
-  var observedDocuments: [String: Int] = [:]
   private var poll: DispatchSourceTimer?
   private let log = Logger(subsystem: "com.vlk.clistream", category: "FileProvider")
 
@@ -36,11 +35,10 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
   func invalidate() { poll?.cancel() }
 
   func persist(after sequence: Int) throws {
-    var changed = index.changedContainers(after: sequence)
-    if index.sequence != sequence { changed.formUnion(observedDocuments.keys) }
     try index.save()
-    guard !changed.isEmpty else { return }
-    for id in changed { manager?.signalEnumerator(for: .init(id)) { _ in } }
+    guard index.sequence != sequence else { return }
+    // Replicated providers publish through the working set. File Provider fans
+    // those updates out to open folders and documents.
     manager?.signalEnumerator(for: .workingSet) { _ in }
   }
 

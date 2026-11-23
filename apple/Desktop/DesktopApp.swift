@@ -182,6 +182,7 @@ private struct DesktopWindow: View {
         }
       } else if !actions.managed && !actions.revoked {
         ToolbarItem { Text("Attach only").foregroundStyle(.tertiary) }
+          .sharedBackgroundVisibility(.hidden)
       }
       if actions.reconnect {
         ToolbarItem { Button("Reconnect", systemImage: "arrow.clockwise") { actions.perform(.reconnect) } }

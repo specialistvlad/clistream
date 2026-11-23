@@ -14,9 +14,7 @@ struct DesktopSidebar: View {
   @Environment(\.openWindow) private var openWindow
   @Environment(\.colorScheme) private var appearance
   @State private var collapsed = Set<[String]>()
-  @FocusState private var editing: String?
   @FocusState private var sidebarFocused: Bool
-  @State private var draft = ""
 
   private var matches: [WorkspaceSession] {
     workspace.sessions.filter { state.query.isEmpty || $0.item.Name.localizedCaseInsensitiveContains(state.query) }
@@ -29,6 +27,9 @@ struct DesktopSidebar: View {
   }
   var body: some View {
     List(selection: Binding(get: { state.selection }, set: { value in
+      // A section header isn't a selectable outline row. AppKit may restore the
+      // previous CLI selection as the header switches into editing mode.
+      guard state.renaming == nil else { return }
       switch value {
       case .session(let id):
         if let row = workspace.sessions.first(where: { $0.id == id }) { state.activate(row) }
@@ -102,43 +103,42 @@ struct DesktopSidebar: View {
       state.rename(server, in: state.renamingTarget)
       return .handled
     }
-    .onChange(of: state.renaming) { _, id in
-      guard let id, let server = workspace.profiles.first(where: { $0.id == id }) else { return }
-      draft = server.name
-      DispatchQueue.main.async { editing = id }
-    }
   }
 
-  @ViewBuilder private func serverHeader(_ server: ServerProfile, group: [String]) -> some View {
-    if state.renaming == server.id && (state.renamingTarget == nil || state.renamingTarget == group) {
-      TextField("Server name", text: $draft).textFieldStyle(.roundedBorder)
-        .accessibilityIdentifier("server-name-field").focused($editing, equals: server.id)
-        .onSubmit { workspace.rename(server, to: draft); state.renaming = nil }
-        .onExitCommand { state.renaming = nil }
-    } else {
-      HStack {
-        Text(server.name)
-        Spacer()
-        if let sample = workspace.samples[server.id] {
-          Text(DesktopTerminal.latency(sample)).font(.caption).monospacedDigit()
+  private func serverHeader(_ server: ServerProfile, group: [String]) -> some View {
+    Group {
+      if state.renaming == server.id && (state.renamingTarget == nil || state.renamingTarget == group) {
+        InlineServerName(name: server.name) { value in
+          if let value { workspace.rename(server, to: value) }
+          state.renaming = nil
+        }
+        .frame(minHeight: 22)
+      } else {
+        HStack {
+          Text(server.name)
+          Spacer()
+          if let sample = workspace.samples[server.id] {
+            Text(DesktopTerminal.latency(sample)).font(.caption).monospacedDigit()
+          }
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Server " + server.name)
+        .onTapGesture {
+          state.selection = .server(server.id)
+          state.renamingTarget = group
+          sidebarFocused = true
+        }
+        .contextMenu {
+          Button("Rename…") { state.rename(server, in: group) }
+          Button("Reconnect") { workspace.retry(server) }
+          Divider()
+          Button { state.alert = .remove(server) } label: {
+            Label("Remove Server…", systemImage: "trash").labelStyle(.titleAndIcon)
+          }
         }
       }
-      .contentShape(Rectangle())
-      .accessibilityElement(children: .combine)
-      .accessibilityLabel("Server " + server.name)
-      .tag(SidebarSelection.server(server.id))
-      .onTapGesture {
-        state.selection = .server(server.id)
-        state.renamingTarget = group
-        sidebarFocused = true
-      }
-      .contextMenu {
-        Button("Rename…") { state.rename(server, in: group) }
-        Button("Reconnect") { workspace.retry(server) }
-        Divider()
-        Button("Remove Server…", systemImage: "trash") { state.alert = .remove(server) }
-      }
-    }
+    }.tag(SidebarSelection.server(server.id))
   }
   private func unavailable(_ server: ServerProfile) -> some View {
     let revoked = workspace.revoked(server)
@@ -192,6 +192,54 @@ struct DesktopSidebar: View {
       }
     }
   }
+}
+
+/// Start editing after the context menu closes and the outline has installed
+/// its header in the window. The field editor owns Return and Escape.
+private struct InlineServerName: NSViewRepresentable {
+  let name: String
+  let finish: (String?) -> Void
+
+  final class Field: NSTextField {
+    override func viewDidMoveToWindow() {
+      super.viewDidMoveToWindow()
+      guard let window else { return }
+      DispatchQueue.main.async { [weak self, weak window] in
+        guard let self, let window, self.window === window else { return }
+        window.makeFirstResponder(self)
+        self.selectText(nil)
+      }
+    }
+  }
+  final class Coordinator: NSObject, NSTextFieldDelegate {
+    var finish: (String?) -> Void
+    init(_ finish: @escaping (String?) -> Void) { self.finish = finish }
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+      guard !textView.hasMarkedText() else { return false }
+      if selector == #selector(NSResponder.insertNewline(_:)) {
+        finish(textView.string)
+        return true
+      }
+      if selector == #selector(NSResponder.cancelOperation(_:)) {
+        finish(nil)
+        return true
+      }
+      return false
+    }
+  }
+  func makeCoordinator() -> Coordinator { Coordinator(finish) }
+  func makeNSView(context: Context) -> Field {
+    let field = Field(string: name)
+    field.usesSingleLineMode = true
+    field.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+    field.delegate = context.coordinator
+    field.setAccessibilityElement(true)
+    field.setAccessibilityRole(.textField)
+    field.setAccessibilityLabel("Server name")
+    field.setAccessibilityIdentifier("server-name-field")
+    return field
+  }
+  func updateNSView(_ field: Field, context: Context) { context.coordinator.finish = finish }
 }
 
 /// A native toolbar search field keeps its cancel button and search accessibility role.

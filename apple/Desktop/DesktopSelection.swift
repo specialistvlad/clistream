@@ -171,7 +171,7 @@ enum DesktopAlert: Identifiable {
         Task { await connection.reconnect(row.item) }
       case .finder:
         Task {
-          do { try await FinderWorkspace.show(serverID: row.server.id, host: row.item.Host, workspaceID: row.item.id) }
+          do { try await FinderWorkspace.show(serverID: row.server.id, workspaceID: row.item.id) }
           catch { owner.alert = .error(error.localizedDescription) }
         }
       case .tab, .window: break

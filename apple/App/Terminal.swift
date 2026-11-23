@@ -53,6 +53,10 @@ private func visibleText(in view: TerminalView) -> String {
 
 #if os(macOS)
   private final class AccessibleTerminal: TerminalView {
+    override func mouseDown(with event: NSEvent) {
+      window?.makeFirstResponder(self)
+      super.mouseDown(with: event)
+    }
     override func viewDidChangeEffectiveAppearance() {
       super.viewDidChangeEffectiveAppearance()
       effectiveAppearance.performAsCurrentDrawingAppearance {

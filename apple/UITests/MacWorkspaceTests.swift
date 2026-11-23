@@ -15,7 +15,7 @@ extension NativeSessionTests {
     XCTAssertTrue(shell.waitForExistence(timeout: 10))
     shell.click()
     let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
-    terminal.typeText("printf 'shell-ready\n'\n")
+    terminal.typeText("echo shell-ready\n")
     expectOutput("shell-ready", in: app)
     try await capture("servers-tree", app)
     let search = app.searchFields.firstMatch
@@ -27,7 +27,7 @@ extension NativeSessionTests {
 
     let address = try XCTUnwrap(env["CLISTREAM_ENDPOINT"])
     let server = app.descendants(matching: .any)["Server " + address].firstMatch
-    try await captureMenu("server-menu", in: app, shown: app.menuItems["Rename…"].firstMatch) {
+    try await captureMenu("server-menu", in: app, title: "Rename…") {
       server.rightClick()
     }
     search.click()
@@ -38,7 +38,7 @@ extension NativeSessionTests {
     let ports = app.descendants(matching: .any)["session-ports"].firstMatch
     ports.click()
     XCTAssertTrue(app.descendants(matching: .any)["forward-tcp"].firstMatch.waitForExistence(timeout: 10))
-    try await captureMenu("open-session-menu", in: app, shown: app.menuItems["Show Ports"].firstMatch) {
+    try await captureMenu("open-session-menu", in: app, title: "Show Ports") {
       comparison.rightClick()
     }
     ports.click()
@@ -47,16 +47,14 @@ extension NativeSessionTests {
     for (action, heading) in [("Restart…", "Restart “comm”"), ("Stop…", "Stop “comm”?")] {
       pipe.click()
       comparison.rightClick()
-      let item = app.menuItems[action].firstMatch
-      XCTAssertTrue(item.waitForExistence(timeout: 10))
-      item.click()
+      try clickMacMenuItem(action, in: app)
       XCTAssertTrue(app.staticTexts[heading].firstMatch.waitForExistence(timeout: 10))
       app.typeKey(.escape, modifierFlags: [])
     }
     pipe.click()
     for (menu, item) in [("File", "Paste Invitation"), ("Edit", "Copy"), ("View", "Show Ports"),
                          ("Session", "Restart…"), ("Server", "Remove Server…")] {
-      try await captureMenu("menu-" + menu.lowercased(), in: app, shown: app.menuItems[item].firstMatch) {
+      try await captureMenu("menu-" + menu.lowercased(), in: app, title: item) {
         app.menuBarItems[menu].click()
       }
     }
@@ -64,7 +62,7 @@ extension NativeSessionTests {
     let oneShotID = try XCTUnwrap(env["CLISTREAM_PTY_ID"])
     let oneShot = app.descendants(matching: .any)["session-" + oneShotID].firstMatch
     oneShot.rightClick()
-    app.menuItems["Open in New Window"].click()
+    try clickMacMenuItem("Open in New Window", in: app)
     let newWindow = app.windows.firstMatch
     XCTAssertTrue(newWindow.staticTexts["Attach only"].firstMatch.waitForExistence(timeout: 10))
     app.menuBarItems["Session"].click()
@@ -87,7 +85,7 @@ extension NativeSessionTests {
     pasteboard.setString(link, forType: .string)
     defer { pasteboard.clearContents() }
     app.menuBarItems["File"].click()
-    app.menuItems["Paste Invitation"].click()
+    try clickMacMenuItem("Paste Invitation", in: app)
     let name = try await fixtureResponse("SECOND-ADDRESS")
     XCTAssertTrue(app.staticTexts[name].firstMatch.waitForExistence(timeout: 10))
     confirmPairing(pairingButton(in: app), in: app)
@@ -96,7 +94,7 @@ extension NativeSessionTests {
     XCTAssertTrue(other.waitForExistence(timeout: 15))
     let header = app.descendants(matching: .any)["Server " + name].firstMatch
     header.rightClick()
-    app.menuItems["Rename…"].click()
+    try clickMacMenuItem("Rename…", in: app)
     let field = app.textFields["server-name-field"].firstMatch
     XCTAssertTrue(field.waitForExistence(timeout: 10))
     field.typeKey("a", modifierFlags: .command)
@@ -104,13 +102,13 @@ extension NativeSessionTests {
     field.typeKey(.escape, modifierFlags: [])
     XCTAssertTrue(header.waitForExistence(timeout: 10))
     header.rightClick()
-    app.menuItems["Remove Server…"].click()
+    try clickMacMenuItem("Remove Server…", in: app)
     XCTAssertTrue(app.staticTexts["Remove “" + name + "”?"].firstMatch.waitForExistence(timeout: 10))
     try await capture("remove-server", app)
     app.typeKey(.escape, modifierFlags: [])
     XCTAssertTrue(other.exists)
     header.rightClick()
-    app.menuItems["Remove Server…"].click()
+    try clickMacMenuItem("Remove Server…", in: app)
     app.buttons["Remove"].firstMatch.click()
     XCTAssertTrue(other.waitForNonExistence(timeout: 10))
     app.terminate()
@@ -123,10 +121,35 @@ extension NativeSessionTests {
     let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
     terminal.typeText("surviving-profile\n")
     expectOutput("out:surviving-profile", in: app)
+    app.menuBarItems["Server"].click()
+    try clickMacMenuItem("Remove Server…", in: app)
+    app.buttons["Remove"].firstMatch.click()
+    XCTAssertTrue(app.buttons["Paste Invitation"].firstMatch.waitForExistence(timeout: 10))
+    XCTAssertTrue(pipe.waitForNonExistence(timeout: 10))
+    try await capture("welcome", app)
+  }
+
+  // macOS also exposes commands from closed main menus. Resolve the item in the
+  // currently tracking menu when a row and the menu bar share the same label.
+  @MainActor private func waitForMacMenu(_ title: String, in app: XCUIApplication, visible: Bool) -> Bool {
+    let items = app.menuItems.matching(identifier: title)
+    let matches = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+      items.allElementsBoundByIndex.contains(where: { $0.isHittable }) == visible
+    }, object: nil)
+    return XCTWaiter.wait(for: [matches], timeout: 6) == .completed
+  }
+
+  @MainActor func visibleMacMenuItem(_ title: String, in app: XCUIApplication) throws -> XCUIElement {
+    XCTAssertTrue(waitForMacMenu(title, in: app, visible: true), title)
+    return try XCTUnwrap(app.menuItems.matching(identifier: title).allElementsBoundByIndex.first(where: { $0.isHittable }))
+  }
+
+  @MainActor func clickMacMenuItem(_ title: String, in app: XCUIApplication) throws {
+    try visibleMacMenuItem(title, in: app).click()
   }
 
   @MainActor private func captureMenu(
-    _ name: String, in app: XCUIApplication, shown: XCUIElement, open: () -> Void
+    _ name: String, in app: XCUIApplication, title: String, open: () -> Void
   ) async throws {
     let gallery = ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1"
     let device = XCUIDevice.shared
@@ -135,7 +158,7 @@ extension NativeSessionTests {
     for dark in gallery ? [false, true] : [false] {
       if gallery { device.appearance = dark ? .dark : .light }
       open()
-      XCTAssertTrue(shown.waitForExistence(timeout: 10))
+      _ = try visibleMacMenuItem(title, in: app)
       if gallery {
         // A menu lives in its own system window, outside the app window screenshot.
         let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
@@ -144,7 +167,7 @@ extension NativeSessionTests {
         add(shot)
       }
       app.typeKey(.escape, modifierFlags: [])
-      XCTAssertTrue(shown.waitForNonExistence(timeout: 5))
+      XCTAssertTrue(waitForMacMenu(title, in: app, visible: false))
     }
   }
 }
