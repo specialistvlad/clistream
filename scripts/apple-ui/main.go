@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -25,6 +26,27 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func firstInvitation(root string, command *exec.Cmd) ([]byte, error) {
+	// On a new profile the first admin invocation and the server can otherwise
+	// compete for daemon.lock. Only a serving daemon publishes admin.sock.
+	config := root
+	if runtime.GOOS == "darwin" {
+		config = filepath.Join(root, "Library", "Application Support")
+	}
+	socket := filepath.Join(config, "clistream", "server", "admin.sock")
+	for deadline := time.Now().Add(time.Minute); time.Now().Before(deadline); {
+		info, err := os.Stat(socket)
+		if err == nil && info.Mode()&os.ModeSocket != 0 {
+			return command.Output()
+		}
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		time.Sleep(80 * time.Millisecond)
+	}
+	return nil, errors.New("broker did not publish its administration socket")
 }
 
 func run(args []string) error {
@@ -78,14 +100,7 @@ func run(args []string) error {
 		return err
 	}
 	defer cleanup()
-	var link []byte
-	for deadline := time.Now().Add(time.Minute); time.Now().Before(deadline); {
-		link, err = command("clistreamd", "invite").Output()
-		if err == nil {
-			break
-		}
-		time.Sleep(80 * time.Millisecond)
-	}
+	link, err := firstInvitation(root, command("clistreamd", "invite"))
 	if err != nil {
 		return fmt.Errorf("primary broker did not issue an invitation: %w", err)
 	}

@@ -48,12 +48,13 @@ container=$(docker run -d --read-only --cap-drop ALL --tmpfs /tmp -w /work \
   'umask 077; env | grep "^TEST_RUNNER_CLISTREAM_" > /tmp/fixture.tmp && mv /tmp/fixture.tmp /tmp/fixture.env && exec sleep infinity')
 # Read the completed fixture environment from its tmpfs. A capability-free
 # container cannot assume write permission on directories owned by the Mac UID.
-for ((i=0; i<240; i++)); do
-  if docker cp "$container:/tmp/fixture.env" "$stage/env" >/dev/null 2>&1; then break; fi
-  [[ $(docker inspect --format '{{.State.Running}}' "$container") == true ]] || break
-  sleep .5
-done
-if [[ ! -s "$stage/env" ]]; then
+if ! (umask 077; docker exec "$container" sh -ec '
+  for i in $(seq 1 120); do
+    if test -s /tmp/fixture.env; then exec cat /tmp/fixture.env; fi
+    sleep 1
+  done
+  exit 1
+' > "$stage/env") || [[ ! -s "$stage/env" ]]; then
   docker inspect --format 'Linux fixture status {{.State.Status}}, exit code {{.State.ExitCode}}' "$container" >&2
   exit 1
 fi

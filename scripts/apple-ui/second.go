@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/specialistvlad/clistream/internal/identity"
 )
@@ -32,14 +31,7 @@ func secondServer(root, bin string, mux *http.ServeMux, path string, launch func
 	}
 	var once sync.Once
 	stopBroker := func() { once.Do(stop) }
-	var invite []byte
-	for deadline := time.Now().Add(time.Minute); time.Now().Before(deadline); {
-		invite, err = cmd("clistreamd", "invite").Output()
-		if err == nil {
-			break
-		}
-		time.Sleep(80 * time.Millisecond)
-	}
+	invite, err := firstInvitation(dir, cmd("clistreamd", "invite"))
 	if err != nil {
 		stopBroker()
 		return nil, fmt.Errorf("secondary broker did not issue an invitation: %w", err)
