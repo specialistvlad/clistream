@@ -24,7 +24,16 @@ else
   echo "Files catalog missing from app group"
 fi
 if [[ -n $group && -f "$group/CLIStream/finder-index.plist" ]]; then
-  plutil -convert json -o - "$group/CLIStream/finder-index.plist" | jq -r '.nodes | length | "Provider index item count \(.)"'
+  index="$group/CLIStream/finder-index.plist"
+  plutil -convert json -o - "$index" | jq -r '.nodes | length | "Provider index item count \(.)"'
+  # Compare only known virtual folder identifiers against the system's view.
+  # Keep the dump in the pipe. It can contain user paths and filenames.
+  perl -e 'alarm 8; exec @ARGV' xcrun simctl spawn "$device" fileproviderctl dump -l "$app.files/workspaces" 2>/dev/null |
+    awk -F '\t' 'FILENAME != "-" { kind[$1] = $2; next }
+      { for (id in kind) if (index($0, id)) seen[kind[id]] = 1; lines++ }
+      END { print "File Provider system dump lines", lines + 0;
+        for (item in seen) print "System references a catalog item of kind", item }' \
+      <(plutil -convert json -o - "$index" | jq -r '.nodes[] | select(.kind == "server" or .kind == "host" or .kind == "workspace") | [.id,.kind] | @tsv') -
 else
   echo "Provider index unavailable"
 fi

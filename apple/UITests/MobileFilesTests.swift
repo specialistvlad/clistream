@@ -11,18 +11,27 @@ extension NativeSessionTests {
       addTeardownBlock { @MainActor in if initial != .unknown { device.orientation = initial } }
     }
     let app = try await openPipe()
-    let show = app.buttons["session-show-files"].firstMatch
-    if !show.isHittable { app.buttons["Session"].firstMatch.tap() }
-    XCTAssertTrue(show.waitForExistence(timeout: 10))
-    show.tap()
-    let alert = app.alerts["Show in Files"].firstMatch
-    XCTAssertTrue(alert.waitForExistence(timeout: 15))
-    let message = alert.staticTexts.allElementsBoundByIndex.map(\.label).joined(separator: " ")
-    let path = try XCTUnwrap(message.components(separatedBy: "Browse → CLIStream → ").last?
-      .components(separatedBy: ". If CLIStream").first)
-    let components = path.components(separatedBy: " → ")
-    XCTAssertEqual(components.count, 3)
-    alert.buttons["OK"].tap()
+    func workspacePath(afterEnabling: Bool = false) throws -> [String] {
+      let show = app.buttons["session-show-files"].firstMatch
+      if !show.isHittable { app.buttons["Session"].firstMatch.tap() }
+      XCTAssertTrue(show.waitForExistence(timeout: 10))
+      show.tap()
+      let alert = app.alerts["Show in Files"].firstMatch
+      XCTAssertTrue(alert.waitForExistence(timeout: 20))
+      let message = alert.staticTexts.allElementsBoundByIndex.map(\.label).joined(separator: " ")
+      if afterEnabling {
+        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(
+          format: "label BEGINSWITH %@", "Open Files and go to")).firstMatch.exists,
+          "Files could not resolve the selected workspace after it was enabled")
+      }
+      let prefix = try XCTUnwrap(message.range(of: "Open Files and go to Browse → CLIStream → "))
+      let path = try XCTUnwrap(message[prefix.upperBound...].components(separatedBy: ". If CLIStream").first)
+      let components = path.components(separatedBy: " → ")
+      XCTAssertEqual(components.count, 3)
+      alert.buttons["OK"].tap()
+      return components
+    }
+    var components = try workspacePath()
     let prepared = try await fixtureResponse("files/prepare")
     XCTAssertEqual(prepared, "ready")
     let files = XCUIApplication(bundleIdentifier: "com.apple.DocumentsApp")
@@ -82,7 +91,14 @@ extension NativeSessionTests {
     // A visible location can still be disabled on first use. Files asks for
     // consent after the user selects it, including in the iPad sidebar.
     let turnOn = files.buttons["Turn On"].firstMatch
-    if turnOn.wait(for: \.isHittable, toEqual: true, timeout: 4) { turnOn.tap() }
+    if turnOn.wait(for: \.isHittable, toEqual: true, timeout: 4) {
+      turnOn.tap()
+      XCTAssertTrue(turnOn.waitForNonExistence(timeout: 10))
+      // Enabling a provider grants the app access to the system-assigned path.
+      app.activate()
+      components = try workspacePath(afterEnabling: true)
+      files.activate()
+    }
     for part in components {
       let directory = fileItem(part)
       XCTAssertTrue(directory.wait(for: \.isHittable, toEqual: true, timeout: 20), part)

@@ -200,8 +200,10 @@ struct MobileServers: View {
       HStack {
         Text(server.name)
         Spacer()
-        if let us = workspace.samples[server.id] {
-          Text(Self.latency(us)).monospacedDigit().font(.caption)
+        TimelineView(.periodic(from: .now, by: 2)) { _ in
+          if let us = workspace.samples[server.id] {
+            Text(Self.latency(us)).monospacedDigit().font(.caption)
+          }
         }
       }.contentShape(Rectangle())
     } primaryAction: {

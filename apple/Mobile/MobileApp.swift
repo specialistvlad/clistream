@@ -1,4 +1,5 @@
 import SwiftUI
+import FileProvider
 
 @main struct MobileApp: App {
   private let workspace: Workspace = {
@@ -76,5 +77,8 @@ struct BrowserView: View {
       }
     }
     .task { workspace.load() }
+    .onReceive(NotificationCenter.default.publisher(for: .fileProviderDomainDidChange)) { _ in
+      Task { await FinderWorkspace.locationDidChange() }
+    }
   }
 }

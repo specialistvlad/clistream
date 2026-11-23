@@ -62,8 +62,8 @@ extension NativeSessionTests {
       alert.buttons[confirmation].tap()
       if confirmation == "Cancel" { XCTAssertTrue(row.exists) }
     }
-    XCTAssertTrue(row.waitForNonExistence(timeout: 8))
-    XCTAssertTrue(app.staticTexts["No Servers"].firstMatch.exists)
+    XCTAssertTrue(app.staticTexts["No Servers"].firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(app.buttons["welcome-paste-invitation"].firstMatch.exists)
   }
 
   @MainActor func testScanAndPasteInvitationReview() async throws {

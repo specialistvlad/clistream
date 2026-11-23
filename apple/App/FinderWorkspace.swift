@@ -108,6 +108,7 @@ import OSLog
         let manager = try await manager()
         try await manager.signalEnumerator(for: .workingSet)
       } catch {
+        if lastSignature == signature { lastSignature = nil }
         let reason = error as NSError
         logger.error("Finder registration or refresh failed: \(reason.domain, privacy: .public) \(reason.code)")
       }
@@ -115,6 +116,18 @@ import OSLog
   }
 
   #if os(iOS)
+  static func locationDidChange() async {
+    do {
+      let domains = try await NSFileProviderManager.domains()
+      guard let domain = domains.first(where: { $0.identifier == FinderStorage.domain.identifier }),
+        domain.userEnabled, let manager = NSFileProviderManager(for: domain) else { return }
+      try await manager.signalEnumerator(for: .workingSet)
+    } catch {
+      let reason = error as NSError
+      logger.error("Could not refresh Files location: \(reason.domain, privacy: .public) \(reason.code)")
+    }
+  }
+
   static func prepareForBrowsing(_ row: WorkspaceSession, in workspace: Workspace) async throws -> String {
     try update(servers: workspace.profiles, sessions: workspace.sessions, errors: workspace.errors)
     let manager = try await manager()
