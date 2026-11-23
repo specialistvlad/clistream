@@ -87,14 +87,26 @@ final class NativeSessionTests: XCTestCase {
       func showServerList(for id: String) {
         let row = app.descendants(matching: .any)["session-" + id].firstMatch
         if row.waitForExistence(timeout: 6) && row.isHittable { return }
-        let back = app.navigationBars.descendants(matching: .any)["Back"].firstMatch
-        if back.exists && back.isHittable {
-          back.tap()
-        } else {
-          let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.45))
-          let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.45))
-          start.press(forDuration: 0.1, thenDragTo: end)
+        let add = app.buttons["workspace-add-server"].firstMatch
+        if !add.exists || !add.isHittable {
+          let back = app.navigationBars.descendants(matching: .any)["Back"].firstMatch
+          if back.exists && back.isHittable {
+            back.tap()
+          } else {
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.005, dy: 0.45))
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.45))
+            start.press(forDuration: 0.1, thenDragTo: end)
+          }
         }
+        // An expanded offline server can push the live server below the fold.
+        // SwiftUI creates its rows as the real sidebar scrolls into view.
+        let list = app.collectionViews.firstMatch
+        XCTAssertTrue(list.waitForExistence(timeout: 8))
+        for _ in 0..<12 {
+          if row.exists && row.isHittable { return }
+          list.swipeUp()
+        }
+        XCTAssertTrue(row.exists && row.isHittable, "The server list did not reveal the requested session")
       }
       showServerList(for: id)
     #endif
@@ -506,13 +518,21 @@ final class NativeSessionTests: XCTestCase {
         format: "value BEGINSWITH %@", "Connected"), object: restored)
       XCTAssertEqual(XCTWaiter.wait(for: [connected], timeout: 15), .completed)
     #else
-      let fresh = try await fixtureResponse("QR")
-      app.open(try XCTUnwrap(URL(string: fresh)))
+      let receipt = try await fixtureResponse("open-repair-invitation")
+      XCTAssertEqual(receipt, "opened")
       confirmPairing(pairingButton(in: app), in: app)
-      let restored = app.staticTexts["desktop-session-status"].firstMatch
-      let connected = XCTNSPredicateExpectation(
-        predicate: NSPredicate(format: "label BEGINSWITH %@", "Connected"), object: restored)
-      XCTAssertEqual(XCTWaiter.wait(for: [connected], timeout: 15), .completed)
+      let connected = app.descendants(matching: .any).matching(NSPredicate(
+        format: "identifier == %@ AND (label BEGINSWITH %@ OR value BEGINSWITH %@)",
+        "desktop-session-status", "Connected", "Connected"
+      )).firstMatch
+      if !connected.waitForExistence(timeout: 15) {
+        let screen = XCTAttachment(screenshot: app.screenshot())
+        screen.name = "mobile-repair-window"
+        screen.lifetime = .keepAlways
+        add(screen)
+        XCTFail("The selected terminal did not reconnect after confirming the new invitation")
+        return
+      }
     #endif
     let input = app.descendants(matching: .any)["session-terminal"].firstMatch
     activate(input)

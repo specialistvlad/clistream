@@ -135,7 +135,7 @@ jobs:
             staging=$(mktemp -d "$RUNNER_TEMP/screenshots.XXXXXX")
             xcrun xcresulttool export attachments --path "$bundle" --output-path "$staging" >/dev/null
             jq -r '.[] | .attachments[].suggestedHumanReadableName | select(test("^audit-[0-9]+-[0-9]+-[a-z-]+_")) | split("_")[0]' "$staging/manifest.json"
-            jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | test("^(command-review|ports-inspector|terminal-output|finder-open-error|finder-locations|finder-settings|finder-checkpoint)-window_")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0])] | @tsv' "$staging/manifest.json" |
+            jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | test("^(command-review|ports-inspector|terminal-output|mobile-repair|finder-open-error|finder-locations|finder-settings|finder-checkpoint)-window_")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0])] | @tsv' "$staging/manifest.json" |
               while IFS=$'\t' read -r file name; do cp "$staging/$file" "results/$name.png"; done
             jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | test("^finder-(open-error|locations|settings|checkpoint)-message_")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0])] | @tsv' "$staging/manifest.json" |
               while IFS=$'\t' read -r file name; do cp "$staging/$file" "results/$name.txt"; done

@@ -291,7 +291,21 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 			http.Error(w, "fixture unavailable", 503)
 			return
 		}
+		if r.URL.Path == path+"open-repair-invitation" {
+			id := os.Getenv("SIMULATOR_ID")
+			// Deliver as an external link to the live scene. XCUIApplication's
+			// open(URL) is a launch operation and can replace that scene.
+			if err := exec.CommandContext(r.Context(), "xcrun", "simctl", "openurl", id, strings.TrimSpace(string(data))).Run(); err != nil {
+				http.Error(w, "unable to deliver invitation to the simulator", http.StatusServiceUnavailable)
+				return
+			}
+			fmt.Fprint(w, "opened")
+			return
+		}
 		w.Write(data)
+	}
+	if os.Getenv("SIMULATOR_ID") != "" {
+		mux.HandleFunc(path+"open-repair-invitation", issue)
 	}
 	for _, op := range []string{"QR", "PIPE", "PORTS", "PTY", "FLUSH", "DRIVERS"} {
 		mux.HandleFunc(path+op, issue)
