@@ -157,7 +157,6 @@ struct WorkspaceSession: Identifiable {
   }
 
   private func updateFinder() {
-    #if os(macOS)
       guard pairing.profile == nil else { return }
       do {
         try FinderWorkspace.update(servers: profiles, sessions: sessions, errors: errors)
@@ -165,7 +164,6 @@ struct WorkspaceSession: Identifiable {
         // A Finder registration failure must not interrupt a live terminal.
         NSLog("CLIStream Finder catalog: %@", error.localizedDescription)
       }
-    #endif
   }
 
     func remove(_ profile: ServerProfile) throws {

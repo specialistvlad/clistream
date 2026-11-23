@@ -175,11 +175,13 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
         return (file, WorkspaceItem(self.index.store(current)))
       } catch {
         try? FileManager.default.removeItem(at: file)
+        #if os(macOS)
         if (error as NSError).code
           == NSFileProviderError.Code.localVersionConflictingWithServer.rawValue
         {
           throw NSFileProviderError(.versionNoLongerAvailable)
         }
+        #endif
         throw error
       }
     }) { result in

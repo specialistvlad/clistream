@@ -6,11 +6,21 @@ import Security
 // The acceptance app has its own bundle and group identifiers.
 enum FinderStorage {
   static func container() throws -> URL {
+    #if os(iOS)
+    guard var appID = Bundle.main.bundleIdentifier else { throw CocoaError(.fileReadNoPermission) }
+    if Bundle.main.object(forInfoDictionaryKey: "NSExtension") != nil {
+      guard appID.hasSuffix(".files") else { throw CocoaError(.fileReadNoPermission) }
+      appID.removeLast(".files".count)
+    }
+    let group = "group." + appID + ".workspace"
+    #else
     guard let task = SecTaskCreateFromSelf(nil),
       let groups = SecTaskCopyValueForEntitlement(
         task, "com.apple.security.application-groups" as CFString, nil) as? [String],
-      let group = groups.first(where: { $0.hasSuffix(".workspace") }),
-      let folder = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)
+      let group = groups.first(where: { $0.hasSuffix(".workspace") })
+    else { throw CocoaError(.fileReadNoPermission) }
+    #endif
+    guard let folder = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)
     else { throw CocoaError(.fileReadNoPermission) }
     var root = folder.appendingPathComponent("CLIStream", isDirectory: true)
     try FileManager.default.createDirectory(
@@ -63,7 +73,7 @@ enum FinderStorage {
     let domain = NSFileProviderDomain(
       identifier: NSFileProviderDomainIdentifier("workspaces"), displayName: "CLIStream")
     domain.supportsSyncingTrash = false
-    #if DEBUG
+    #if DEBUG && os(macOS)
       if let task = SecTaskCreateFromSelf(nil),
         SecTaskCopyValueForEntitlement(
           task, "com.apple.developer.fileprovider.testing-mode" as CFString, nil) as? Bool == true
@@ -81,6 +91,24 @@ enum FinderID {
     parts.map { Data($0.utf8).base64EncodedString() }.joined(separator: ".")
   }
   static func workspace(_ pin: String, _ id: String) -> String { make("workspace", pin, id) }
+  static func displayNames(_ pairs: [(String, String)]) -> [String: String] {
+    var used = Set<String>()
+    var names = [String: String]()
+    for (id, name) in pairs.sorted(by: { $0.0 < $1.0 }) {
+      let raw = name.replacingOccurrences(of: "/", with: "∕")
+      var stem = raw.isEmpty || raw == "." || raw == ".." ? "(\(raw))" : raw
+      while stem.utf8.count > 240 { stem.removeLast() }
+      var candidate = stem
+      var suffix = 1
+      while !used.insert(candidate.folding(options: [.caseInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+        .precomposedStringWithCanonicalMapping).inserted {
+        suffix += 1
+        candidate = "\(stem) (\(suffix))"
+      }
+      names[id] = candidate
+    }
+    return names
+  }
   static func server(of identifier: String) -> String? {
     let parts = identifier.split(separator: ".", omittingEmptySubsequences: false)
     guard parts.count >= 2, let pin = Data(base64Encoded: String(parts[1])) else { return nil }

@@ -31,6 +31,15 @@ if [[ "$platform" == macOS ]]; then
       [[ $(plutil -extract "com\.apple\.security\.network\.$direction" raw - <<<"$entitlements") == true ]]
     done
   done
+else
+  app="$archive/Products/Applications/CLIStream.app"
+  extension="$app/PlugIns/CLIStreamFiles.appex"
+  for bundle in "$app" "$extension"; do
+    codesign --verify --strict "$bundle"
+    entitlements=$(codesign -d --entitlements :- "$bundle" 2>/dev/null)
+    group=$(plutil -extract 'com\.apple\.security\.application-groups.0' raw - <<<"$entitlements")
+    [[ "$group" == group.com.vlk.clistream.workspace ]]
+  done
 fi
 if [[ ${ARCHIVE_ONLY:-0} == 1 ]]; then echo "$archive"; exit 0; fi
 plist="build/release/options-$platform.plist"

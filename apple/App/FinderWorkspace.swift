@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import FileProvider
 import OSLog
 
@@ -112,6 +114,19 @@ import OSLog
     }
   }
 
+  #if os(iOS)
+  static func filesPath(_ row: WorkspaceSession, in workspace: Workspace) -> String {
+    let pin = row.server.id
+    let rows = workspace.sessions.filter { $0.server.id == pin && $0.item.workspace == true }
+    let servers = FinderID.displayNames(workspace.profiles.map { (FinderID.make("server", $0.id), $0.name) })
+    let hosts = FinderID.displayNames(Set(rows.map { $0.item.Host }).map { (FinderID.make("host", pin, $0), $0) })
+    let programs = FinderID.displayNames(rows.filter { $0.item.Host == row.item.Host }
+      .map { (FinderID.workspace(pin, $0.item.id), $0.item.Name) })
+    return ["Browse", "CLIStream", servers[FinderID.make("server", pin)] ?? row.server.name,
+            hosts[FinderID.make("host", pin, row.item.Host)] ?? row.item.Host,
+            programs[FinderID.workspace(pin, row.item.id)] ?? row.item.Name].joined(separator: " → ")
+  }
+  #else
   static func show(serverID: String, workspaceID: String) async throws {
     do {
       #if DEBUG
@@ -140,4 +155,5 @@ import OSLog
       throw error
     }
   }
+  #endif
 }

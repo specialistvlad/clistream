@@ -29,6 +29,7 @@ struct MobileTerminal: View {
   @Environment(\.regularWorkspace) private var regular
   @Environment(\.closedHinge) private var closedHinge
   @State private var ports = false
+  @State private var showingFiles = false
   @State private var keyboard = false
   @State private var sample: Int64?
   @State private var grid = ""
@@ -98,8 +99,17 @@ struct MobileTerminal: View {
           ToolbarItemGroup(placement: .topBarTrailing) { lifecycleButtons }
           ToolbarSpacer(.fixed, placement: .topBarTrailing)
         }
-        ToolbarItemGroup(placement: .topBarTrailing) { portsButton; sessionMenu }
+        ToolbarItemGroup(placement: .topBarTrailing) {
+          if regular && item.workspace == true { filesButton }
+          portsButton
+        }
+        if regular { ToolbarSpacer(.fixed, placement: .topBarTrailing) }
+        ToolbarItem(placement: .topBarTrailing) { sessionMenu }
       }
+    }
+    .alert("Show in Files", isPresented: $showingFiles) { Button("OK") {} } message: {
+      Text("Open Files and go to " + FinderWorkspace.filesPath(target, in: workspace)
+           + ". If CLIStream is hidden, tap Edit in Browse and enable CLIStream under Locations.")
     }
     .modifier(PortsPresentation(connection: connection, session: item, presented: $ports))
     .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in keyboard = true }
@@ -117,6 +127,10 @@ struct MobileTerminal: View {
   private var showKeyboard: some View {
     Button("Show Keyboard", systemImage: "keyboard") { connection.focusTerminal() }
       .labelStyle(.iconOnly).accessibilityIdentifier("show-keyboard")
+  }
+  private var filesButton: some View {
+    Button("Show in Files", systemImage: "folder") { showingFiles = true }
+      .accessibilityIdentifier("session-show-files")
   }
   private var portsButton: some View {
     Button("Ports", systemImage: regular ? "sidebar.right" : "network") { ports.toggle() }
@@ -143,6 +157,7 @@ struct MobileTerminal: View {
         Button("Reconnect", systemImage: "arrow.clockwise") { Task { await connection.reconnect(item) } }
       }
       Button("Ports", systemImage: "network") { ports = true }
+      if item.workspace == true { filesButton }
       Divider()
       Button("Detach", systemImage: "rectangle.portrait.and.arrow.right", action: detach)
     }.accessibilityIdentifier("session-menu")

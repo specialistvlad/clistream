@@ -61,9 +61,7 @@ final class Connection: ObservableObject {
       var dir = try FileManager.default.url(
         for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
       ).appendingPathComponent("CLIStream", isDirectory: true)
-      #if os(macOS)
-        dir = try FinderWorkspace.enrollmentRoot(legacy: dir)
-      #endif
+      dir = try FinderWorkspace.enrollmentRoot(legacy: dir)
       try FileManager.default.createDirectory(
         at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
       var attributes = URLResourceValues()

@@ -1,4 +1,4 @@
-#if os(macOS)
+#if os(macOS) || os(iOS)
   import Foundation
   import XCTest
 
@@ -22,7 +22,7 @@
       XCTAssertThrowsError(try FinderStorage.existingEnrollment(unknown, in: root))
     }
 
-    @MainActor func testMigratesMacProfilesWithoutChangingKeysOrRevivingRemovedServers() throws {
+    @MainActor func testMigratesProfilesWithoutChangingKeysOrRevivingRemovedServers() throws {
       let files = FileManager.default
       let temp = files.temporaryDirectory.appendingPathComponent(UUID().uuidString)
       defer { try? files.removeItem(at: temp) }

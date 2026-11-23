@@ -38,12 +38,44 @@ targetTemplates:
         PRODUCT_NAME: CLIStream
 targets:
   CLIStream-iOS:
-    sources: [Mobile]
+    attributes:
+      SystemCapabilities:
+        com.apple.ApplicationGroups.iOS: {enabled: 1}
+    sources: [Mobile, FinderShared]
     templates: [Client]
     platform: iOS
+    dependencies:
+      - target: CLIStream-Files
+        embed: true
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1,2"
+        CLISTREAM_APP_GROUP: "group.$(CLISTREAM_APP_ID).workspace"
+        CODE_SIGN_ENTITLEMENTS: MobileFiles.entitlements
+        "CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]": MobileSimulator.entitlements
+  CLIStream-Files:
+    attributes:
+      SystemCapabilities:
+        com.apple.ApplicationGroups.iOS: {enabled: 1}
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: FinderExtension
+        excludes: [Info.plist, Finder.entitlements]
+      - path: FinderShared
+    dependencies:
+      - framework: build/Core.xcframework
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(CLISTREAM_APP_ID).files"
+        PRODUCT_NAME: CLIStreamFiles
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: YES
+        CLISTREAM_APP_GROUP: "group.$(CLISTREAM_APP_ID).workspace"
+        CODE_SIGN_ENTITLEMENTS: MobileFiles.entitlements
+        "CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]": MobileSimulator.entitlements
+        INFOPLIST_FILE: FinderExtension/Info.plist
   CLIStream-macOS:
     sources: [Desktop, FinderShared]
     templates: [Client]
