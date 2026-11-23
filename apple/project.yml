@@ -38,9 +38,6 @@ targetTemplates:
         PRODUCT_NAME: CLIStream
 targets:
   CLIStream-iOS:
-    attributes:
-      SystemCapabilities:
-        com.apple.ApplicationGroups.iOS: {enabled: 1}
     sources: [Mobile, FinderShared]
     templates: [Client]
     platform: iOS
@@ -54,9 +51,6 @@ targets:
         CODE_SIGN_ENTITLEMENTS: MobileFiles.entitlements
         "CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*]": MobileSimulator.entitlements
   CLIStream-Files:
-    attributes:
-      SystemCapabilities:
-        com.apple.ApplicationGroups.iOS: {enabled: 1}
     type: app-extension
     platform: iOS
     sources:
