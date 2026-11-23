@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"path"
 	"strings"
@@ -24,7 +23,7 @@ func rendezvous(mux *http.ServeMux, route string) <-chan string {
 		mu.Lock()
 		if !arrived[name] {
 			arrived[name] = true
-			fmt.Printf("%s reached %s\n", name, path.Base(route))
+			sharedCheckpoint(name + " reached " + path.Base(route))
 			arrivals <- name
 			if len(arrived) == 3 {
 				close(ready)

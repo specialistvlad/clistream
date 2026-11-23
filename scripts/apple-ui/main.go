@@ -60,7 +60,14 @@ func run(args []string) error {
 		if err := cmd.Start(); err != nil {
 			return nil, err
 		}
-		return func() { cmd.Process.Signal(os.Interrupt); cmd.Wait() }, nil
+		return func() {
+			_ = cmd.Process.Signal(os.Interrupt)
+			// A suspended fixture must not prevent XCTest results from being
+			// collected after the client tests have already finished.
+			kill := time.AfterFunc(5*time.Second, func() { _ = cmd.Process.Kill() })
+			_ = cmd.Wait()
+			kill.Stop()
+		}, nil
 	}
 	brokerArgs := []string{"--listen", "127.0.0.1:0", "--qr=false"}
 	if port := os.Getenv("CLISTREAM_UI_BROKER_PORT"); port != "" {

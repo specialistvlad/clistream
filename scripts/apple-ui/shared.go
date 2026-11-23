@@ -12,17 +12,52 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
+// Kill the wrapper and its simctl/xcodebuild subprocesses together. A child
+// inheriting a diagnostic pipe must not keep Wait blocked after XCTest exits.
+func sharedCommand(ctx context.Context, program string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, program, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = 5 * time.Second
+	return cmd
+}
+
+func sharedCheckpoint(label string) {
+	if os.Getenv("GITHUB_ACTIONS") == "true" {
+		fmt.Println("::notice title=Shared UI test::" + label)
+	} else {
+		fmt.Println(label)
+	}
+}
+
+func prepareStage(ctx context.Context, label string, limit time.Duration, program string, args ...string) error {
+	stage, cancel := context.WithTimeout(ctx, limit)
+	defer cancel()
+	sharedCheckpoint(label)
+	cmd := sharedCommand(stage, program, args...)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	err := cmd.Run()
+	if stage.Err() != nil {
+		return fmt.Errorf("%s: %w", label, stage.Err())
+	}
+	if err != nil {
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	return nil
+}
+
 // Build each SDK once before starting the simultaneous interaction watchdog.
-func buildTestPlan(root, platform, destination string) (string, error) {
+func buildTestPlan(ctx context.Context, root, platform, destination string) (string, error) {
 	dir := filepath.Join(root, "build-"+platform)
-	cmd := exec.Command("apple/acceptance-xcodebuild.sh", platform, "-quiet", "-project", "apple/CLIStream.xcodeproj",
+	err := prepareStage(ctx, "Build the "+platform+" test plan", 8*time.Minute,
+		"apple/acceptance-xcodebuild.sh", platform, "-quiet", "-project", "apple/CLIStream.xcodeproj",
 		"-scheme", "CLIStream-"+platform, "-derivedDataPath", dir, "-destination", destination,
 		"-jobs", "3", "CLISTREAM_APP_ID=com.vlk.clistream.acceptance.shared", "build-for-testing")
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err != nil {
 		return "", err
 	}
 	plans, err := filepath.Glob(filepath.Join(dir, "Build", "Products", "*.xctestrun"))
@@ -38,17 +73,18 @@ func buildTestPlan(root, platform, destination string) (string, error) {
 type viewerPlans struct{ mac, mobile string }
 
 func prepareViewers(root string) (viewerPlans, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
+	defer cancel()
 	for _, key := range []string{"IPHONE_SIMULATOR_ID", "IPAD_SIMULATOR_ID"} {
 		if os.Getenv(key) == "" {
 			return viewerPlans{}, fmt.Errorf("%s required", key)
 		}
 	}
-	fmt.Println("Building the Mac and mobile test plans")
-	macPlan, err := buildTestPlan(root, "macOS", "generic/platform=macOS")
+	macPlan, err := buildTestPlan(ctx, root, "macOS", "generic/platform=macOS")
 	if err != nil {
 		return viewerPlans{}, err
 	}
-	mobilePlan, err := buildTestPlan(root, "iOS", "generic/platform=iOS Simulator")
+	mobilePlan, err := buildTestPlan(ctx, root, "iOS", "generic/platform=iOS Simulator")
 	if err != nil {
 		return viewerPlans{}, err
 	}
@@ -57,13 +93,13 @@ func prepareViewers(root string) (viewerPlans, error) {
 	// Leave the iPad up for pairing and start the prepared phone only after that.
 	for _, device := range []string{"IPHONE_SIMULATOR_ID", "IPAD_SIMULATOR_ID"} {
 		id := os.Getenv(device)
-		fmt.Println("Preparing", device)
-		if err := prepareSimulator(id, products); err != nil {
+		if err := prepareSimulator(ctx, device, id, products); err != nil {
 			return viewerPlans{}, fmt.Errorf("prepare %s: %w", device, err)
 		}
 		if device == "IPHONE_SIMULATOR_ID" {
-			if err := exec.Command("xcrun", "simctl", "shutdown", id).Run(); err != nil {
-				return viewerPlans{}, fmt.Errorf("shut down the prepared phone: %w", err)
+			if err := prepareStage(ctx, "Shut down the prepared iPhone", 90*time.Second,
+				"xcrun", "simctl", "shutdown", id); err != nil {
+				return viewerPlans{}, err
 			}
 		}
 	}
@@ -72,22 +108,16 @@ func prepareViewers(root string) (viewerPlans, error) {
 
 // CoreSimulator can lose its install service immediately after an otherwise
 // successful first boot (simctl exits 204, NSMachErrorDomain -308).
-func prepareSimulator(id, products string) error {
-	run := func(program string, args ...string) error {
-		cmd := exec.Command(program, args...)
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		return cmd.Run()
-	}
+func prepareSimulator(ctx context.Context, device, id, products string) error {
 	for attempt := 0; ; attempt++ {
-		if err := run("apple/boot-simulator.sh", id); err != nil {
-			return fmt.Errorf("boot: %w", err)
+		if err := prepareStage(ctx, "Boot "+device, 10*time.Minute, "apple/boot-simulator.sh", id); err != nil {
+			return err
 		}
 		var err error
 		for _, bundle := range []string{"CLIStream.app", "CLIStreamUITests-Runner.app"} {
-			fmt.Println("Installing", bundle)
-			err = run("xcrun", "simctl", "install", id, filepath.Join(products, bundle))
+			err = prepareStage(ctx, "Install "+bundle+" on "+device, 4*time.Minute,
+				"xcrun", "simctl", "install", id, filepath.Join(products, bundle))
 			if err != nil {
-				err = fmt.Errorf("install %s: %w", bundle, err)
 				break
 			}
 		}
@@ -97,7 +127,10 @@ func prepareSimulator(id, products string) error {
 		}
 		fmt.Println("Simulator installation service terminated; rebooting before retry:", err)
 		// boot-simulator may erase a failed first boot. Reinstall both products.
-		_ = run("xcrun", "simctl", "shutdown", id)
+		if err := prepareStage(ctx, "Shut down "+device+" before installation retry", 90*time.Second,
+			"xcrun", "simctl", "shutdown", id); err != nil {
+			return err
+		}
 	}
 }
 
@@ -116,17 +149,16 @@ func shared(plans viewerPlans, arrivals <-chan string, url, pipeID, pipeRun, ter
 		{"pad", os.Getenv("IPAD_SIMULATOR_ID")}, {"phone", os.Getenv("IPHONE_SIMULATOR_ID")}, {"mac", ""},
 	} {
 		if device.name == "phone" {
-			boot := exec.CommandContext(ctx, "xcrun", "simctl", "bootstatus", device.id, "-b")
-			boot.Stdout, boot.Stderr = os.Stdout, os.Stderr
-			if err := boot.Run(); err != nil {
-				return fmt.Errorf("boot the prepared iPhone: %w", err)
+			if err := prepareStage(ctx, "Boot the prepared iPhone", 5*time.Minute,
+				"xcrun", "simctl", "bootstatus", device.id, "-b"); err != nil {
+				return err
 			}
 		}
 		dest, plan, suite := "platform=macOS", plans.mac, "CLIStream-MacUITests"
 		if device.id != "" {
 			dest, plan, suite = "platform=iOS Simulator,id="+device.id, plans.mobile, "CLIStream-UITests"
 		}
-		fmt.Println("Pairing shared viewer:", device.name)
+		sharedCheckpoint("Pair shared viewer " + device.name)
 		env := append(os.Environ(), "TEST_RUNNER_CLISTREAM_FIXTURE="+url, "TEST_RUNNER_CLISTREAM_PARTICIPANT="+device.name,
 			"TEST_RUNNER_CLISTREAM_PIPE_ID="+pipeID, "TEST_RUNNER_CLISTREAM_PTY_ID="+terminalID, "TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY=0")
 		participants.Go(func() {
@@ -140,6 +172,7 @@ func shared(plans viewerPlans, arrivals <-chan string, url, pipeID, pipeRun, ter
 			return ctx.Err()
 		}
 	}
+	sharedCheckpoint("Join the three native viewers with the CLI")
 	participants.Go(func() { results <- observeCLI(ctx, command("clistream", "attach", pipeRun)) })
 	for range 4 {
 		select {
@@ -157,7 +190,7 @@ func shared(plans viewerPlans, arrivals <-chan string, url, pipeID, pipeRun, ter
 func testSharedViewer(ctx context.Context, name, id, plan, destination, suite string, env []string) error {
 	for attempt := 0; ; attempt++ {
 		bundle := filepath.Join("apple/build", fmt.Sprintf("shared-%d-%s.xcresult", time.Now().Unix(), name))
-		test := exec.CommandContext(ctx, "xcodebuild", "-quiet", "-xctestrun", plan, "-destination", destination,
+		test := sharedCommand(ctx, "xcodebuild", "-quiet", "-xctestrun", plan, "-destination", destination,
 			"-parallel-testing-enabled", "NO", "-collect-test-diagnostics", "never",
 			"-resultBundlePath", bundle,
 			"-only-testing:"+suite+"/NativeSessionTests/testConcurrentViewers", "test-without-building")
@@ -166,13 +199,19 @@ func testSharedViewer(ctx context.Context, name, id, plan, destination, suite st
 		test.Stdout = io.MultiWriter(os.Stdout, &diagnostics)
 		test.Stderr = test.Stdout
 		err := test.Run()
+		if errors.Is(err, exec.ErrWaitDelay) && test.ProcessState.Success() {
+			// XCTest finished successfully; one of its detached helpers held a pipe open.
+			err = nil
+		}
 		if err == nil || attempt != 0 || name != "pad" || os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" ||
 			!bytes.Contains(diagnostics.Bytes(), []byte("Test crashed with signal term while preparing to run tests.")) {
 			return err
 		}
 		// Only the first iPad can recover here, before any viewer has paired.
 		// Never retry a testcase that Xcode actually started.
-		data, readErr := exec.CommandContext(ctx, "xcrun", "xcresulttool", "get", "test-results", "summary", "--path", bundle).Output()
+		summaryCtx, cancelSummary := context.WithTimeout(ctx, 30*time.Second)
+		data, readErr := sharedCommand(summaryCtx, "xcrun", "xcresulttool", "get", "test-results", "summary", "--path", bundle).Output()
+		cancelSummary()
 		var summary struct{ TotalTestCount *int }
 		if readErr != nil || json.Unmarshal(data, &summary) != nil || summary.TotalTestCount == nil || *summary.TotalTestCount != 0 {
 			return err
@@ -181,13 +220,13 @@ func testSharedViewer(ctx context.Context, name, id, plan, destination, suite st
 		if err := os.Rename(bundle, bundle+".startup"); err != nil {
 			return err
 		}
-		if err := exec.CommandContext(ctx, "xcrun", "simctl", "shutdown", id).Run(); err != nil {
-			return fmt.Errorf("restart iPad after runner startup failure: %w", err)
+		if err := prepareStage(ctx, "Shut down iPad after runner startup failure", 90*time.Second,
+			"xcrun", "simctl", "shutdown", id); err != nil {
+			return err
 		}
-		boot := exec.CommandContext(ctx, "apple/boot-simulator.sh", id)
-		boot.Stdout, boot.Stderr = os.Stdout, os.Stderr
-		if err := boot.Run(); err != nil {
-			return fmt.Errorf("boot iPad after runner startup failure: %w", err)
+		if err := prepareStage(ctx, "Boot iPad after runner startup failure", 5*time.Minute,
+			"apple/boot-simulator.sh", id); err != nil {
+			return err
 		}
 	}
 }

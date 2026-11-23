@@ -24,6 +24,8 @@ A two-window test opened an attach-only session, verified that Restart was disab
 
 The full iPhone run passed all 19 required cases and exported 28 screenshots. The optional integration case requires externally supplied Claude and Codex sessions and skipped on this runner. [iPhone suite](https://github.com/specialistvlad/clistream/actions/runs/45151855737/job/137616302244)
 
+The iPad passed 18 required cases in the full matrix. Its EOF case timed out contacting the fixture. A focused hosted rerun passed the complete EOF interaction, retained output and screenshot capture, bringing coverage to all 19 required cases across the two runs. [iPad suite](https://github.com/specialistvlad/clistream/actions/runs/45151855737/job/137616302651) · [EOF and completed output](https://github.com/specialistvlad/clistream/actions/runs/45161097075/job/137646472393)
+
 Finder on a clean hosted Mac enabled CLIStream under Locations and opened the selected program. The test pasted a file into Finder, changed it on the host, stopped the child, read the new contents, moved the file into a new folder, saved it and deleted both entries. The supervisor verified each mutation. Restarting the child preserved the location, and a supervisor with its workspace disabled hid the Finder action. An earlier save had produced a conflict copy after a move. The provider now preserves the content revision across its own acknowledged moves, and the complete Mac-host round trip passed. [Mac-host Finder test](https://github.com/specialistvlad/clistream/actions/runs/45155014852/job/137625637389)
 
 ## Native terminal workspace · November 22, 2026
