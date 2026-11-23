@@ -12,6 +12,12 @@ import OSLog
   static func enrollmentRoot(legacy: URL) throws -> URL {
     if let migrated { return migrated }
     let root = try FinderStorage.container()
+    try migrate(legacy: legacy, to: root)
+    migrated = root
+    return root
+  }
+
+  static func migrate(legacy: URL, to root: URL) throws {
     let fm = FileManager.default
     let marker = root.appendingPathComponent(".profiles-migrated")
     if !fm.fileExists(atPath: marker.path) {
@@ -25,7 +31,7 @@ import OSLog
         guard fm.fileExists(atPath: metadata.path) else { continue }
         struct Saved: Decodable { let Pin: String }
         let pin = try JSONDecoder().decode(Saved.self, from: Data(contentsOf: metadata)).Pin
-        let destination = try FinderStorage.credentialDirectory(pin)
+        let destination = try FinderStorage.credentialDirectory(pin, in: root)
         try fm.createDirectory(
           at: destination.deletingLastPathComponent(), withIntermediateDirectories: true,
           attributes: [.posixPermissions: 0o700])
@@ -33,9 +39,12 @@ import OSLog
         if !fm.fileExists(atPath: destination.path) {
           // Publish the two credential files together. Never expose a profile with a new key.
           let stage = root.appendingPathComponent(UUID().uuidString)
-          try fm.createDirectory(at: stage, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+          try fm.createDirectory(
+            at: stage, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
           defer { try? fm.removeItem(at: stage) }
-          for url in [key, metadata] { try fm.copyItem(at: url, to: stage.appendingPathComponent(url.lastPathComponent)) }
+          for url in [key, metadata] {
+            try fm.copyItem(at: url, to: stage.appendingPathComponent(url.lastPathComponent))
+          }
           try fm.moveItem(at: stage, to: destination)
         }
         let currentKey = try Data(contentsOf: destination.appendingPathComponent("key.pem"))
@@ -45,14 +54,14 @@ import OSLog
         // If a previous launch stopped between the two unlinks, the destination is
         // already complete. Remove the surviving metadata only after checking it.
         if !fm.fileExists(atPath: key.path),
-           try Data(contentsOf: metadata) == Data(contentsOf: destination.appendingPathComponent("server.json")) {
+          try Data(contentsOf: metadata)
+            == Data(contentsOf: destination.appendingPathComponent("server.json"))
+        {
           try fm.removeItem(at: metadata)
         }
       }
       try Data().write(to: marker, options: .atomic)
     }
-    migrated = root
-    return root
   }
 
   private static func manager() async throws -> NSFileProviderManager {
@@ -69,12 +78,18 @@ import OSLog
       return manager
     }
     registration = task
-    do { return try await task.value }
-    catch { registration = nil; throw error }
+    do { return try await task.value } catch {
+      registration = nil
+      throw error
+    }
   }
 
-  static func update(servers: [ServerProfile], sessions: [WorkspaceSession], errors: [String: String]) throws {
-    let entries = servers.map { FinderStorage.Server(pin: $0.id, name: $0.name) }.sorted { $0.pin < $1.pin }
+  static func update(
+    servers: [ServerProfile], sessions: [WorkspaceSession], errors: [String: String]
+  ) throws {
+    let entries = servers.map { FinderStorage.Server(pin: $0.id, name: $0.name) }.sorted {
+      $0.pin < $1.pin
+    }
     let previous = try FinderStorage.servers()
     if previous != entries {
       let url = try FinderStorage.container().appendingPathComponent("finder-servers.json")
@@ -83,7 +98,8 @@ import OSLog
     var containers = Set(servers.map { FinderID.make("server", $0.id) })
     let workspaces = sessions.filter { $0.item.workspace == true }
     containers.formUnion(workspaces.map { FinderID.make("host", $0.server.id, $0.item.Host) })
-    let signature = (entries.map { FinderID.make($0.pin, $0.name, errors[$0.pin] ?? "") }
+    let signature =
+      (entries.map { FinderID.make($0.pin, $0.name, errors[$0.pin] ?? "") }
       + workspaces.map { FinderID.make($0.id, $0.item.Host, $0.item.Name) }).sorted()
     guard lastSignature != signature else { return }
     let affected = hierarchy.union(containers)
@@ -94,7 +110,8 @@ import OSLog
       do {
         let manager = try await manager()
         for item in [NSFileProviderItemIdentifier.rootContainer, .workingSet]
-          + affected.map(NSFileProviderItemIdentifier.init(rawValue:)) {
+          + affected.map(NSFileProviderItemIdentifier.init(rawValue:))
+        {
           try await manager.signalEnumerator(for: item)
         }
       } catch {
@@ -105,8 +122,12 @@ import OSLog
 
   static func show(serverID: String, host: String, workspaceID: String) async throws {
     let manager = try await manager()
+    // A host that has never been browsed can have no active enumerator yet.
+    try? await manager.signalEnumerator(for: .init(FinderID.make("host", serverID, host)))
     let id = NSFileProviderItemIdentifier(FinderID.workspace(serverID, workspaceID))
     let folder = try await manager.getUserVisibleURL(for: id)
+    let acquired = folder.startAccessingSecurityScopedResource()
+    defer { if acquired { folder.stopAccessingSecurityScopedResource() } }
     guard NSWorkspace.shared.open(folder) else { throw CocoaError(.fileReadUnknown) }
   }
 }

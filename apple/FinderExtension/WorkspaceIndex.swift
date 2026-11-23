@@ -27,7 +27,8 @@ final class WorkspaceIndex {
     let file = try FinderStorage.container().appendingPathComponent("finder-index.plist")
     if FileManager.default.fileExists(atPath: file.path) {
       // Metadata can be rebuilt from the server. A fresh epoch expires prior sync anchors.
-      state = (try? PropertyListDecoder().decode(State.self, from: Data(contentsOf: file))) ?? State()
+      state =
+        (try? PropertyListDecoder().decode(State.self, from: Data(contentsOf: file))) ?? State()
     }
     loaded = true
   }
@@ -60,13 +61,16 @@ final class WorkspaceIndex {
   func changes(since anchor: NSFileProviderSyncAnchor) throws -> [Change] {
     let parts = String(decoding: anchor.rawValue, as: UTF8.self).split(separator: ":")
     guard parts.count == 2, parts[0] == state.epoch.uuidString, let since = Int(parts[1]),
-      since >= (state.changes.first?.sequence ?? 1) - 1, since <= sequence else {
+      since >= (state.changes.first?.sequence ?? 1) - 1, since <= sequence
+    else {
       throw NSFileProviderError(.syncAnchorExpired)
     }
     return state.changes.filter { $0.sequence > since }
   }
   func changedContainers(after sequence: Int) -> Set<String> {
-    Set(state.changes.lazy.filter { $0.sequence > sequence }.flatMap { [$0.id, $0.oldParent, $0.parent].compactMap { $0 } })
+    Set(
+      state.changes.lazy.filter { $0.sequence > sequence }
+        .flatMap { [$0.oldParent, $0.parent].compactMap { $0 } })
   }
   var all: [WorkspaceNode] { Array(state.nodes.values) }
   private func record(_ id: String, old: String?, new: String?) {
@@ -90,7 +94,9 @@ final class WorkspaceIndex {
   }
   func cached(_ id: String) -> WorkspaceNode? { id == FinderID.root ? .root : state.nodes[id] }
   func require(_ id: String) throws -> WorkspaceNode {
-    guard let node = cached(id) else { throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: .init(id)) }
+    guard let node = cached(id) else {
+      throw NSError.fileProviderErrorForNonExistentItem(withIdentifier: .init(id))
+    }
     return node
   }
   func children(of id: String) -> [WorkspaceNode] { state.nodes.values.filter { $0.parent == id } }
@@ -112,7 +118,10 @@ final class WorkspaceIndex {
       while stem.utf8.count > 240 { stem.removeLast() }
       node.name = stem
       var suffix = 1
-      while !used.insert(node.name.folding(options: [.caseInsensitive], locale: Locale(identifier: "en_US_POSIX")).precomposedStringWithCanonicalMapping).inserted {
+      while !used.insert(
+        node.name.folding(options: [.caseInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+          .precomposedStringWithCanonicalMapping
+      ).inserted {
         suffix += 1
         node.name = "\(stem) (\(suffix))"
       }
@@ -121,9 +130,12 @@ final class WorkspaceIndex {
   }
   func discover(only serverID: String? = nil) throws {
     let servers = try FinderStorage.servers()
-    let roots = displayNames(servers.map {
-      WorkspaceNode(id: FinderID.make("server", $0.pin), parent: FinderID.root, name: $0.name, kind: .server, server: $0.pin)
-    })
+    let roots = displayNames(
+      servers.map {
+        WorkspaceNode(
+          id: FinderID.make("server", $0.pin), parent: FinderID.root, name: $0.name, kind: .server,
+          server: $0.pin)
+      })
     reconcile(roots, parent: FinderID.root)
     for server in roots where serverID == nil || server.server == serverID {
       do {
@@ -131,20 +143,26 @@ final class WorkspaceIndex {
         let reply = try WorkspaceService.call(["Op": "supervisors", "Dir": dir.path])
         let available = (reply.Supervisors ?? []).filter { $0.Workspace == true }
         let byHost = Dictionary(grouping: available, by: { $0.Info.Host })
-        let hosts = displayNames(byHost.keys.map { name in
-          WorkspaceNode(id: FinderID.make("host", server.server, name), parent: server.id,
-                        name: name, kind: .host, server: server.server, remoteName: name)
-        })
+        let hosts = displayNames(
+          byHost.keys.map { name in
+            WorkspaceNode(
+              id: FinderID.make("host", server.server, name), parent: server.id,
+              name: name, kind: .host, server: server.server, remoteName: name)
+          })
         reconcile(hosts, parent: server.id)
         for host in hosts {
-          let workspaces = displayNames((byHost[host.remoteName] ?? []).map { run in
-            WorkspaceNode(id: FinderID.workspace(server.server, run.ID), parent: host.id, name: run.Info.Name,
-                          kind: .workspace, server: server.server, workspace: run.ID)
-          })
+          let workspaces = displayNames(
+            (byHost[host.remoteName] ?? []).map { run in
+              WorkspaceNode(
+                id: FinderID.workspace(server.server, run.ID), parent: host.id, name: run.Info.Name,
+                kind: .workspace, server: server.server, workspace: run.ID)
+            })
           reconcile(workspaces, parent: host.id)
         }
       } catch let error as NSError {
-        if error.domain == NSFileProviderErrorDomain && error.code == NSFileProviderError.Code.notAuthenticated.rawValue {
+        if error.domain == NSFileProviderErrorDomain
+          && error.code == NSFileProviderError.Code.notAuthenticated.rawValue
+        {
           reconcile([], parent: server.id)
         }
         // An unavailable server must not erase materialized files or hide other servers.
@@ -164,7 +182,8 @@ final class WorkspaceIndex {
   }
   func childPath(_ name: String, in parent: WorkspaceNode) throws -> String {
     guard !name.isEmpty, name != ".", name != "..", !name.contains("/"), !name.contains("\0"),
-          parent.kind == .directory || parent.kind == .workspace else { throw CocoaError(.fileWriteInvalidFileName) }
+      parent.kind == .directory || parent.kind == .workspace
+    else { throw CocoaError(.fileWriteInvalidFileName) }
     let root = try path(of: parent)
     return root == "." ? name : root + "/" + name
   }
@@ -221,9 +240,11 @@ final class WorkspaceIndex {
         let contents = try readChildren(current)
         seen[current.id] = Set(contents.map(\.id))
         contents.forEach(store)
-      }
-      catch let error as NSError where error.domain == NSFileProviderErrorDomain &&
-        [.serverUnreachable, .notAuthenticated, .noSuchItem].contains(NSFileProviderError.Code(rawValue: error.code)) {
+      } catch let error as NSError
+        where error.domain == NSFileProviderErrorDomain
+        && [.serverUnreachable, .notAuthenticated, .noSuchItem].contains(
+          NSFileProviderError.Code(rawValue: error.code))
+      {
         continue
       }
     }

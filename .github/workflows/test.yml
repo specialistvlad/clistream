@@ -50,6 +50,8 @@ jobs:
       matrix:
         device: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.device)) || fromJSON('["macOS","iPhone","iPad","Duo","shared"]') }}
     runs-on: xcode-27
+    env:
+      CLISTREAM_MAC_DEVELOPMENT_TEAM: ${{ vars.CLISTREAM_MAC_DEVELOPMENT_TEAM }}
     # A cold iOS runtime must finish migrating before the per-case watchdogs start.
     timeout-minutes: ${{ (matrix.device == 'Duo' || matrix.device == 'macOS') && 95 || 65 }}
     steps:
@@ -132,6 +134,20 @@ jobs:
           path: gallery/*.png
           if-no-files-found: ignore
           retention-days: 3
+      - name: Verify the complete Mac design gallery
+        if: matrix.device == 'macOS' && !inputs.cases && (github.event_name != 'workflow_dispatch' || inputs.screenshots)
+        run: |
+          missing=0
+          for board in servers-tree port-forwards open-session-menu server-menu rename-server welcome disconnected add-server confirm-server pairing-error edit-command stop-confirmation remove-server menu-file menu-edit menu-view menu-session menu-server; do
+            for appearance in '' '-dark'; do
+              file="gallery/$board$appearance.png"
+              if [[ ! -s "$file" ]]; then
+                echo "::error::Missing Mac design capture $file"
+                missing=1
+              fi
+            done
+          done
+          exit "$missing"
       - name: Record individual XCTest outcomes
         if: always()
         run: |

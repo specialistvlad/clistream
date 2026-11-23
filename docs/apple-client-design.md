@@ -34,6 +34,8 @@ On Mac, use the window toolbar for lifecycle actions. On iPhone and iPad, open *
 
 **Show in Finder** opens the selected program under **CLIStream › server › host › program**. The system downloads file contents on demand. Finder and ordinary document apps can create, save, move, rename and remove items in a shared folder. Host-side edits are picked up by the provider. Workspaces belong to the supervisor, so stopping and restarting a managed child preserves the folder. Legacy peers and supervisors started with `--files=FALSE` omit this action. The Go CLI continues to provide its own workspace commands on Linux and macOS. [Apple File Provider](https://developer.apple.com/documentation/fileprovider)
 
+While the extension is running, it checks previously browsed folders for host-side changes about every ten seconds. It also refreshes on enumeration, including after reconnecting. Concurrent document saves preserve the remote original and a conflicted copy, or return a version conflict when the editing app requests one.
+
 ## Future file access
 
 The iPhone, iPad and Duo Files extension is deferred. These apps use the shared terminal and session controls described above.

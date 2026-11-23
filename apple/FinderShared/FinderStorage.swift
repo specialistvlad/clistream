@@ -22,10 +22,14 @@ enum FinderStorage {
   }
 
   static func credentialDirectory(_ pin: String) throws -> URL {
+    try credentialDirectory(pin, in: container())
+  }
+
+  static func credentialDirectory(_ pin: String, in root: URL) throws -> URL {
     guard pin.count == 64, pin.allSatisfy(\.isHexDigit) else {
       throw CocoaError(.fileReadCorruptFile)
     }
-    return try container().appendingPathComponent("Servers").appendingPathComponent(pin)
+    return root.appendingPathComponent("Servers").appendingPathComponent(pin)
   }
 
   struct Server: Codable, Equatable {
@@ -35,8 +39,9 @@ enum FinderStorage {
 
   static func servers() throws -> [Server] {
     let url = try container().appendingPathComponent("finder-servers.json")
-    do { return try JSONDecoder().decode([Server].self, from: Data(contentsOf: url)) }
-    catch let error as CocoaError where error.code == .fileReadNoSuchFile { return [] }
+    do { return try JSONDecoder().decode([Server].self, from: Data(contentsOf: url)) } catch let
+      error as CocoaError where error.code == .fileReadNoSuchFile
+    { return [] }
   }
 
   static var domain: NSFileProviderDomain {
@@ -53,4 +58,9 @@ enum FinderID {
     parts.map { Data($0.utf8).base64EncodedString() }.joined(separator: ".")
   }
   static func workspace(_ pin: String, _ id: String) -> String { make("workspace", pin, id) }
+  static func server(of identifier: String) -> String? {
+    let parts = identifier.split(separator: ".", omittingEmptySubsequences: false)
+    guard parts.count >= 2, let pin = Data(base64Encoded: String(parts[1])) else { return nil }
+    return String(data: pin, encoding: .utf8)
+  }
 }

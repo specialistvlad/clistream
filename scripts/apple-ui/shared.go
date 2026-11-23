@@ -14,7 +14,7 @@ import (
 // Build each SDK once before starting the simultaneous interaction watchdog.
 func buildTestPlan(root, platform, destination string) (string, error) {
 	dir := filepath.Join(root, "build-"+platform)
-	cmd := exec.Command("xcodebuild", "-quiet", "-project", "apple/CLIStream.xcodeproj",
+	cmd := exec.Command("apple/acceptance-xcodebuild.sh", platform, "-quiet", "-project", "apple/CLIStream.xcodeproj",
 		"-scheme", "CLIStream-"+platform, "-derivedDataPath", dir, "-destination", destination,
 		"-jobs", "3", "CLISTREAM_APP_ID=com.vlk.clistream.acceptance.shared", "build-for-testing")
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr

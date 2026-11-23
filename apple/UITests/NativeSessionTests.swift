@@ -407,6 +407,12 @@ final class NativeSessionTests: XCTestCase {
 
   @MainActor func testRevocationAndRepair() async throws {
     let app = try await openPipe()
+    #if os(macOS)
+      let last = app.descendants(matching: .any)["session-terminal"].firstMatch
+      last.click()
+      last.typeText("before-revocation\n")
+      expectOutput("out:before-revocation", in: app)
+    #endif
     let response = try await fixtureResponse("REVOKE")
     XCTAssertEqual(response, "revoked")
     #if os(iOS)
@@ -421,10 +427,24 @@ final class NativeSessionTests: XCTestCase {
     XCTAssertTrue(denied.waitForExistence(timeout: 15))
     try await capture("disconnected", app)
     #if os(macOS)
-      XCTAssertTrue(app.buttons["Pair Again…"].firstMatch.exists)
+      expectOutput("out:before-revocation", in: app)
       XCTAssertFalse(app.buttons["Show in Finder"].exists)
+      let repair = app.buttons["Pair Again…"].firstMatch
+      XCTAssertTrue(repair.exists)
+      repair.click()
+      let fresh = try await fixtureResponse("QR")
+      let link = app.secureTextFields["pairing-link"].firstMatch
+      XCTAssertTrue(link.waitForExistence(timeout: 10))
+      link.typeText(fresh)
+      confirmPairing(pairingButton(in: app), in: app)
+      let id = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_PIPE_ID"])
+      let session = app.descendants(matching: .any)["session-" + id].firstMatch
+      XCTAssertTrue(session.waitForExistence(timeout: 12))
+      session.click()
+      let recovered = app
+    #else
+      let recovered = try await openPipe()
     #endif
-    let recovered = try await openPipe()
     let input = recovered.descendants(matching: .any)["session-terminal"].firstMatch
     activate(input)
     input.typeText("access-restored\n")

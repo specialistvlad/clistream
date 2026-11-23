@@ -44,7 +44,7 @@ result=$(mktemp -d "$PWD/apple/build/results-$platform-XXXXXXXX")
 products="$result/CLIStream.xctestproducts"
 (
   cd apple
-  xcodebuild -quiet -scheme "CLIStream-$platform" -derivedDataPath "build/$dd" \
+  ./acceptance-xcodebuild.sh "$platform" -quiet -scheme "CLIStream-$platform" -derivedDataPath "build/$dd" \
     -destination "$buildDestination" -jobs 3 CLISTREAM_APP_ID=com.vlk.clistream.acceptance \
     -testProductsPath "$products" build-for-testing
 )

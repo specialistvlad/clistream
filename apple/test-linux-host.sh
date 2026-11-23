@@ -46,7 +46,7 @@ for ((i=0; i<200; i++)); do [[ -f "$stage/state/env" ]] && break; sleep .1; done
 [[ -f "$stage/state/env" ]] || { docker logs "$container"; exit 1; }
 while IFS= read -r entry; do export "$entry"; done < "$stage/state/env"
 result=$(mktemp -d "$PWD/apple/build/results-linux-ui-XXXXXXXX")
-GITHUB_ACTIONS=true xcodebuild -quiet -project apple/CLIStream.xcodeproj \
+GITHUB_ACTIONS=true apple/acceptance-xcodebuild.sh "$platform" -quiet -project apple/CLIStream.xcodeproj \
   -scheme "CLIStream-$platform" -destination "$destination" \
   -derivedDataPath "apple/build/$dd" CLISTREAM_APP_ID=com.vlk.clistream.acceptance \
   -parallel-testing-enabled NO -collect-test-diagnostics never -resultBundlePath "$result/native.xcresult" \

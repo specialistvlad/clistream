@@ -8,8 +8,22 @@ final class WorkspaceEnumerator: NSObject, NSFileProviderEnumerator {
   init(container: NSFileProviderItemIdentifier, provider: WorkspaceProvider) {
     self.container = container
     self.provider = provider
+    super.init()
+    provider.queue.async {
+      if provider.index.cached(container.rawValue)?.kind == .file {
+        provider.observedDocuments[container.rawValue, default: 0] += 1
+      }
+    }
   }
-  func invalidate() { provider.queue.async { self.invalidated = true } }
+  func invalidate() {
+    provider.queue.async {
+      guard !self.invalidated else { return }
+      self.invalidated = true
+      if let count = self.provider.observedDocuments[self.container.rawValue] {
+        self.provider.observedDocuments[self.container.rawValue] = count > 1 ? count - 1 : nil
+      }
+    }
+  }
 
   private func refresh() throws -> [WorkspaceNode] {
     guard !invalidated else { throw CocoaError(.userCancelled) }
@@ -21,7 +35,9 @@ final class WorkspaceEnumerator: NSObject, NSFileProviderEnumerator {
       try index.refreshWorkingSet()
       items = index.all
     } else {
-      if index.cached(container.rawValue) == nil { try index.discover() }
+      if index.cached(container.rawValue) == nil {
+        try index.discover(only: FinderID.server(of: container.rawValue))
+      }
       let node = try index.require(container.rawValue)
       try index.refresh(node)
       items = node.kind == .file ? [try index.require(node.id)] : index.children(of: node.id)
@@ -30,32 +46,39 @@ final class WorkspaceEnumerator: NSObject, NSFileProviderEnumerator {
     return items
   }
 
-  func enumerateItems(for observer: NSFileProviderEnumerationObserver, startingAt page: NSFileProviderPage) {
+  func enumerateItems(
+    for observer: NSFileProviderEnumerationObserver, startingAt page: NSFileProviderPage
+  ) {
     provider.queue.async {
       do {
         let items = try self.refresh()
         for start in stride(from: 0, to: items.count, by: 200) {
-          observer.didEnumerate(items[start..<min(start + 200, items.count)].map(WorkspaceItem.init))
+          observer.didEnumerate(
+            items[start..<min(start + 200, items.count)].map(WorkspaceItem.init))
         }
         observer.finishEnumerating(upTo: nil)
       } catch { observer.finishEnumeratingWithError(error) }
     }
   }
-  func enumerateChanges(for observer: NSFileProviderChangeObserver, from anchor: NSFileProviderSyncAnchor) {
+  func enumerateChanges(
+    for observer: NSFileProviderChangeObserver, from anchor: NSFileProviderSyncAnchor
+  ) {
     provider.queue.async {
       do {
         _ = try self.refresh()
         let index = self.provider.index
         let id = self.container.rawValue
         let changes = try index.changes(since: anchor)
-        let affected = Set(changes.filter {
-          self.container == .workingSet || $0.parent == id || $0.oldParent == id || $0.id == id
-        }.map(\.id))
+        let affected = Set(
+          changes.filter {
+            self.container == .workingSet || $0.parent == id || $0.oldParent == id || $0.id == id
+          }.map(\.id))
         var removed = [NSFileProviderItemIdentifier]()
         var updated = [WorkspaceItem]()
         for key in affected {
           if let node = index.cached(key),
-             self.container == .workingSet || node.parent == id || node.id == id {
+            self.container == .workingSet || node.parent == id || node.id == id
+          {
             updated.append(WorkspaceItem(node))
           } else {
             removed.append(.init(key))

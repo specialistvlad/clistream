@@ -25,7 +25,8 @@ final class WorkspaceItem: NSObject, NSFileProviderItem {
   var filename: String { node.name }
   var contentType: UTType {
     if node.kind != .file { return .folder }
-    return UTType(filenameExtension: (filename as NSString).pathExtension, conformingTo: .data) ?? .data
+    return UTType(filenameExtension: (filename as NSString).pathExtension, conformingTo: .data)
+      ?? .data
   }
   var documentSize: NSNumber? { node.kind == .file ? NSNumber(value: node.bytes) : nil }
   var contentModificationDate: Date? {
@@ -33,14 +34,17 @@ final class WorkspaceItem: NSObject, NSFileProviderItem {
   }
   var capabilities: NSFileProviderItemCapabilities {
     switch node.kind {
-    case .file, .directory: return [.allowsReading, .allowsWriting, .allowsReparenting, .allowsRenaming, .allowsDeleting]
+    case .file, .directory:
+      return [.allowsReading, .allowsWriting, .allowsReparenting, .allowsRenaming, .allowsDeleting]
     case .workspace: return [.allowsContentEnumerating, .allowsAddingSubItems]
     default: return [.allowsContentEnumerating]
     }
   }
   var itemVersion: NSFileProviderItemVersion {
     let content = Data((node.isRemote ? node.version : node.id).utf8)
-    return .init(contentVersion: content, metadataVersion: Data(FinderID.make(node.parent, node.name, node.version).utf8))
+    return .init(
+      contentVersion: content,
+      metadataVersion: Data(FinderID.make(node.parent, node.name, node.version).utf8))
   }
 }
 
@@ -53,7 +57,8 @@ struct WorkspaceEntry: Decodable {
     WorkspaceNode(
       id: FinderID.make("item", parent.server, parent.workspace, ID),
       parent: parent.id, name: Name, kind: Directory ? .directory : .file, server: parent.server,
-      workspace: parent.workspace, remoteName: Name, version: Version, bytes: Size, modified: Modified)
+      workspace: parent.workspace, remoteName: Name, version: Version, bytes: Size,
+      modified: Modified)
   }
 }
 
@@ -82,7 +87,8 @@ enum WorkspaceService {
       throw NSFileProviderError(.serverUnreachable)
     }
     defer { free(result) }
-    let reply = try JSONDecoder().decode(Reply.self, from: Data(bytes: result, count: strlen(result)))
+    let reply = try JSONDecoder().decode(
+      Reply.self, from: Data(bytes: result, count: strlen(result)))
     if let message = reply.Error, !message.isEmpty {
       let code: NSFileProviderError.Code
       switch reply.ErrorKind {
@@ -91,7 +97,8 @@ enum WorkspaceService {
       case "missing": code = .noSuchItem
       case "denied": code = .notAuthenticated
       case "permission":
-        let reading = ["workspace-list", "workspace-stat", "workspace-fetch"].contains(fields["Op"] as? String ?? "")
+        let reading = ["workspace-list", "workspace-stat", "workspace-fetch"].contains(
+          fields["Op"] as? String ?? "")
         throw CocoaError(reading ? .fileReadNoPermission : .fileWriteNoPermission)
       case "noSpace": code = .insufficientQuota
       case "notEmpty": code = .directoryNotEmpty
@@ -99,16 +106,21 @@ enum WorkspaceService {
       default:
         code = message.contains("authorization required") ? .notAuthenticated : .serverUnreachable
       }
-      throw NSError(domain: NSFileProviderErrorDomain, code: code.rawValue,
-                    userInfo: [NSLocalizedDescriptionKey: message])
+      throw NSError(
+        domain: NSFileProviderErrorDomain, code: code.rawValue,
+        userInfo: [NSLocalizedDescriptionKey: message])
     }
     return reply
   }
-  static func request(_ action: String, parent: WorkspaceNode, path: String, local: URL? = nil,
-                      destination: String? = nil, version: String? = nil, recursive: Bool = false,
-                      requestID: String? = nil) throws -> Reply {
-    var fields: [String: Any] = ["Op": "workspace-" + action, "Dir": try FinderStorage.credentialDirectory(parent.server).path,
-                  "ID": parent.workspace, "Path": path]
+  static func request(
+    _ action: String, parent: WorkspaceNode, path: String, local: URL? = nil,
+    destination: String? = nil, version: String? = nil, recursive: Bool = false,
+    requestID: String? = nil
+  ) throws -> Reply {
+    var fields: [String: Any] = [
+      "Op": "workspace-" + action, "Dir": try FinderStorage.credentialDirectory(parent.server).path,
+      "ID": parent.workspace, "Path": path,
+    ]
     fields["LocalPath"] = local?.path
     fields["Destination"] = destination
     fields["Version"] = version

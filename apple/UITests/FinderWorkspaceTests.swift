@@ -45,6 +45,14 @@ extension NativeSessionTests {
     let source = folder.appendingPathComponent(filename)
     let changed = try await fixtureResponse("finder/host-edit")
     XCTAssertEqual(changed, "edited")
+    app.activate()
+    app.typeKey(".", modifierFlags: .command)
+    let stop = app.buttons["Stop"].firstMatch
+    XCTAssertTrue(stop.waitForExistence(timeout: 10))
+    stop.click()
+    XCTAssertTrue(app.buttons["Start…"].firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(show.exists, "Stopping a managed child lost its workspace")
+    finder.activate()
 
     // Open as an ordinary document consumer. Coordination asks the extension
     // to materialize the file and receives later versions from the host.
@@ -104,6 +112,12 @@ extension NativeSessionTests {
     XCTAssertEqual(deleted, "deleted")
     finder.typeKey("w", modifierFlags: .command)
     app.activate()
+    app.typeKey("r", modifierFlags: .command)
+    let start = app.buttons["Start"].firstMatch
+    XCTAssertTrue(start.waitForExistence(timeout: 10))
+    start.click()
+    XCTAssertTrue(app.descendants(matching: .any)["session-terminal"].firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(show.exists)
 
     let env = ProcessInfo.processInfo.environment
     if let id = env["CLISTREAM_PTY_ID"] {
