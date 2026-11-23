@@ -11,6 +11,7 @@ private struct DesktopFormSheet<Fields: View>: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text(title).font(.headline).accessibilityAddTraits(.isHeader)
+        .accessibilityLabel(title).accessibilityIdentifier("desktop-sheet-title")
       Text(message).font(.callout).foregroundStyle(.secondary)
       Form { fields() }.formStyle(.columns)
       HStack {

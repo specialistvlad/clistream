@@ -50,7 +50,7 @@ extension NativeSessionTests {
       pipe.click()
       comparison.rightClick()
       try clickMacMenuItem(action, in: app)
-      assertMacElement(app.staticTexts[heading].firstMatch, in: app)
+      assertMacElement(macText(heading, in: app), in: app)
       app.typeKey(.escape, modifierFlags: [])
     }
   }
@@ -114,15 +114,15 @@ extension NativeSessionTests {
     let header = app.descendants(matching: .any)["Server " + name].firstMatch
     header.rightClick()
     try clickMacMenuItem("Rename…", in: app)
-    let field = app.textFields["server-name-field"].firstMatch
+    let field = serverNameEditor(in: app)
     assertMacElement(field, in: app)
-    field.typeKey("a", modifierFlags: .command)
-    field.typeText("unsaved-name")
-    field.typeKey(.escape, modifierFlags: [])
+    app.typeKey("a", modifierFlags: .command)
+    app.typeText("unsaved-name")
+    app.typeKey(.escape, modifierFlags: [])
     XCTAssertTrue(header.waitForExistence(timeout: 10))
     header.rightClick()
     try clickMacMenuItem("Remove Server…", in: app)
-    XCTAssertTrue(app.staticTexts["Remove “" + name + "”?"].firstMatch.waitForExistence(timeout: 10))
+    assertMacElement(macText("Remove “" + name + "”?", in: app), in: app)
     try await capture("remove-server", app)
     app.typeKey(.escape, modifierFlags: [])
     XCTAssertTrue(other.exists)
@@ -146,6 +146,16 @@ extension NativeSessionTests {
     XCTAssertTrue(app.buttons["Paste Invitation"].firstMatch.waitForExistence(timeout: 10))
     XCTAssertTrue(pipe.waitForNonExistence(timeout: 10))
     try await capture("welcome", app)
+  }
+
+  @MainActor private func macText(_ text: String, in app: XCUIApplication) -> XCUIElement {
+    app.descendants(matching: .any).matching(NSPredicate(
+      format: "label == %@ OR title == %@ OR value == %@", text, text, text)).firstMatch
+  }
+
+  @MainActor func serverNameEditor(in app: XCUIApplication) -> XCUIElement {
+    app.descendants(matching: .any).matching(NSPredicate(
+      format: "identifier == %@ OR label == %@", "server-name-field", "Server name")).firstMatch
   }
 
   @MainActor func assertMacElement(_ element: XCUIElement, in app: XCUIApplication,

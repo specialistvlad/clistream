@@ -16,7 +16,6 @@ struct DesktopServerHeader: View {
         if let value { workspace.rename(server, to: value) }
         state.renaming = nil
       }
-      .accessibilityIdentifier("server-name-field")
     } else {
       HStack {
         Text(server.name)
@@ -60,48 +59,25 @@ private struct HeaderLatency: View {
   }
 }
 
-private struct InlineServerName: NSViewRepresentable {
-  let name: String
+private struct InlineServerName: View {
+  @State private var draft: String
+  @FocusState private var focused: Bool
   let finish: (String?) -> Void
 
-  final class Field: NSTextField {
-    override func viewDidMoveToWindow() {
-      super.viewDidMoveToWindow()
-      guard let window else { return }
-      DispatchQueue.main.async { [weak self, weak window] in
-        guard let self, let window, self.window === window else { return }
-        window.makeFirstResponder(self)
-        self.selectText(nil)
-      }
-    }
+  init(name: String, finish: @escaping (String?) -> Void) {
+    _draft = State(initialValue: name)
+    self.finish = finish
   }
-  final class Coordinator: NSObject, NSTextFieldDelegate {
-    var finish: (String?) -> Void
-    init(_ finish: @escaping (String?) -> Void) { self.finish = finish }
-    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-      guard !textView.hasMarkedText() else { return false }
-      if selector == #selector(NSResponder.insertNewline(_:)) {
-        finish(textView.string)
-        return true
-      }
-      if selector == #selector(NSResponder.cancelOperation(_:)) {
-        finish(nil)
-        return true
-      }
-      return false
-    }
+
+  var body: some View {
+    TextField("Server name", text: $draft)
+      .textFieldStyle(.roundedBorder)
+      .labelsHidden()
+      .focused($focused)
+      .accessibilityLabel("Server name")
+      .accessibilityIdentifier("server-name-field")
+      .onSubmit { finish(draft) }
+      .onExitCommand { finish(nil) }
+      .onAppear { focused = true }
   }
-  func makeCoordinator() -> Coordinator { Coordinator(finish) }
-  func makeNSView(context: Context) -> Field {
-    let field = Field(string: name)
-    field.usesSingleLineMode = true
-    field.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
-    field.delegate = context.coordinator
-    field.setAccessibilityElement(true)
-    field.setAccessibilityRole(.textField)
-    field.setAccessibilityLabel("Server name")
-    field.setAccessibilityIdentifier("server-name-field")
-    return field
-  }
-  func updateNSView(_ field: Field, context: Context) { context.coordinator.finish = finish }
 }

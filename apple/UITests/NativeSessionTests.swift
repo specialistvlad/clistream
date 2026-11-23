@@ -130,12 +130,12 @@ final class NativeSessionTests: XCTestCase {
       XCTAssertTrue(server.waitForExistence(timeout: 12))
       server.rightClick()
       try clickMacMenuItem("Rename…", in: app)
-      let name = app.textFields["server-name-field"].firstMatch
+      let name = serverNameEditor(in: app)
       let alias = "Build server " + UUID().uuidString.prefix(8)
-      activate(name)
-      name.typeKey("a", modifierFlags: .command)
-      name.typeText(alias)
-      name.typeKey(.return, modifierFlags: [])
+      assertMacElement(name, in: app)
+      app.typeKey("a", modifierFlags: .command)
+      app.typeText(alias)
+      app.typeKey(.return, modifierFlags: [])
       app.terminate()
       app.launch()
       XCTAssertTrue(app.descendants(matching: .any).matching(
@@ -157,10 +157,10 @@ final class NativeSessionTests: XCTestCase {
       XCTAssertTrue(app.buttons["Start…"].firstMatch.waitForExistence(timeout: 15))
       header.rightClick()
       try clickMacMenuItem("Rename…", in: app)
-      let name = app.textFields["server-name-field"].firstMatch
+      let name = serverNameEditor(in: app)
       assertMacElement(name, in: app)
       try await capture("rename-server", app)
-      name.typeKey(.escape, modifierFlags: [])
+      app.typeKey(.escape, modifierFlags: [])
     #endif
     action("Start…", app)
     XCTAssertTrue(app.buttons["Start"].firstMatch.waitForExistence(timeout: 12))
