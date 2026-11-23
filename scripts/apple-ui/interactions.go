@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -195,23 +196,48 @@ func captureDuoScreen(ctx context.Context, udid string, panel duoScreen, path st
 		fmt.Sprintf("--display=%d", panel.ID), path).Run()
 }
 
+// The system keeps Session in the same toolbar rail when the keyboard closes.
+// The next native Keys lookup independently verifies a repeat tap there.
+type duoToolbarButton struct {
+	panel   duoScreen
+	degrees float64
+	point   [2]int
+}
+
 // A menu may be fully drawn before AXe's label tap accepts its hit-test
 // receipt. If it certifies that no input was sent, locate the actual visible
 // control again and touch its center on the same physical panel.
-func tapDuoControl(ctx context.Context, udid string, panel duoScreen, label string) error {
+func (toolbar *duoToolbarButton) tapControl(ctx context.Context, udid string, panel duoScreen, degrees float64, label string) error {
 	target := []string{"--input-mode", "selected", "--screen-id", strconv.FormatUint(uint64(panel.ID), 10), "--screen-uuid", panel.UUID, "--udid", udid}
-	raw, err := exec.CommandContext(ctx, "axe", append([]string{"--output", "json", "tap", "--verbose", "--label", label, "--wait-timeout", "12"}, target...)...).Output()
-	if err == nil {
-		return nil
+	tap := func(p [2]int) error {
+		return exec.CommandContext(ctx, "axe", append([]string{"tap", "-x", strconv.Itoa(p[0]), "-y", strconv.Itoa(p[1])}, target...)...).Run()
 	}
+	if label == "Session" && toolbar.panel == panel && toolbar.degrees == degrees {
+		return tap(toolbar.point)
+	}
+	remember := func(p [2]int) {
+		if label == "Session" && p[0] > 0 && p[1] > 0 && float64(p[0]) < panel.Width && float64(p[1]) < panel.Height {
+			*toolbar = duoToolbarButton{panel: panel, degrees: degrees, point: p}
+		}
+	}
+	raw, err := exec.CommandContext(ctx, "axe", append([]string{"--output", "json", "tap", "--verbose", "--label", label, "--wait-timeout", "12"}, target...)...).Output()
 	var receipt struct {
 		Error struct{ Code string }
 		Data  struct {
 			Result struct {
 				EnqueuedEventCount *int
 				Cleanup            string
+				AX                 struct{ Point *struct{ X, Y float64 } }
 			}
 		}
+	}
+	if err == nil {
+		if label == "Session" && json.Unmarshal(raw, &receipt) == nil {
+			if p := receipt.Data.Result.AX.Point; p != nil {
+				remember([2]int{int(math.Round(p.X)), int(math.Round(p.Y))})
+			}
+		}
+		return nil
 	}
 	if json.Unmarshal(raw, &receipt) != nil {
 		return err
@@ -256,7 +282,11 @@ func tapDuoControl(ctx context.Context, udid string, panel duoScreen, label stri
 	if len(points) != 1 {
 		return fmt.Errorf("active display has %d distinct visible centers for %s", len(points), label)
 	}
-	return exec.CommandContext(ctx, "axe", append([]string{"tap", "-x", strconv.Itoa(point[0]), "-y", strconv.Itoa(point[1])}, target...)...).Run()
+	if err := tap(point); err != nil {
+		return err
+	}
+	remember(point)
+	return nil
 }
 
 // AXe reports the lit panel's role and oriented size in points.
@@ -353,7 +383,11 @@ func poseRoute(mux *http.ServeMux, path, udid, keysFile string) {
 		}
 		http.Error(w, "simulator hinge did not settle", http.StatusServiceUnavailable)
 	})
+	var menuMu sync.Mutex
+	var toolbar duoToolbarButton
 	mux.HandleFunc(path+"duo-key/", func(w http.ResponseWriter, r *http.Request) {
+		menuMu.Lock()
+		defer menuMu.Unlock()
 		role, key, ok := strings.Cut(strings.TrimPrefix(r.URL.Path, path+"duo-key/"), "/")
 		if !ok || (role != "outer" && role != "inner") {
 			http.NotFound(w, r)
@@ -375,7 +409,7 @@ func poseRoute(mux *http.ServeMux, path, udid, keysFile string) {
 			http.Error(w, "child keyboard receipt unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		panel, _, err := duoDisplay(r.Context(), udid)
+		panel, degrees, err := duoDisplay(r.Context(), udid)
 		if err != nil || panel.Role != role || panel.UUID == "" {
 			http.Error(w, "requested display unavailable", http.StatusServiceUnavailable)
 			return
@@ -383,7 +417,7 @@ func poseRoute(mux *http.ServeMux, path, udid, keysFile string) {
 		// Touch each real menu item on the same measured panel even as UIKit
 		// animates from the Session menu to its nested keyboard commands.
 		for _, label := range controls {
-			err := tapDuoControl(r.Context(), udid, panel, label)
+			err := toolbar.tapControl(r.Context(), udid, panel, degrees, label)
 			if label == key && want != "" {
 				received := false
 				for deadline := time.Now().Add(5 * time.Second); r.Context().Err() == nil && time.Now().Before(deadline); {
