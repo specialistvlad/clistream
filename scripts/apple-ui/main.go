@@ -46,7 +46,19 @@ func firstInvitation(root string, command *exec.Cmd) ([]byte, error) {
 		}
 		time.Sleep(80 * time.Millisecond)
 	}
-	return nil, errors.New("broker did not publish its administration socket")
+	// Do not include raw stderr, pairing links, or private state in CI logs.
+	log, _ := os.ReadFile(filepath.Join(root, "broker-stderr"))
+	lower := bytes.ToLower(log)
+	for _, cause := range []string{"no space left on device", "permission denied", "operation not permitted",
+		"address already in use", "identity directory must be private", "too many open files",
+		"invalid advertised endpoint", "cannot allocate memory", "file name too long"} {
+		if bytes.Contains(lower, []byte(cause)) {
+			return nil, fmt.Errorf("broker did not publish its administration socket: %s", cause)
+		}
+	}
+	_, lockErr := os.Stat(filepath.Join(filepath.Dir(socket), "daemon.lock"))
+	return nil, fmt.Errorf("broker did not publish its administration socket (created lock: %t, wrote diagnostics: %t)",
+		lockErr == nil, len(log) > 0)
 }
 
 func run(args []string) error {
@@ -65,12 +77,8 @@ func run(args []string) error {
 		return err
 	}
 	defer os.RemoveAll(root)
-	var plans viewerPlans
 	if args[0] == "shared" {
-		plans, err = prepareViewers(root)
-		if err != nil {
-			return err
-		}
+		sharedCheckpoint("Start the two brokers and register supervised children before booting simulators")
 	}
 	command := func(tool string, args ...string) *exec.Cmd {
 		cmd := exec.Command(filepath.Join(bin, tool), args...)
@@ -79,6 +87,14 @@ func run(args []string) error {
 		return cmd
 	}
 	launch := func(cmd *exec.Cmd) (func(), error) {
+		if filepath.Base(cmd.Path) == "clistreamd" {
+			log, err := os.OpenFile(filepath.Join(cmd.Dir, "broker-stderr"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+			if err != nil {
+				return nil, err
+			}
+			defer log.Close()
+			cmd.Stderr = log
+		}
 		if err := cmd.Start(); err != nil {
 			return nil, err
 		}
@@ -338,6 +354,13 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 	defer server.Close()
 	url := fmt.Sprintf("http://127.0.0.1:%d%s", listener.Addr().(*net.TCPAddr).Port, path)
 	if args[0] == "shared" {
+		// Pair supervisors while the machine is idle, before simulator
+		// migration and Xcode builds compete with broker initialization.
+		// Each actual viewer receives a newly minted invitation via HTTP.
+		plans, err := prepareViewers(root)
+		if err != nil {
+			return err
+		}
 		return shared(plans, arrivals, func() { close(aborted) }, url, pipe.ID, pipe.Run, terminal.ID, command)
 	}
 	test := exec.Command(args[0], args[1:]...)
