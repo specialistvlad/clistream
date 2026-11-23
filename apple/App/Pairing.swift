@@ -110,15 +110,15 @@ struct WorkspaceSheet<Fields: View>: View {
         .toolbarMinimizationBehavior(.never, for: .navigationBar)
         .toolbar {
           ToolbarItem(placement: .cancellationAction) {
-            Button("Cancel", action: cancel).accessibilityIdentifier("workspace-cancel")
+            Button("Close", systemImage: "xmark", action: cancel).labelStyle(.iconOnly).accessibilityIdentifier("workspace-cancel")
           }
           ToolbarItem(placement: .confirmationAction) {
-            Button(confirmation, action: confirm).disabled(!enabled)
+            Button(confirmation, systemImage: "checkmark", action: confirm).labelStyle(.iconOnly).disabled(!enabled)
               .accessibilityIdentifier("workspace-confirm").keyboardShortcut(.defaultAction)
           }
         }
     }
-      .presentationDetents([.medium, .large])
+      .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
     #endif
   }
 }

@@ -175,11 +175,13 @@ struct CommandSheet: View {
       confirmation: draft.session.running ? "Restart" : "Start",
       enabled: validation.Command != nil, cancel: { dismiss() }, confirm: launch
     ) {
-      if draft.session.running { Text("Restarting ends the current run for everyone connected.") }
-      VStack(alignment: .leading) {
-        Text("Command")
+      Section {
         CommandField(line: $line, submit: launch).frame(minHeight: 32)
         if let error = validation.Error { Text(error).foregroundStyle(.red) }
+      } header: { Text("Command") } footer: {
+        Text(draft.session.running
+             ? "Quote arguments that contain spaces. Use \"\" for an empty argument. Restarting ends the current run for everyone connected."
+             : "Quote arguments that contain spaces. Use \"\" for an empty argument.")
       }
     }
   }
@@ -188,12 +190,12 @@ struct CommandSheet: View {
   }
 }
 
-private struct PortsPresentation: ViewModifier {
+struct PortsPresentation: ViewModifier {
   @ObservedObject var connection: Connection
   let session: SessionInfo
   @Binding var presented: Bool
   #if os(iOS)
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.regularWorkspace) private var regular
   #endif
 
   func body(content: Content) -> some View {
@@ -205,10 +207,10 @@ private struct PortsPresentation: ViewModifier {
         .inspector(isPresented: presentation(compact: false)) { inspectorColumn }
         .sheet(isPresented: presentation(compact: true)) {
           NavigationStack {
-            portList.navigationTitle("Ports").navigationBarTitleDisplayMode(.inline)
-              .toolbar { ToolbarItem(placement: .confirmationAction) { done } }
+            PortList(connection: connection, session: session, inspector: false).navigationTitle("Ports").navigationBarTitleDisplayMode(.inline)
+              .toolbar { ToolbarItem(placement: .cancellationAction) { done } }
           }
-          .presentationDetents([.medium, .large])
+          .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
         }
     #else
       content.inspector(isPresented: $presented) { inspectorColumn }
@@ -217,15 +219,15 @@ private struct PortsPresentation: ViewModifier {
 
   #if os(iOS)
     private func presentation(compact: Bool) -> Binding<Bool> {
-      Binding(get: { presented && (sizeClass == .compact) == compact },
-              set: { value in if (sizeClass == .compact) == compact { presented = value } })
+      Binding(get: { presented && (!regular) == compact },
+              set: { value in if (!regular) == compact { presented = value } })
     }
   #endif
 
   private var inspectorColumn: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack {
-        Text("Ports").font(.headline).accessibilityAddTraits(.isHeader)
+        Text("Ports").font(.title2.bold()).accessibilityAddTraits(.isHeader)
         Spacer()
         done
       }.padding()
@@ -236,11 +238,11 @@ private struct PortsPresentation: ViewModifier {
   }
 
   private var done: some View {
-    Button("Done") { presented = false }.accessibilityIdentifier("dismiss-ports")
+    Button("Close", systemImage: "xmark") { presented = false }.labelStyle(.iconOnly).accessibilityIdentifier("dismiss-ports")
   }
 
   private var portList: some View {
-    PortList(connection: connection, session: session)
+    PortList(connection: connection, session: session, inspector: true)
   }
 }
 
@@ -248,8 +250,10 @@ private struct PortList: View {
   @ObservedObject var connection: Connection
   let session: SessionInfo
 
+  let inspector: Bool
   var body: some View {
     List {
+      Section {
       ForEach((session.Ports ?? [:]).keys.sorted(), id: \.self) { name in
         VStack(alignment: .leading) {
           Toggle(
@@ -260,22 +264,25 @@ private struct PortList: View {
               })
           ) {
             Text(name)
-            Text((session.Ports?[name] ?? "").uppercased()).font(.caption)
+            Text([session.Ports?[name]?.uppercased(), session.PortAddresses?[name]].compactMap { $0 }.joined(separator: " · ")).font(.caption)
           }.disabled(!connection.attached || connection.changingForwards.contains(name))
             .accessibilityIdentifier("forward-" + name)
           if let address = connection.forwarding[name] {
-            Text(address).textSelection(.enabled).accessibilityIdentifier(
+            Text(address).font(.system(.body, design: .monospaced)).textSelection(.enabled).accessibilityIdentifier(
               "forward-address-" + name)
-            Button("Copy Address") {
+            Button("Copy Address", systemImage: "doc.on.doc") {
               #if os(macOS)
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(address, forType: .string)
               #else
                 UIPasteboard.general.string = address
               #endif
-            }.buttonStyle(.borderless)
+            }.labelStyle(.iconOnly).buttonStyle(.borderless)
           }
         }
+      }
+      } footer: {
+        Text(inspector ? "Forwards keep running when you close this inspector." : "Forwards keep running when you close this sheet.")
       }
     }.overlay {
       if session.Ports?.isEmpty != false {

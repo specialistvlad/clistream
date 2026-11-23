@@ -122,6 +122,7 @@ private func visibleText(in view: TerminalView) -> String {
     override func didMoveToWindow() {
       super.didMoveToWindow()
       guard window != nil else { return }
+      if !(inputAccessoryView is TerminalKeyBar) { inputAccessoryView = TerminalKeyBar(terminal: self) }
       applyPalette()
       applyTextSize()
     }
@@ -131,7 +132,7 @@ private func visibleText(in view: TerminalView) -> String {
       registerForTraitChanges(UITraitCollection.systemTraitsAffectingColorAppearance) {
         (view: TouchTerminal, _) in view.applyPalette()
       }
-      registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) {
+      registerForTraitChanges([UITraitPreferredContentSizeCategory.self, UITraitHorizontalSizeClass.self]) {
         (view: TouchTerminal, _) in view.applyTextSize()
       }
     }
@@ -150,7 +151,7 @@ private func visibleText(in view: TerminalView) -> String {
     }
 
     private func applyTextSize() {
-      let base = UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+      let base = UIFont.monospacedSystemFont(ofSize: traitCollection.horizontalSizeClass == .regular ? 13 : 12, weight: .regular)
       let scaled = UIFontMetrics(forTextStyle: .body).scaledFont(for: base, compatibleWith: traitCollection)
       if font != scaled { font = scaled }
     }

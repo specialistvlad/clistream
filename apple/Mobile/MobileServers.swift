@@ -5,8 +5,9 @@ struct MobileServers: View {
   @ObservedObject var actions: MobileLifecycle
   let selected: String?
   let activate: (WorkspaceSession) -> Void
-  let add: () -> Void
-  @Environment(\.horizontalSizeClass) private var width
+  @ObservedObject var invitations: MobileInvitations
+  @Environment(\.closedHinge) private var closedHinge
+  @Environment(\.regularWorkspace) private var regular
   @AppStorage("workspace-list") private var flat = false
   @AppStorage("workspace-group") private var grouping = "Server"
   @State private var query = ""
@@ -19,6 +20,41 @@ struct MobileServers: View {
   }
 
   var body: some View {
+    adaptiveList
+    .searchable(text: $query, placement: !regular ? .toolbar : .sidebar, prompt: "Search")
+    .navigationTitle("Servers")
+    .navigationBarTitleDisplayMode(closedHinge ? .inline : .automatic)
+    .safeAreaInset(edge: .trailing, spacing: 0) {
+      if closedHinge && !regular {
+        VStack { serverButtons; Spacer() }.labelStyle(.iconOnly).buttonStyle(.glass)
+          .buttonBorderShape(.circle).accessibilityIdentifier("duo-server-tools")
+      }
+    }
+    .overlay {
+      if workspace.profiles.isEmpty {
+        ContentUnavailableView {
+          Label("No Servers", systemImage: "network")
+        } description: {
+          Text("Scan the QR code that clistreamd shows, or paste its invitation. Invitations last three minutes.")
+        } actions: {
+          Button("Paste Invitation", systemImage: "doc.on.clipboard", action: invitations.paste).buttonStyle(.glass)
+          Button("Scan QR Code", systemImage: "qrcode.viewfinder", action: invitations.scan).buttonStyle(.glassProminent)
+        }
+      }
+    }
+    .toolbar {
+      if !regular && !workspace.profiles.isEmpty { DefaultToolbarItem(kind: .search, placement: .bottomBar) }
+      if !closedHinge || regular { ToolbarItemGroup(placement: .topBarTrailing) { serverButtons } }
+    }
+    .sheet(item: $renaming, content: renameSheet)
+  }
+
+  @ViewBuilder private var adaptiveList: some View {
+    if regular { servers.listStyle(.sidebar) }
+    else { servers.listStyle(.insetGrouped) }
+  }
+
+  private var servers: some View {
     List(selection: Binding(get: { selected }, set: { id in
       if let row = workspace.sessions.first(where: { $0.id == id }) { activate(row) }
     })) {
@@ -69,12 +105,12 @@ struct MobileServers: View {
         }
       }
     }
-    .listStyle(.insetGrouped)
-    .searchable(text: $query, placement: width == .compact ? .toolbar : .sidebar, prompt: "Search")
-    .navigationTitle("Servers")
-    .toolbar {
-      ToolbarItemGroup(placement: .topBarTrailing) {
-        Button("Add Server", systemImage: "plus", action: add).keyboardShortcut("k")
+  }
+
+  @ViewBuilder private var serverButtons: some View {
+        Button("Scan QR Code", systemImage: "qrcode.viewfinder", action: invitations.scan)
+          .accessibilityIdentifier("workspace-scan")
+        Button("Add Server", systemImage: "plus") { invitations.add() }.keyboardShortcut("k")
           .accessibilityIdentifier("workspace-add-server")
         Menu("Layout and grouping", systemImage: "list.bullet.indent") {
           Picker("Layout", selection: $flat) { Text("Tree").tag(false); Text("List").tag(true) }
@@ -85,16 +121,15 @@ struct MobileServers: View {
             ForEach(workspace.profiles) { server in Button(server.name) { rename(server) } }
           }
         }.accessibilityIdentifier("workspace-view-options")
-      }
-    }
-    .sheet(item: $renaming) { server in
+  }
+
+  private func renameSheet(_ server: ServerProfile) -> some View {
       WorkspaceSheet(title: "Rename Server", confirmation: "Save",
                      enabled: !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                      cancel: { renaming = nil }, confirm: {
         workspace.rename(server, to: name)
         renaming = nil
       }) { TextField("Name", text: $name).accessibilityIdentifier("server-name-field") }
-    }
   }
 
   private func expanded(_ path: [String]) -> Binding<Bool> {
