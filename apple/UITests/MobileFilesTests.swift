@@ -4,6 +4,12 @@ import XCTest
 extension NativeSessionTests {
   @MainActor func testFilesWorkspaceRoundTrip() async throws {
     continueAfterFailure = false
+    if UIDevice.current.userInterfaceIdiom == .pad {
+      let device = XCUIDevice.shared
+      let initial = device.orientation
+      device.orientation = .landscapeLeft
+      addTeardownBlock { @MainActor in if initial != .unknown { device.orientation = initial } }
+    }
     let app = try await openPipe()
     let show = app.buttons["session-show-files"].firstMatch
     if !show.isHittable { app.buttons["Session"].firstMatch.tap() }

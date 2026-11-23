@@ -827,6 +827,18 @@ final class NativeSessionTests: XCTestCase {
       XCTAssertTrue(session.waitForExistence(timeout: 15))
       session.click()
     #else
+      if !session.waitForExistence(timeout: 4) {
+        let sidebar = app.buttons["Show Sidebar"].firstMatch
+        if sidebar.isHittable { sidebar.tap() }
+      }
+      if !session.waitForExistence(timeout: 15) {
+        let screen = XCTAttachment(screenshot: app.screenshot())
+        screen.name = "mobile-paired-list-window"
+        screen.lifetime = .keepAlways
+        add(screen)
+        XCTFail("The servers list did not show the paired supervisor")
+        return app
+      }
       activate(session)
     #endif
     return app

@@ -21,7 +21,7 @@ struct BrowserView: View {
   @StateObject private var invitations = MobileInvitations()
   @State private var selected: WorkspaceSession?
   @State private var closedHinge = false
-  @State private var visibility = NavigationSplitViewVisibility.automatic
+  @State private var visibility = NavigationSplitViewVisibility.all
   @State private var column = NavigationSplitViewColumn.sidebar
   var body: some View {
     GeometryReader { geometry in
@@ -49,14 +49,21 @@ struct BrowserView: View {
         } else {
           Text("Select a CLI")
         }
-      }
+      }.navigationSplitViewStyle(.balanced)
     }
     .background { if #available(iOS 27.1, *) { HingeObserver(closed: $closedHinge) } }
     .environment(\.closedHinge, closedHinge)
     .environment(\.regularWorkspace, width == .regular)
     .modifier(
       MobileInvitationPresentation(
-        flow: invitations, connection: workspace.pairing, enroll: workspace.enroll)
+        flow: invitations, connection: workspace.pairing,
+        enroll: { link in
+          await workspace.enroll(link)
+          if selected == nil && workspace.pairing.pairingError == nil {
+            visibility = .all
+            column = .sidebar
+          }
+        })
     )
     .modifier(MobileLifecyclePresentation(actions: actions, workspace: workspace))
     .onChange(of: workspace.profiles.map(\.id)) { _, ids in
