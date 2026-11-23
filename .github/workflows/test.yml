@@ -112,7 +112,8 @@ jobs:
         run: |
           if ! docker info >/dev/null 2>&1; then
             brew install docker colima qemu
-            colima start --vm-type qemu --cpu 2 --memory 3 --disk 10
+            # CLIStream uses QUIC. Colima's default SSH forwarder carries TCP only.
+            colima start --vm-type qemu --port-forwarder grpc --cpu 2 --memory 3 --disk 10
           fi
           apple/test-linux-host.sh macOS
       - name: Inspect Finder registration on failure
