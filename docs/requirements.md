@@ -45,6 +45,8 @@ For F10, every user-facing action offered on iPhone or iPad must work by touch a
 
 The executable path identifies the program to run. The optional folder path identifies the contents to stream. The operator can choose the application's folder or any other folder available to the supervisor. For example, a supervisor started in `/work/project` can run `/opt/tools/report` and share `/data/results`. Omitting the folder in the same launch shares `/work/project`. All clients attached to that session use the same folder for file operations.
 
+For F9 and F10, the Mac app exposes writable workspaces in Finder. A user can open the selected program’s folder, save files from a document app and see changes from the host. Preserve a stale editor’s work on version conflicts. A stopped managed child keeps the supervisor’s folder available. Revocation and disabled sharing prevent remote access. Verify writes and deletes on the supervisor host, including Linux. Files on iPhone, iPad and Duo is deferred.
+
 **Requirements change, November 20, 2026.** Folder selection replaces the earlier requirement for host filesystem isolation. The supervised command runs with its normal operating-system permissions. Use `--workspace DIR` for an explicit shared folder or `--files=FALSE` to disable browsing and transfers. The selected root and the child’s launch directory are independent. [Implementation plan](implementation-plan.md)
 
 ## Nonfunctional and engineering requirements

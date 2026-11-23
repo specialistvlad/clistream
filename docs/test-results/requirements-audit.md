@@ -20,6 +20,10 @@ The November 20 managed-terminal run records the Go suites on both operating sys
 
 ## Engineering checks
 
+The Mac redesign adds `testDesktopSearchAndCommands` and `testPasteInvitationAndRemoveServer` to F2 and F10. They exercise the shipping menu bar, clicked-row targeting, search, rename cancellation, pairing review, and removal across relaunch. The gallery includes native sheets, alerts and menus in both appearances.
+
+For F9, `testFinderWorkspaceRoundTrip` opens Finder through the selected terminal, copies in a document, reads a host-side edit, moves and saves the file, deletes it, and checks the bytes and final folder state on the host. `TestProviderWorkspace` exercises the wire contract. The `internal/files` workspace tests cover concurrent saves, mutation during transfer and confinement. Executed results are recorded separately. [Verification](../verification.md)
+
 | Requirement | Automated evidence | Interpretation |
 |---|---|---|
 | N1. Security and trust | `TestSignedInvitationIntegrity`, `TestDisplayedInvitesShareRedemptionAcrossListeners`, `TestInteractivePairingAndReconnect`, `TestServerRequiresCertificateAndCompressionALPN`, `TestEnrollmentAndCompressedStreams`, `TestActiveRevocation` | The peer proves possession of an Ed25519 key under TLS 1.3. Enrollment, broker identity and active revocation are exercised. Device secrets stay out of the published results. |

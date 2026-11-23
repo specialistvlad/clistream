@@ -1,9 +1,11 @@
 import XCTest
+#if os(macOS)
+  import AppKit
+#endif
 
 final class NativeSessionTests: XCTestCase {
   @MainActor func testPairPreviewAndSend() async throws {
     let app = try await openPipe()
-    let done = app.buttons["dismiss-ports"].firstMatch
     func togglePort(_ name: String) {
       let row = app.descendants(matching: .any)["forward-" + name].firstMatch
       XCTAssertTrue(row.waitForExistence(timeout: 15))
@@ -15,12 +17,19 @@ final class NativeSessionTests: XCTestCase {
       #endif
     }
     func closePorts() {
-      activate(done)
-      XCTAssertTrue(done.waitForNonExistence(timeout: 10))
+      #if os(macOS)
+        activate(app.descendants(matching: .any)["session-ports"].firstMatch)
+        XCTAssertTrue(app.descendants(matching: .any)["forward-tcp"].firstMatch.waitForNonExistence(timeout: 10))
+      #else
+        let done = app.buttons["dismiss-ports"].firstMatch
+        activate(done)
+        XCTAssertTrue(done.waitForNonExistence(timeout: 10))
+      #endif
     }
-    XCTAssertFalse(done.exists && done.isHittable, "The closed inspector displayed its Done button in the terminal")
+    let closedDone = app.buttons["dismiss-ports"].firstMatch
+    XCTAssertFalse(closedDone.exists && closedDone.isHittable)
     for proto in ["tcp", "udp"] {
-      activate(app.buttons["session-ports"].firstMatch)
+      activate(app.descendants(matching: .any)["session-ports"].firstMatch)
       togglePort(proto)
       let address = app.descendants(matching: .any)["forward-address-" + proto].firstMatch
       guard address.waitForExistence(timeout: 15) else {
@@ -40,7 +49,7 @@ final class NativeSessionTests: XCTestCase {
       try await capture("port-forwards", app)
       closePorts()
       try exchange(port: port, datagram: proto == "udp")
-      activate(app.buttons["session-ports"].firstMatch)
+      activate(app.descendants(matching: .any)["session-ports"].firstMatch)
       togglePort(proto)
       XCTAssertTrue(address.waitForNonExistence(timeout: 5))
       closePorts()
@@ -67,7 +76,7 @@ final class NativeSessionTests: XCTestCase {
     #else
       app.open(try XCTUnwrap(URL(string: invitation)))
     #endif
-    let confirm = app.buttons["Pair device"].firstMatch
+    let confirm = pairingButton(in: app)
     XCTAssertTrue(confirm.waitForExistence(timeout: 12))
     try await capture("confirm-server", app)
     confirmPairing(confirm, in: app)
@@ -122,10 +131,9 @@ final class NativeSessionTests: XCTestCase {
       let name = app.textFields["server-name-field"].firstMatch
       let alias = "Build server " + UUID().uuidString.prefix(8)
       activate(name)
-      try await capture("rename-server", app)
       name.typeKey("a", modifierFlags: .command)
       name.typeText(alias)
-      activate(app.buttons["Save"].firstMatch)
+      name.typeKey(.return, modifierFlags: [])
       app.terminate()
       app.launch()
       XCTAssertTrue(app.descendants(matching: .any).matching(
@@ -141,6 +149,17 @@ final class NativeSessionTests: XCTestCase {
     XCTAssertTrue(app.buttons["Stop"].firstMatch.waitForExistence(timeout: 10))
     try await capture("stop-confirmation", app)
     activate(app.buttons["Stop"].firstMatch)
+    #if os(macOS)
+      let endpoint = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_ENDPOINT"])
+      let header = app.descendants(matching: .any)["Server " + endpoint].firstMatch
+      XCTAssertTrue(app.buttons["Start…"].firstMatch.waitForExistence(timeout: 15))
+      header.rightClick()
+      app.menuItems["Rename…"].firstMatch.click()
+      let name = app.textFields["server-name-field"].firstMatch
+      XCTAssertTrue(name.waitForExistence(timeout: 10))
+      try await capture("rename-server", app)
+      name.typeKey(.escape, modifierFlags: [])
+    #endif
     action("Start…", app)
     XCTAssertTrue(app.buttons["Start"].firstMatch.waitForExistence(timeout: 12))
     try await capture("start-command", app)
@@ -171,7 +190,7 @@ final class NativeSessionTests: XCTestCase {
     #else
       action("Send EOF", app)
     #endif
-    let result = app.staticTexts.containing(NSPredicate(
+    let result = app.descendants(matching: .any).matching(NSPredicate(
       format: "value CONTAINS %@ OR label CONTAINS %@", "finished-child","finished-child"
     )).firstMatch
     XCTAssertTrue(result.waitForExistence(timeout: 15))
@@ -216,7 +235,7 @@ final class NativeSessionTests: XCTestCase {
     try await capture("pipe-session",app)
   }
 
-  @MainActor private func expectOutput(
+  @MainActor func expectOutput(
     _ value: String, in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line
   ) {
     // Restart and layout transitions can replace the native terminal view.
@@ -240,7 +259,7 @@ final class NativeSessionTests: XCTestCase {
     activate(app.buttons[title].firstMatch)
   }
 
-  @MainActor private func capture(_ name: String, _ app: XCUIApplication) async throws {
+  @MainActor func capture(_ name: String, _ app: XCUIApplication) async throws {
     guard ProcessInfo.processInfo.environment["CLISTREAM_CAPTURE_GALLERY"] == "1" else { return }
     let device = XCUIDevice.shared
     let original = device.appearance
@@ -319,8 +338,6 @@ final class NativeSessionTests: XCTestCase {
           expectOutput("out:layout draft", in: app)
           if layout == "List" {
             captureCurrent(screenshot, app)
-          } else if group == "Server" {
-            captureCurrent("servers-tree", app)
           }
         }
       }
@@ -347,7 +364,7 @@ final class NativeSessionTests: XCTestCase {
       let other = app.descendants(matching: .any)["session-" + pty].firstMatch
       other.rightClick()
       let newTab = app.menuItems["Open in New Tab"]
-      if newTab.waitForExistence(timeout: 5) { captureCurrent("open-session-menu", app) }
+      XCTAssertTrue(newTab.waitForExistence(timeout: 5))
       activate(newTab)
       XCTAssertTrue(
         app.descendants(matching: .any)["session-terminal"].firstMatch.waitForExistence(timeout: 12)
@@ -377,7 +394,7 @@ final class NativeSessionTests: XCTestCase {
     #if os(macOS)
       XCTAssertTrue(
         app.staticTexts["Couldn’t pair this device"].firstMatch.waitForExistence(timeout: 12))
-      captureCurrent("pairing-error", app)
+      try await capture("pairing-error", app)
       app.activate()
       app.typeKey(.return, modifierFlags: [])
     #else
@@ -385,7 +402,7 @@ final class NativeSessionTests: XCTestCase {
       captureCurrent("pairing-error", app)
       activate(app.buttons["OK"].firstMatch)
     #endif
-    XCTAssertFalse(app.buttons["Pair device"].exists)
+    XCTAssertFalse(pairingButton(in: app).exists)
   }
 
   @MainActor func testRevocationAndRepair() async throws {
@@ -402,7 +419,11 @@ final class NativeSessionTests: XCTestCase {
       NSPredicate(format: "label CONTAINS[c] %@ OR value CONTAINS[c] %@", "revoked", "revoked")
     ).firstMatch
     XCTAssertTrue(denied.waitForExistence(timeout: 15))
-    captureCurrent("disconnected", app)
+    try await capture("disconnected", app)
+    #if os(macOS)
+      XCTAssertTrue(app.buttons["Pair Again…"].firstMatch.exists)
+      XCTAssertFalse(app.buttons["Show in Finder"].exists)
+    #endif
     let recovered = try await openPipe()
     let input = recovered.descendants(matching: .any)["session-terminal"].firstMatch
     activate(input)
@@ -445,7 +466,7 @@ final class NativeSessionTests: XCTestCase {
       let invitation = try await fixtureResponse("SECOND")
       let otherSession = try await fixtureResponse("SECOND-ID")
       try await enterInvitation(invitation, in: app)
-      confirmPairing(app.buttons["Pair device"].firstMatch, in: app)
+      confirmPairing(pairingButton(in: app), in: app)
       activate(app.descendants(matching: .any)["session-" + otherSession].firstMatch)
       activate(input)
       input.typeText("independent-mac\n")
@@ -482,7 +503,7 @@ final class NativeSessionTests: XCTestCase {
     #endif
   }
 
-  @MainActor private func openPipe(
+  @MainActor func openPipe(
     terminal: Bool = false, eof: Bool = false, capturePairing: Bool = false
   ) async throws
     -> XCUIApplication
@@ -515,7 +536,7 @@ final class NativeSessionTests: XCTestCase {
     #else
       app.open(try XCTUnwrap(URL(string: link)))
     #endif
-    let pair = app.buttons["Pair device"].firstMatch
+    let pair = pairingButton(in: app)
     confirmPairing(pair, in: app)
     #if os(macOS)
       XCTAssertTrue(session.waitForExistence(timeout: 15))
@@ -526,7 +547,7 @@ final class NativeSessionTests: XCTestCase {
     return app
   }
   private func invitation() async throws -> String { try await fixtureResponse("QR") }
-  @MainActor private func confirmPairing(_ pair: XCUIElement, in app: XCUIApplication) {
+  @MainActor func confirmPairing(_ pair: XCUIElement, in app: XCUIApplication) {
     XCTAssertTrue(pair.waitForExistence(timeout: 12))
     #if os(macOS)
       app.activate()
@@ -575,6 +596,14 @@ final class NativeSessionTests: XCTestCase {
 }
 
 extension XCTestCase {
+  @MainActor func pairingButton(in app: XCUIApplication) -> XCUIElement {
+    #if os(macOS)
+      return app.buttons["Pair"].firstMatch
+    #else
+      return app.buttons["Pair device"].firstMatch
+    #endif
+  }
+
   @MainActor private static var inspectedFirstLaunch = false
 
   @MainActor func captureWelcomeIfEmpty(_ app: XCUIApplication) {
@@ -583,7 +612,16 @@ extension XCTestCase {
     Self.inspectedFirstLaunch = true
     if app.state == .notRunning { app.launch() }
     if app.staticTexts["Add a server to see its CLI apps."].firstMatch.waitForExistence(timeout: 3) {
-      captureCurrent("welcome", app)
+      #if os(macOS)
+        let appearance = XCUIDevice.shared.appearance
+        defer { XCUIDevice.shared.appearance = appearance }
+        for dark in [false, true] {
+          XCUIDevice.shared.appearance = dark ? .dark : .light
+          captureCurrent(dark ? "welcome-dark" : "welcome", app)
+        }
+      #else
+        captureCurrent("welcome", app)
+      #endif
     }
   }
 

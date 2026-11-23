@@ -2,7 +2,22 @@
 # Run the Apple UI against a Linux daemon and Linux child in a private container.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-: "${SIMULATOR_ID:?Set an OS 27 simulator UDID}"
+case "${1:-iOS}" in
+  iOS)
+    : "${SIMULATOR_ID:?Set an OS 27 simulator UDID}"
+    platform=iOS
+    destination="platform=iOS Simulator,id=$SIMULATOR_ID"
+    target=CLIStream-UITests
+    testCase=testPairPreviewAndSend
+    dd=accept-ios ;;
+  macOS)
+    platform=macOS
+    destination="platform=macOS,arch=$(uname -m)"
+    target=CLIStream-MacUITests
+    testCase=testFinderWorkspaceRoundTrip
+    dd=accept-mac ;;
+  *) echo "expected iOS or macOS" >&2; exit 2 ;;
+esac
 stage=$(mktemp -d /tmp/cs-linux-ui.XXXXXX)
 container=""
 cleanup(){
@@ -32,8 +47,9 @@ for ((i=0; i<200; i++)); do [[ -f "$stage/state/env" ]] && break; sleep .1; done
 while IFS= read -r entry; do export "$entry"; done < "$stage/state/env"
 result=$(mktemp -d "$PWD/apple/build/results-linux-ui-XXXXXXXX")
 GITHUB_ACTIONS=true xcodebuild -quiet -project apple/CLIStream.xcodeproj \
-  -scheme CLIStream-iOS -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
-  -derivedDataPath apple/build/accept-ios CLISTREAM_APP_ID=com.vlk.clistream.acceptance \
+  -scheme "CLIStream-$platform" -destination "$destination" \
+  -derivedDataPath "apple/build/$dd" CLISTREAM_APP_ID=com.vlk.clistream.acceptance \
   -parallel-testing-enabled NO -collect-test-diagnostics never -resultBundlePath "$result/native.xcresult" \
-  -only-testing:CLIStream-UITests/NativeSessionTests/testPairPreviewAndSend test
-go run ./scripts/apple-report "$result/native.xcresult"
+  "-only-testing:$target/NativeSessionTests/$testCase" test
+go run ./scripts/apple-report "$result/native.xcresult" | tee "$result/cases.json"
+jq -e --arg name "$testCase()" 'any(.cases[]; .test == $name and .result == "Passed")' "$result/cases.json" >/dev/null

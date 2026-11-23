@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/specialistvlad/clistream/internal/identity"
 )
 
 // Start a second independent broker for the cross-server routing UI test.
@@ -42,12 +44,20 @@ func secondServer(root, bin string, mux *http.ServeMux, path string, launch func
 		stopBroker()
 		return nil, fmt.Errorf("secondary broker did not issue an invitation: %w", err)
 	}
-	child, err := launch(cmd("clistreams", "--io-mode", "pipe", string(bytes.TrimSpace(invite)), "/bin/sh", "-c", `while IFS= read -r line; do echo "second:$line"; done`))
+	child, err := launch(cmd("clistreams", "--files=FALSE", "--io-mode", "pipe", string(bytes.TrimSpace(invite)), "/bin/sh", "-c", `while IFS= read -r line; do echo "second:$line"; done`))
 	if err != nil {
 		stopBroker()
 		return nil, err
 	}
 	cleanup := func() { child(); stopBroker() }
+	server, err := identity.ParseInvitation(string(bytes.TrimSpace(invite)))
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	mux.HandleFunc(path+"SECOND-ADDRESS", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, server.Address)
+	})
 	mux.HandleFunc(path+"SECOND", func(w http.ResponseWriter, r *http.Request) {
 		b, e := cmd("clistreamd", "invite").Output()
 		if e != nil {

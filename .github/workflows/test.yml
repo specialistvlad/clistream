@@ -51,7 +51,7 @@ jobs:
         device: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.device)) || fromJSON('["macOS","iPhone","iPad","Duo","shared"]') }}
     runs-on: xcode-27
     # A cold iOS runtime must finish migrating before the per-case watchdogs start.
-    timeout-minutes: ${{ matrix.device == 'Duo' && 85 || 65 }}
+    timeout-minutes: ${{ (matrix.device == 'Duo' || matrix.device == 'macOS') && 95 || 65 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -102,6 +102,14 @@ jobs:
             iPad) SIMULATOR_ID="$(simulator 'iPad Pro 13-inch (M5)')" apple/test-native.sh ;;
             Duo) SIMULATOR_ID="$(simulator 'iPhone Duo')" apple/test-native.sh ;;
           esac
+      - name: Verify Finder against a Linux workspace
+        if: matrix.device == 'macOS' && (!inputs.cases || contains(inputs.cases, 'testFinderWorkspaceRoundTrip'))
+        run: |
+          if ! docker info >/dev/null 2>&1; then
+            brew install docker colima qemu
+            colima start --vm-type qemu --cpu 2 --memory 3 --disk 10
+          fi
+          apple/test-linux-host.sh macOS
       - name: Collect gallery screenshots
         if: always() && matrix.device != 'shared'
         run: |

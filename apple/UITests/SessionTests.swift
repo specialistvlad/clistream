@@ -308,7 +308,7 @@ final class SessionTests: XCTestCase {
     #endif
     let invitation = try await fixtureResponse("QR")
     app.open(try XCTUnwrap(URL(string: invitation)))
-    tap(app.buttons["Pair device"])
+    tap(pairingButton(in: app))
     let target = app.descendants(matching: .any)["session-" + id].firstMatch
     XCTAssertTrue(target.waitForExistence(timeout: 15))
     if scrollList {

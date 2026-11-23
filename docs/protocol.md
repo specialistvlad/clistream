@@ -40,7 +40,7 @@ A peer probes with `{"Op":"capabilities"}`. An enrolled peer receives an `ok` wi
 | `arguments` | Fetch the current argument vector in `Args` when the operator opens the editor. This legacy operation edits arguments only. An omitted vector represents zero arguments. |
 | `start`, `stop`, `restart`, `apply` | Supply controller `ID`, expected `Revision` and current `Run` (empty while stopped). Only `apply` supplies replacement `Args`. The supervisor validates the snapshot and serializes transitions. An error or missing acknowledgement requires a fresh listing before another operator decision. |
 
-The broker removes a connection's registrations on disconnect. It publishes changes to its running-session and supervisor views together. Attachment, file and tunnel streams continue to use the run ID. The supervisor closes old channels before launching a replacement. The activity journal omits successful supervisor-table polls. It records publications, failed requests and management actions. Each `supervisor_request` includes the action, requesting device and connection, target supervisor and current run where available, duration and outcome. A missing upstream reply records an `unconfirmed` outcome.
+The broker removes a connection's registrations on disconnect. It publishes changes to its running-session and supervisor views together. Attachment, existing CLI file channels and tunnel streams continue to use the run ID. The supervisor closes old channels before launching a replacement. The activity journal omits successful supervisor-table polls. It records publications, failed requests and management actions. Each `supervisor_request` includes the action, requesting device and connection, target supervisor and current run where available, duration and outcome. A missing upstream reply records an `unconfirmed` outcome.
 
 ## Channel operations
 
@@ -70,3 +70,20 @@ Brokers and managed supervisors advertise `run-result-v1`. The negotiated `resul
 The Apple bridge implements its local `preview` request by opening only output channels on the wire. Selecting a CLI in the native workspace opens an interactive attachment. Interactive Apple sessions use the negotiated supervisor revision for lifecycle commands and the child run ID for terminal streams and port forwards.
 
 The native client reads the smoothed RTT from the QUIC connection to the broker. This is local transport telemetry. Multiple enrollments use the existing protocol independently, and supervisor identifiers are scoped to the authenticated broker.
+
+## Replicated workspaces
+
+A broker advertising `workspace-v1` accepts `workspace-supervisors`. Each supporting supervisor with an enabled workspace sets `Workspace` on its descriptor. The new listing can also include the configured loopback endpoint for each named port in `Info.PortAddresses`. Legacy listing operations keep their original field sets.
+
+Open a `workspace` request with the managed supervisor ID or the current attach-only registration ID, a channel and a relative path. A managed workspace remains available while its child is stopped. The broker checks enrollment and the advertised capability before forwarding the stream. The supervisor applies the same pinned-root checks as the existing file service.
+
+| Channel | Exchange |
+| --- | --- |
+| `workspace/list`, `workspace/stat` | Read directory entries or one item. Entries include an opaque ID and version, name, kind, size and modification time. |
+| `workspace/fetch` | Receive one file as streamed data and a final end record. An expected version detects changes during a read. |
+| `workspace/create`, `workspace/replace` | Send contents after the initial acknowledgement. Confirm success only on the final acknowledgement after publication. Create requires a new name. Replace checks the expected version again before publishing. |
+| `workspace/mkdir`, `workspace/move`, `workspace/remove` | Create a directory, move an item to the destination relative path in `Args`, or delete an item. Move and remove require the expected version. |
+
+Provider errors include a machine-readable `ErrorKind` so Finder can distinguish a stale version, a name collision, an unavailable peer and denied access. Paths and contents stay out of activity logs. The original `fs/` operations continue to serve the Go CLI.
+
+For a directory, `workspace/remove` normally requires it to be empty. With `Recursive` set, the supervisor validates the descendants against the workspace restrictions, atomically moves the directory to a reserved staging name, then removes its contents. A crash during cleanup can leave that private staging directory on the host.

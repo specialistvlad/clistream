@@ -119,7 +119,13 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 	if err := os.WriteFile(filepath.Join(root, "echo.sh"), []byte(echoScript), 0600); err != nil {
 		return err
 	}
-	pipe, stop, err := startSupervisor(append(exports, "--io-mode", "pipe", string(bytes.TrimSpace(link)), "/bin/sh", "echo.sh")...)
+	// Finder enumerates every enabled workspace. Keep fixture keys and invitations
+	// in the private parent, outside the directory any test can browse.
+	workspace := filepath.Join(root, "workspace")
+	if err := os.Mkdir(workspace, 0700); err != nil {
+		return err
+	}
+	pipe, stop, err := startSupervisor(append(exports, "--workspace", workspace, "--io-mode", "pipe", string(bytes.TrimSpace(link)), "/bin/sh", "echo.sh")...)
 	if err != nil {
 		return err
 	}
@@ -128,15 +134,30 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 	if err != nil {
 		return err
 	}
-	terminal, stop, err := startSupervisor("--once", "--io-mode", "pty", "--", exe, "terminal-child")
+	terminal, stop, err := startSupervisor("--files=FALSE", "--once", "--io-mode", "pty", "--", exe, "terminal-child")
 	if err != nil {
 		return err
 	}
 	defer stop()
 	var measured, eof, touch registration
+	var shell, compare registration
+	if os.Getenv("CLISTREAM_MAC_BOARD") == "1" {
+		// Use installed programs for the Mac boards. The shell supplies the PTY
+		// window and comm stays running while its input stream is open.
+		shell, stop, err = startSupervisor("--files=FALSE", "--io-mode", "pty", "--", "/bin/sh", "-i")
+		if err != nil {
+			return err
+		}
+		defer stop()
+		compare, stop, err = startSupervisor("--files=FALSE", "--io-mode", "pipe", "--", "/usr/bin/comm", "-", "/dev/null")
+		if err != nil {
+			return err
+		}
+		defer stop()
+	}
 	if os.Getenv("SIMULATOR_ID") != "" && args[0] != "shared" {
 		// Keep the selectable paragraph stable while UIKit moves the selection handles.
-		touch, stop, err = startSupervisor("--once", "--io-mode", "pipe", "--", "/bin/sh", "-c",
+		touch, stop, err = startSupervisor("--files=FALSE", "--once", "--io-mode", "pipe", "--", "/bin/sh", "-c",
 			`printf "copyword selection\n"; while IFS= read -r line; do printf "out:%s\n" "$line" >&2; done`)
 		if err != nil {
 			return err
@@ -144,12 +165,12 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 		defer stop()
 	}
 	if os.Getenv("CLISTREAM_HOSTED_TESTS") == "1" {
-		measured, stop, err = startSupervisor("--once", "--io-mode", "pty", "--", "/bin/sh", "-c", `stty -echo; read word; stty size; printf '\033[32m%s\033[0m\n' "$word"; exit 23`)
+		measured, stop, err = startSupervisor("--files=FALSE", "--once", "--io-mode", "pty", "--", "/bin/sh", "-c", `stty -echo; read word; stty size; printf '\033[32m%s\033[0m\n' "$word"; exit 23`)
 		if err != nil {
 			return err
 		}
 		defer stop()
-		eof, stop, err = startSupervisor("--io-mode", "pipe", "--", "/bin/cat")
+		eof, stop, err = startSupervisor("--files=FALSE", "--io-mode", "pipe", "--", "/bin/cat")
 		if err != nil {
 			return err
 		}
@@ -169,6 +190,7 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 	}
 	path := "/" + hex.EncodeToString(secret[:]) + "/"
 	mux := http.NewServeMux()
+	finderRoutes(mux, path, workspace)
 	if args[0] == "shared" || os.Getenv("CLISTREAM_HOSTED_TESTS") == "1" {
 		stopSecond, err := secondServer(root, bin, mux, path, launch)
 		if err != nil {
@@ -268,5 +290,6 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 		return err
 	}
 	test.Env = append(os.Environ(), "TEST_RUNNER_CLISTREAM_ENDPOINT="+invitation.Address, "TEST_RUNNER_CLISTREAM_SESSION="+pipe.ID, "TEST_RUNNER_CLISTREAM_UI_PTY="+terminal.ID, "TEST_RUNNER_CLISTREAM_PTY_SESSION="+measured.ID, "TEST_RUNNER_CLISTREAM_PIPE_RUN="+pipe.Run, "TEST_RUNNER_CLISTREAM_FIXTURE="+url, "TEST_RUNNER_CLISTREAM_DUO_NAME="+os.Getenv("CLISTREAM_DUO_NAME"), "TEST_RUNNER_CLISTREAM_TOUCH_SESSION="+touch.ID, "TEST_RUNNER_CLISTREAM_EOF_ID="+eof.ID, "TEST_RUNNER_CLISTREAM_PIPE_ID="+pipe.ID, "TEST_RUNNER_CLISTREAM_PTY_ID="+terminal.ID)
+	test.Env = append(test.Env, "TEST_RUNNER_CLISTREAM_SHELL_ID="+shell.ID, "TEST_RUNNER_CLISTREAM_SEARCH_ID="+compare.ID)
 	return test.Run()
 }

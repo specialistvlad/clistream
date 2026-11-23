@@ -10,6 +10,10 @@ To run one Apple UI suite on an isolated Mac, open **Actions → Test → Run wo
 
 Open `docs/screenshots/index.html` in the checkout used for capture. The gallery groups full-resolution PNGs by the native Mac app, iPhone, iPad, iPhone Duo, and the Go terminal client on macOS and Linux. The hosted Apple matrix exports named PNGs from the running apps. Gallery artifacts are available for three days. The terminal captures use output from the compiled Go programs connected to a pseudo-terminal. Git ignores the entire gallery, so a fresh clone contains only the published README animation.
 
+## Mac redesign and Finder · November 23, 2026
+
+The implementation passed local `make test e2e` and the old-binary compatibility suite on macOS. Both Apple schemes compiled their test products without launching an app or simulator. A production Mac archive passed strict signature verification for the app and its embedded Finder extension, including their shared App Group. These build and protocol checks precede the hosted Finder, Mac, iPhone, iPad, Duo and shared-session checks.
+
 ## Native terminal workspace · November 22, 2026
 
 Both Go jobs passed their release archive checks and end-to-end suites on macOS and Linux. The Linux job also passed the container deployment checks. [Go matrix](https://github.com/specialistvlad/clistream/actions/runs/45014110837)

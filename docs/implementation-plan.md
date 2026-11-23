@@ -2,7 +2,27 @@
 
 ## Delivery status
 
-The shipped clients cover live sessions, managed command editing and restarts, completed results, and named port forwarding. The Apple apps also support several servers, adaptive navigation and system appearance. Workspace file commands ship in the Go CLI. Finder and Files integration remains deferred. The dated plans below record the sequence of implementation, including earlier Apple file UI work. [Native client guide](apple-client-design.md) · [Verification record](verification.md)
+The clients support live sessions, managed commands, retained results, and named port forwarding. The approved Mac redesign adds a writable Finder location alongside the existing Go CLI workspace commands. The owner deferred the mobile Files extension. [Native client guide](apple-client-design.md) · [Verification record](verification.md)
+
+## Native Mac workspace and Finder · November 23, 2026
+
+Use the approved screens and exact copy on macOS. Build the sidebar, toolbar, terminal, inspector, commands, sheets and server actions in that order. Keep mobile presentation in its existing target. [Screen specification](design/macos/spec.md)
+
+| Design screen | Existing implementation | Target |
+| --- | --- | --- |
+| Main window in light and dark appearance | DesktopBrowser, WorkspaceSidebar, WorkspaceTerminal and SessionActions | Native split view, selectable sidebar, unified toolbar, terminal and status bar, trailing Ports form |
+| Server context menu and inline rename | WorkspaceSidebar disclosure label and rename sheet | Server section menu and focused inline text field |
+| First launch | DesktopBrowser empty detail | ContentUnavailableView with Add Server and Paste Invitation |
+| Access revoked | Workspace watcher and terminal connection | Retained output, disconnected status and Pair Again action |
+| Pair sheet, empty and filled | PairingPresentation | Native sheet with masked invitation, server address and identity review |
+| Pairing error | PairingPresentation alert | System alert with the invitation recovery message |
+| Restart sheet and Stop alert | SessionActions and CommandSheet | Focused highlighted command field and destructive confirmation |
+| Remove Server alert | New server action | Destructive confirmation, followed by local profile removal |
+| Menu bar | DesktopApp sidebar commands | File, Edit, View, Session and Server menus targeting the key window |
+
+The owner selected read and write access in Finder for this release. Share the Go workspace operations between Linux and macOS, negotiate the provider capability with the daemon, and keep a managed workspace reachable across child exits. Preserve CLI behavior. Embed a replicated File Provider in the Mac app, migrate existing enrollments, and resolve each Show in Finder action to the selected workspace. Keep the mobile terminal, pairing, and layout on their existing paths.
+
+Verify conditional writes, conflicts, interrupted transfers, confinement, revocation and old-peer interoperability in Go. Test each Mac design state in light and dark appearance and exercise the real Finder against both supported supervisor platforms. Run the iPhone, iPad, Duo and shared-client suites for regressions. Collect UI evidence only on isolated runners. Update the README, requirements, native guide, protocol, security, deployment, requirements audit and verification record as the changes land.
 
 ## Original implementation sequence
 

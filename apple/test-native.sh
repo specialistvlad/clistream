@@ -4,6 +4,7 @@ cd "$(dirname "$0")/.."
 platform=${1:-iOS}
 case "$platform" in
   macOS)
+    export CLISTREAM_MAC_BOARD=1
     destination="platform=macOS,arch=$(uname -m)"
     buildDestination="generic/platform=macOS"
     dd=accept-mac

@@ -14,7 +14,9 @@ Open the daemon’s invitation or paste it into Pair. Review the advertised serv
 
 ## Mac windows
 
-The Servers sidebar separates the broker from the computers running supervisors. Select a CLI to work in its terminal. Change the sidebar layout with View or open a CLI in its own tab or window through the row’s context menu. Use the server row’s context menu to rename it, or choose a server under View → Rename Server. The terminal subtitle identifies its host and server. The status bar shows connection state and measured round-trip latency to the selected broker. Both Apple apps follow the system’s Light or Dark appearance.
+Server sections contain hosts and their CLIs. Click a CLI to work in its terminal. Type a program name in Search to filter the sidebar. Choose tree, list, or grouping from the toolbar or View menu. Secondary-click a CLI to open it in a tab or separate window, manage its run, inspect its ports, or open its workspace in Finder. Keyboard commands apply to the front window. The terminal subtitle identifies the host and server. The status bar shows connection state, measured round-trip latency and I/O mode. Both Apple apps follow the system’s Light or Dark appearance.
+
+Use **File → Paste Invitation** to review the address and identity before pairing. Select a server and press Return to rename it inline. Return saves the name and Escape cancels. **Server → Remove Server…** forgets that pairing on this Mac and removes its Finder entries. Server-side revocation is an operator action. After revocation, an open terminal keeps its last output and offers **Pair Again…**.
 
 ## Touch-only operation on iPhone and iPad
 
@@ -28,9 +30,13 @@ On Mac, use the window toolbar for lifecycle actions. On iPhone and iPad, open *
 
 **Ports** opens a trailing inspector on Mac and wide mobile layouts, or a sheet in compact layouts. Toggle a named TCP or UDP export, then copy its local listening address. Closing the inspector leaves active listeners running. Each tab or window shows the forwards for its selected session.
 
+## Finder workspaces
+
+**Show in Finder** opens the selected program under **CLIStream › server › host › program**. The system downloads file contents on demand. Finder and ordinary document apps can create, save, move, rename and remove items in a shared folder. Host-side edits are picked up by the provider. Workspaces belong to the supervisor, so stopping and restarting a managed child preserves the folder. Legacy peers and supervisors started with `--files=FALSE` omit this action. The Go CLI continues to provide its own workspace commands on Linux and macOS. [Apple File Provider](https://developer.apple.com/documentation/fileprovider)
+
 ## Future file access
 
-The Go CLI supports remote workspace operations today. Apple file access is deferred to a replicated File Provider exposing a location in Finder and Files. [Apple File Provider](https://developer.apple.com/documentation/fileprovider)
+The iPhone, iPad and Duo Files extension is deferred. These apps use the shared terminal and session controls described above.
 
 ## Acceptance
 
