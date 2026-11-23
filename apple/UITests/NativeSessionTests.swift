@@ -480,15 +480,33 @@ final class NativeSessionTests: XCTestCase {
 
   @MainActor func testRevocationAndRepair() async throws {
     let app = try await openPipe()
-    #if os(macOS)
-      let last = app.descendants(matching: .any)["session-terminal"].firstMatch
-      last.click()
-      last.typeText("before-revocation\n")
-      expectOutput("out:before-revocation", in: app)
+    let last = app.descendants(matching: .any)["session-terminal"].firstMatch
+    activate(last)
+    last.typeText("before-revocation\n")
+    expectOutput("out:before-revocation", in: app)
+    #if os(iOS)
+      func waitForStatus(_ title: String) -> Bool {
+        let status = app.descendants(matching: .any)["desktop-session-status"].firstMatch
+        let shown = XCTNSPredicateExpectation(
+          predicate: NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", title, title),
+          object: status)
+        if XCTWaiter.wait(for: [shown], timeout: 15) == .completed { return true }
+        let screen = XCTAttachment(screenshot: app.screenshot())
+        screen.name = "mobile-repair-window"
+        screen.lifetime = .keepAlways
+        add(screen)
+        return false
+      }
     #endif
     let response = try await fixtureResponse("REVOKE")
     XCTAssertEqual(response, "revoked")
     #if os(iOS)
+      // UIKit snapshots the Session menu when the user opens it. Wait for
+      // the live transport to close before looking for its Reconnect action.
+      guard waitForStatus("Disconnected") else {
+        XCTFail("The terminal stayed connected after access was revoked")
+        return
+      }
       activate(app.buttons["Session"].firstMatch)
     #endif
     let reconnect = app.buttons["Reconnect"].firstMatch
@@ -521,15 +539,7 @@ final class NativeSessionTests: XCTestCase {
       let receipt = try await fixtureResponse("open-repair-invitation")
       XCTAssertEqual(receipt, "opened")
       confirmPairing(pairingButton(in: app), in: app)
-      let connected = app.descendants(matching: .any).matching(NSPredicate(
-        format: "identifier == %@ AND (label BEGINSWITH %@ OR value BEGINSWITH %@)",
-        "desktop-session-status", "Connected", "Connected"
-      )).firstMatch
-      if !connected.waitForExistence(timeout: 15) {
-        let screen = XCTAttachment(screenshot: app.screenshot())
-        screen.name = "mobile-repair-window"
-        screen.lifetime = .keepAlways
-        add(screen)
+      guard waitForStatus("Connected") else {
         XCTFail("The selected terminal did not reconnect after confirming the new invitation")
         return
       }
