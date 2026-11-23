@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CLIStream iPad</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/9434fae7b402d59fc73674847d73112f">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit;cursor:default}
+</style>
+</helmet>
+<div style="width: {{boardW}}; height: {{boardH}}; box-sizing: border-box; padding: 40px; background: {{t.desk}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; color: {{t.label}}; -webkit-font-smoothing: antialiased">
+<div style="padding: {{bezel}}; border-radius: {{bezelR}}; background: #0B0B0C; box-shadow: 0 30px 70px rgba(0,0,0,0.25), inset 0 0 0 2px #2A2A2C">
+<div style="position: relative; width: {{W}}; height: {{H}}; border-radius: {{screenR}}; overflow: hidden; background: {{t.content}}; display: flex">
+
+<nav aria-label="Servers" style="position: relative; width: {{sideW}}; flex-shrink: 0; background: {{t.sidebar}}">
+<sc-if value="{{isPad}}" hint-placeholder-val="{{ true }}">
+<span style="position: absolute; left: 24px; top: 8px; font-size: 15px; font-weight: 600">9:41&#160;&#160;Mon Nov 23</span>
+</sc-if>
+<div style="position: absolute; left: 16px; right: 16px; top: {{sideTop}}; display: flex; align-items: center; justify-content: space-between">
+<div style="height: 44px; display: flex; align-items: center; padding: 0 4px; border-radius: 22px; background: {{t.glass}}; box-shadow: {{t.glassShadow}}">
+<button type="button" aria-label="Add Server" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-plus" aria-hidden="true" style="width: 19px; height: 18px"></span></button>
+<button type="button" aria-label="Layout and grouping" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-list-bullet-indent" aria-hidden="true" style="width: 22px; height: 14px"></span></button>
+</div>
+<button type="button" aria-label="Hide Sidebar" style="width: 44px; height: 44px; border-radius: 22px; border: none; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-sidebar-left" aria-hidden="true" style="width: 23px; height: 18px"></span></button>
+</div>
+<label style="position: absolute; left: 16px; right: 16px; top: {{searchTop}}; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 20px; background: {{t.field}}; color: {{t.secondary}}">
+<span class="sf sf-magnifyingglass" aria-hidden="true" style="width: 18px; height: 17px"></span>
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search CLIs</span>
+<input type="search" placeholder="Search" style="flex: 1; min-width: 0; border: none; outline: none; background: transparent; font: inherit; font-size: 17px; color: {{t.label}}">
+<span class="sf sf-mic" aria-hidden="true" style="width: 13px; height: 17px"></span>
+</label>
+<div style="position: absolute; left: 12px; right: 12px; top: {{rowsTop}}; display: flex; flex-direction: column">
+<sc-for list="{{sections}}" as="sec" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; margin-bottom: 14px">
+<div style="height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 14px 0 14px">
+<span style="flex: 1; font-size: 17px; font-weight: 600; color: {{t.header}}">{{sec.name}}</span>
+<span style="font-size: 15px; color: {{t.secondary}}">{{sec.meta}}</span>
+<span class="sf sf-chevron-down" aria-hidden="true" style="width: 13px; height: 8px; color: {{accent}}"></span>
+</div>
+<sc-for list="{{sec.rows}}" as="r" hint-placeholder-count="4">
+<button type="button" onClick="{{r.pick}}" aria-current="{{r.current}}" style="height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 16px 0 {{r.pad}}; border: none; border-radius: 22px; background: {{r.bg}}; text-align: left; color: {{t.label}}">
+<span style="width: 26px; display: flex; justify-content: center"><span class="sf {{r.icon}}" aria-hidden="true" style="width: {{r.iw}}; height: {{r.ih}}; color: {{r.iconColor}}"></span></span>
+<span style="flex: 1; font-size: 17px; color: {{r.fg}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.name}}</span>
+<span style="font-size: 17px; color: {{r.capColor}}">{{r.caption}}</span>
+<sc-if value="{{r.down}}" hint-placeholder-val="{{ false }}"><span class="sf sf-chevron-down" aria-hidden="true" style="width: 13px; height: 8px; color: {{t.secondary}}"></span></sc-if>
+</button>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</nav>
+
+<main style="position: relative; flex: 1; min-width: 0; background: {{t.content}}">
+<sc-if value="{{isPad}}" hint-placeholder-val="{{ true }}">
+<span aria-hidden="true" style="position: absolute; right: 24px; top: 9px; display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600"><span class="sf sf-wifi" style="width: 18px; height: 13px"></span>100%<span class="sf sf-battery-100percent" style="width: 28px; height: 14px"></span></span>
+</sc-if>
+<sc-if value="{{isDuo}}" hint-placeholder-val="{{ false }}">
+<span style="position: absolute; right: 64px; top: 18px; font-size: 15px; font-weight: 600">9:41</span>
+<span aria-hidden="true" style="position: absolute; right: 14px; top: 10px; width: 40px; height: 40px; border-radius: 20px; background: #000"></span>
+</sc-if>
+<div style="position: absolute; left: 24px; top: {{barTop}}; height: 44px; display: flex; flex-direction: column; justify-content: center; max-width: 260px">
+<h1 style="margin: 0; font-size: 17px; font-weight: 700; line-height: 21px">sh</h1>
+<span style="font-size: 13px; line-height: 16px; color: {{t.secondary}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">build-mac — Build server</span>
+</div>
+<div style="position: absolute; right: {{barRight}}; top: {{barTop}}; display: flex; gap: 10px">
+<div style="height: 44px; display: flex; align-items: center; padding: 0 4px; border-radius: 22px; background: {{t.glass}}; box-shadow: {{t.glassShadow}}">
+<button type="button" aria-label="Restart…" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-arrow-counterclockwise" aria-hidden="true" style="width: 17px; height: 20px"></span></button>
+<button type="button" aria-label="Stop…" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-stop" aria-hidden="true" style="width: 17px; height: 16px"></span></button>
+</div>
+<div style="height: 44px; display: flex; align-items: center; padding: 0 4px; border-radius: 22px; background: {{t.glass}}; box-shadow: {{t.glassShadow}}">
+<button type="button" aria-label="Show in Files" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-folder" aria-hidden="true" style="width: 21px; height: 17px"></span></button>
+<button type="button" onClick="{{togglePorts}}" aria-pressed="{{portsPressed}}" aria-label="Ports" style="width: 44px; height: 44px; border: none; border-radius: 22px; background: {{portsBg}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-sidebar-right" aria-hidden="true" style="width: 23px; height: 18px"></span></button>
+</div>
+<button type="button" aria-label="More" aria-haspopup="menu" style="width: 44px; height: 44px; border-radius: 22px; border: none; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-ellipsis" aria-hidden="true" style="width: 20px; height: 6px"></span></button>
+</div>
+<div style="position: absolute; left: 0; right: {{termRight}}; top: {{termTop}}; bottom: 36px; overflow: hidden; padding: 8px 24px; font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 13px; line-height: 19px; white-space: pre; color: {{t.termText}}">
+<sc-for list="{{lines}}" as="ln" hint-placeholder-count="8">
+<div><span style="color: {{ln.c1}}">{{ln.a}}</span><span>{{ln.b}}</span><sc-if value="{{ln.cursor}}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="display: inline-block; width: 8px; height: 15px; vertical-align: -3px; background: {{t.termText}}"></span></sc-if></div>
+</sc-for>
+</div>
+<div style="position: absolute; left: 24px; right: {{statusRight}}; bottom: 10px; height: 20px; display: flex; align-items: center; gap: 6px; font-size: 13px; color: {{t.secondary}}">
+<span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 4px; background: {{t.green}}"></span>
+<span>Connected · 2 ms</span>
+<span style="margin-left: auto">PTY · 132 × 38</span>
+</div>
+
+<sc-if value="{{showPorts}}" hint-placeholder-val="{{ false }}">
+<aside aria-label="Ports" style="position: absolute; top: {{inspTop}}; right: 0; bottom: 0; width: {{inspW}}; box-sizing: border-box; padding: 0 16px; background: {{t.inspector}}; border-left: 0.5px solid {{t.sep}}; display: flex; flex-direction: column; gap: 8px">
+<h2 style="margin: 4px 4px 8px; font-size: 22px; font-weight: 700">Ports</h2>
+<div style="border-radius: 26px; background: {{t.cell}}; overflow: hidden">
+<sc-for list="{{ports}}" as="c" hint-placeholder-count="3">
+<div style="min-height: 52px; display: flex; align-items: center; gap: 10px; margin-left: 16px; padding: 8px 16px 8px 0; box-sizing: border-box; border-top: 0.5px solid {{c.sep}}">
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 17px; font-family: {{c.font}}">{{c.title}}</span>
+<sc-if value="{{c.hasSub}}" hint-placeholder-val="{{ true }}"><span style="font-size: 15px; color: {{t.secondary}}">{{c.sub}}</span></sc-if>
+</div>
+<sc-if value="{{c.hasToggle}}" hint-placeholder-val="{{ true }}"><button type="button" role="switch" aria-checked="{{c.checked}}" aria-label="{{c.title}}" style="width: 64px; height: 28px; border: none; border-radius: 14px; padding: 2px; box-sizing: border-box; background: {{c.track}}; display: flex; justify-content: {{c.justify}}"><span aria-hidden="true" style="width: 38px; height: 24px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.2)"></span></button></sc-if>
+<sc-if value="{{c.hasCopy}}" hint-placeholder-val="{{ false }}"><button type="button" aria-label="Copy address" style="width: 34px; height: 34px; border-radius: 17px; border: none; background: {{t.fill}}; color: {{accent}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-doc-on-doc" aria-hidden="true" style="width: 13px; height: 16px"></span></button></sc-if>
+</div>
+</sc-for>
+</div>
+<span style="padding: 0 16px; font-size: 13px; line-height: 17px; color: {{t.secondary}}">Forwards keep running when you close this inspector.</span>
+</aside>
+</sc-if>
+</main>
+<span aria-hidden="true" style="position: absolute; left: 50%; bottom: 8px; width: 200px; height: 5px; margin-left: -100px; border-radius: 3px; background: {{t.home}}"></span>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"device":{"editor":"enum","options":["ipad","duoInner"],"default":"ipad"},"appearance":{"editor":"enum","options":["light","dark"],"default":"light"},"portsOpen":{"editor":"boolean","default":false},"$preview":{"width":1480,"height":1136}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const duo = (this.props.device ?? 'ipad') === 'duoInner';
+    const dark = (this.props.appearance ?? 'light') === 'dark';
+    const st = this.state || {};
+    const showPorts = st.ports === undefined ? !!this.props.portsOpen : st.ports;
+    const sel = st.sel || 'sh';
+    const W = duo ? 951 : 1376, H = duo ? 669 : 1032;
+    const accent = dark ? '#0091FF' : '#0088FF';
+    // iOS 27 UI Kit values: iPad sidebar, toolbar and grouped list renders.
+    const L = {
+      desk: '#D9DCE1', sidebar: '#E4E4E4', content: '#FFFFFF', label: '#000000', secondary: '#8A8A8E', header: '#85858B',
+      field: 'rgba(120,120,128,0.12)', selection: 'rgba(0,0,0,0.075)', sep: 'rgba(60,60,67,0.18)', green: '#34C759',
+      glass: 'linear-gradient(180deg, #FFFFFF 0%, #F4F4F6 100%)', glassShadow: '0 0 0 0.5px rgba(0,0,0,0.07), 0 6px 16px rgba(0,0,0,0.10)',
+      termText: '#1D1D1F', prompt: '#0070D9', ok: '#1F8A3B', dim: '#8A8A8E', inspector: '#F2F2F7', cell: '#FFFFFF',
+      fill: 'rgba(120,120,128,0.12)', trackOff: 'rgba(120,120,128,0.16)', pressed: 'rgba(120,120,128,0.16)', home: 'rgba(0,0,0,0.85)'
+    };
+    const D = {
+      desk: '#14171C', sidebar: '#1C1C1E', content: '#000000', label: '#FFFFFF', secondary: '#8D8D93', header: '#8D8D93',
+      field: 'rgba(118,118,128,0.24)', selection: 'rgba(255,255,255,0.12)', sep: 'rgba(84,84,88,0.55)', green: '#30D158',
+      glass: 'linear-gradient(180deg, rgba(72,72,74,0.92) 0%, rgba(52,52,54,0.92) 100%)', glassShadow: '0 0 0 0.5px rgba(255,255,255,0.14), 0 6px 16px rgba(0,0,0,0.5)',
+      termText: '#EBEBF0', prompt: '#5AB0FF', ok: '#30D158', dim: '#8D8D93', inspector: '#1C1C1E', cell: '#2C2C2E',
+      fill: 'rgba(120,120,128,0.24)', trackOff: 'rgba(120,120,128,0.32)', pressed: 'rgba(255,255,255,0.18)', home: 'rgba(255,255,255,0.85)'
+    };
+    const t = dark ? D : L;
+    const row = (id, name, caption, o) => {
+      const x = o || {};
+      const on = id === sel;
+      return {
+        name, caption, pad: x.pad || '10px', icon: x.icon || 'sf-terminal', iw: x.iw || '22px', ih: x.ih || '17px',
+        iconColor: x.gray ? t.secondary : accent, fg: x.gray ? t.secondary : t.label, capColor: x.capAccent ? accent : t.secondary,
+        down: !!x.down, bg: on ? t.selection : 'transparent', current: on ? 'true' : 'false',
+        pick: () => { if (!x.down && id !== 'off') this.setState({ sel: id }); }
+      };
+    };
+    const sections = [
+      { name: 'Build server', meta: '2 ms', rows: [
+        row('h1', 'build-mac', 'macOS', { icon: 'sf-laptopcomputer', iw: '25px', ih: '15px', down: true }),
+        row('codex', 'codex', '', { pad: '40px' }), row('claude', 'claude', '', { pad: '40px' }), row('sh', 'sh', '', { pad: '40px' }),
+        row('h2', 'linux-01', 'Linux', { icon: 'sf-desktopcomputer', iw: '22px', ih: '18px', down: true }),
+        row('worker', 'worker', 'Exit 0', { pad: '40px', gray: true }), row('sync', 'sync', 'Attach only', { pad: '40px' })
+      ] },
+      { name: 'Home lab', meta: 'Offline', rows: [ row('off', 'Offline', 'Retry', { icon: 'sf-wifi-slash', iw: '20px', ih: '19px', gray: true, capAccent: true }) ] }
+    ];
+    const seg = (a, b, tone) => ({ a, b, c1: tone === 'k' ? t.ok : tone === 'd' ? t.dim : t.prompt, cursor: false });
+    const lines = [
+      seg('~/clistream $ ', 'make test', 'p'), seg('go test -race ./cmd/... ./internal/... ./scripts/... ./tests/...', '', 'd'),
+      seg('ok  ', '  internal/activity     0.219s', 'k'), seg('ok  ', '  internal/broker       8.280s', 'k'),
+      seg('?   ', '  internal/client      [no test files]', 'd'), seg('ok  ', '  internal/files        0.178s', 'k'),
+      seg('ok  ', '  internal/identity     0.211s', 'k'), seg('ok  ', '  internal/session      0.172s', 'k'),
+      seg('ok  ', '  internal/wire         0.173s', 'k'), seg('go vet ./cmd/... ./internal/... ./scripts/... ./tests/...', '', 'd'),
+      seg('~/clistream $ ', '', 'p')
+    ];
+    lines[lines.length - 1].cursor = true;
+    const fw = st.fw || {};
+    const pc = (title, o) => {
+      const x = o || {};
+      const on = x.key ? (fw[x.key] === undefined ? !!x.on : fw[x.key]) : false;
+      return {
+        title, sub: x.sub || '', hasSub: !!x.sub, font: x.mono ? "'SF Mono', ui-monospace, monospace" : 'inherit',
+        hasToggle: !!x.key, checked: on ? 'true' : 'false', track: on ? t.green : t.trackOff, justify: on ? 'flex-end' : 'flex-start',
+        hasCopy: !!x.copy, sep: x.first ? 'transparent' : t.sep
+      };
+    };
+    const ports = [pc('web', { sub: 'TCP · 127.0.0.1:8080', key: 'web', on: true, first: true }), pc('127.0.0.1:8081', { mono: true, copy: true }), pc('metrics', { sub: 'UDP · 127.0.0.1:9125', key: 'metrics', on: false })];
+    const inspW = duo ? 300 : 360;
+    return {
+      t, accent, isPad: !duo, isDuo: duo, sections, lines, ports,
+      boardW: (W + (duo ? 24 : 36) + 80) + 'px', boardH: (H + (duo ? 24 : 36) + 80) + 'px', W: W + 'px', H: H + 'px',
+      bezel: duo ? '12px' : '18px', bezelR: duo ? '52px' : '46px', screenR: duo ? '40px' : '28px',
+      sideW: duo ? '272px' : '330px', sideTop: duo ? '14px' : '38px', searchTop: duo ? '70px' : '94px', rowsTop: duo ? '122px' : '148px',
+      barTop: duo ? '14px' : '38px', barRight: duo ? '110px' : '20px', termTop: duo ? '70px' : '96px',
+      showPorts, inspW: inspW + 'px', inspTop: duo ? '70px' : '96px',
+      termRight: showPorts ? inspW + 'px' : '0px', statusRight: showPorts ? (inspW + 24) + 'px' : '24px',
+      portsPressed: showPorts ? 'true' : 'false', portsBg: showPorts ? t.pressed : 'transparent',
+      togglePorts: () => this.setState({ ports: !showPorts })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # macOS design reference
 
-The design target for the CLIStream Mac app on macOS 27, in formats that people and coding agents can read directly.
+The design target for the CLIStream Mac app on macOS 27, in formats that people and coding agents can read directly. The iPhone, iPad and iPhone Duo counterpart is in [../ios](../ios/README.md).
 
 | File | Contents |
 |---|---|
