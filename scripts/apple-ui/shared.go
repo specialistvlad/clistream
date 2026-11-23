@@ -146,6 +146,33 @@ func shutdownSimulator(ctx context.Context, label, id string) error {
 	return err
 }
 
+func bootPreparedPhone(ctx context.Context, id string) error {
+	ctx, cancel := context.WithTimeout(ctx, 7*time.Minute)
+	defer cancel()
+	var diagnostic bytes.Buffer
+	boot := func(label string) error {
+		sharedCheckpoint(label)
+		cmd := sharedCommand(ctx, "xcrun", "simctl", "bootstatus", id, "-b")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = io.MultiWriter(os.Stderr, &diagnostic)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("%s: %w", label, errors.Join(err, ctx.Err()))
+		}
+		return nil
+	}
+	err := boot("Boot the prepared iPhone")
+	var exit *exec.ExitError
+	if os.Getenv("RUNNER_ENVIRONMENT") == "github-hosted" && errors.As(err, &exit) &&
+		exit.ExitCode() == int(syscall.ECONNABORTED) && ctx.Err() == nil &&
+		bytes.Contains(diagnostic.Bytes(), []byte("CoreSimulatorService connection interrupted")) {
+		// CoreSimulator can restart its XPC service during boot. A fresh
+		// bootstatus reconnects to the service, waiting on the same device
+		// if it is already starting. Leave the paired iPad undisturbed.
+		return boot("Resume iPhone boot after CoreSimulator connection interruption")
+	}
+	return err
+}
+
 // Run each UI runner against the same broker. The independent CLI joins via
 // its normal attach command. A unique marker from each writer is retained in
 // the child's history so simulator launch order does not affect the assertion.
@@ -163,8 +190,7 @@ func shared(plans viewerPlans, arrivals <-chan string, abortBarriers func(), url
 		{"pad", os.Getenv("IPAD_SIMULATOR_ID")}, {"phone", os.Getenv("IPHONE_SIMULATOR_ID")}, {"mac", ""},
 	} {
 		if device.name == "phone" {
-			if err := prepareStage(ctx, "Boot the prepared iPhone", 5*time.Minute,
-				"xcrun", "simctl", "bootstatus", device.id, "-b"); err != nil {
+			if err := bootPreparedPhone(ctx, device.id); err != nil {
 				return err
 			}
 		}
