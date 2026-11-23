@@ -703,6 +703,7 @@ final class NativeSessionTests: XCTestCase {
     defer { app.terminate() }
     let input = app.descendants(matching: .any)["session-terminal"].firstMatch
     activate(input)
+    expectOutput("preview-ready", in: app)
     let ready = try await fixtureResponse("ready/" + participant)
     XCTAssertEqual(ready, "ready")
     // All viewers stay attached. Wait for each writer's echo before the next one types
@@ -711,7 +712,7 @@ final class NativeSessionTests: XCTestCase {
       if peer == participant { input.typeText("shared-" + participant + "\n") }
       let text = "out:shared-" + peer
       let match = app.descendants(matching: .any).matching(
-        NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@", text, text)
+        NSPredicate(format: "identifier == %@ AND value CONTAINS %@", "session-terminal", text)
       ).firstMatch
       XCTAssertTrue(match.waitForExistence(timeout: 300))
     }
@@ -738,8 +739,8 @@ final class NativeSessionTests: XCTestCase {
       input.typeText("independent-mac\n")
       XCTAssertTrue(
         app.descendants(matching: .any).matching(
-          NSPredicate(format: "value CONTAINS %@ OR label CONTAINS %@",
-                      "second:independent-mac", "second:independent-mac")
+          NSPredicate(format: "identifier == %@ AND value CONTAINS %@",
+                      "session-terminal", "second:independent-mac")
         ).firstMatch.waitForExistence(timeout: 12))
       _ = try await fixtureResponse("mac-stage/second-session-echo")
     #endif
@@ -751,8 +752,7 @@ final class NativeSessionTests: XCTestCase {
     #if !os(macOS)
       let marker = app.descendants(matching: .any).matching(
         NSPredicate(
-          format: "value CONTAINS %@ OR label CONTAINS %@", "out:independent-phone",
-          "out:independent-phone")
+          format: "identifier == %@ AND value CONTAINS %@", "session-terminal", "out:independent-phone")
       ).firstMatch
       XCTAssertTrue(marker.waitForExistence(timeout: 20))
     #endif
@@ -764,8 +764,7 @@ final class NativeSessionTests: XCTestCase {
       XCTAssertTrue(
         app.descendants(matching: .any).matching(
           NSPredicate(
-            format: "value CONTAINS %@ OR label CONTAINS %@", "out:independent-phone",
-            "out:independent-phone")
+            format: "identifier == %@ AND value CONTAINS %@", "session-terminal", "out:independent-phone")
         ).firstMatch.waitForExistence(timeout: 12))
     #endif
   }

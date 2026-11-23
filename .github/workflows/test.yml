@@ -65,7 +65,7 @@ jobs:
         run: sudo xcode-select --switch /Applications/Xcode_27.2.app/Contents/Developer
       - run: command -v xcodegen || brew install xcodegen
       - name: Install the simulator input test tool
-        if: matrix.device != 'macOS'
+        if: matrix.device != 'macOS' && matrix.device != 'shared'
         run: |
           mkdir -p "$RUNNER_TEMP/simulator-hid"
           cd "$RUNNER_TEMP/simulator-hid"
