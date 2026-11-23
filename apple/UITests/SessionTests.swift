@@ -111,8 +111,7 @@ final class SessionTests: XCTestCase {
           let restored = try await fixtureResponse("pose/Closed")
           XCTAssertEqual(restored, "applied")
         }
-        let opened = try await fixtureResponse("pose/Open")
-        XCTAssertEqual(opened, "applied")
+        try await moveDuo(to: "Open", scenario: "input", in: app)
       } else {
         XCUIDevice.shared.orientation = .landscapeLeft
       }

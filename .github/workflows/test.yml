@@ -138,6 +138,11 @@ jobs:
               while IFS=$'\t' read -r file name; do cp "$staging/$file" "results/$name.txt"; done
             jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | startswith("failed-desktop-")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0])] | @tsv' "$staging/manifest.json" |
               while IFS=$'\t' read -r file name; do cp "$staging/$file" "results/$name.png"; done
+            jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | test("^failed-duo-[a-z-]+-(window|geometry)_")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0])] | @tsv' "$staging/manifest.json" |
+              while IFS=$'\t' read -r file name; do
+                if [[ $name == *-window ]]; then extension=png; else extension=txt; fi
+                cp "$staging/$file" "results/$name.$extension"
+              done
             jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | test("^gallery-[a-z-]+_[0-9]+_[A-Fa-f0-9-]+\\.png$")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0] | ltrimstr("gallery-"))] | @tsv' "$staging/manifest.json" |
               while IFS=$'\t' read -r file name; do cp "$staging/$file" "gallery/$name.png"; done
           done

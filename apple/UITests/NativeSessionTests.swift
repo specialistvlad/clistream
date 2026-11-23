@@ -693,10 +693,15 @@ extension XCTestCase {
   #if os(iOS)
     @MainActor func openTerminalKeys(in app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
       let menu = app.buttons["Session"].firstMatch
-      XCTAssertTrue(menu.waitForExistence(timeout: 12), file: file, line: line)
+      guard menu.wait(for: \.isHittable, toEqual: true, timeout: 12) else {
+        recordDuoFailure("session-menu", in: app)
+        XCTFail("The Session menu was unavailable", file: file, line: line)
+        return
+      }
       menu.tap()
       let keys = app.buttons["Keys"].firstMatch
       guard keys.wait(for: \.isHittable, toEqual: true, timeout: 12) else {
+        recordDuoFailure("keys-row", in: app)
         XCTFail("The Session menu did not present its Keys row", file: file, line: line)
         return
       }
@@ -706,8 +711,10 @@ extension XCTestCase {
       let origin = app.frame.origin
       app.coordinate(withNormalizedOffset: .zero)
         .withOffset(CGVector(dx: frame.midX - origin.x, dy: frame.midY - origin.y)).tap()
-      XCTAssertTrue(app.buttons["Hide Keyboard"].firstMatch.waitForExistence(timeout: 10),
-                    "The Keys submenu did not open", file: file, line: line)
+      if !app.buttons["Hide Keyboard"].firstMatch.waitForExistence(timeout: 10) {
+        recordDuoFailure("keys-submenu", in: app)
+        XCTFail("The Keys submenu did not open", file: file, line: line)
+      }
     }
   #endif
 
