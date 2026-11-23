@@ -195,6 +195,70 @@ func captureDuoScreen(ctx context.Context, udid string, panel duoScreen, path st
 		fmt.Sprintf("--display=%d", panel.ID), path).Run()
 }
 
+// A menu may be fully drawn before AXe's label tap accepts its hit-test
+// receipt. If it certifies that no input was sent, locate the actual visible
+// control again and touch its center on the same physical panel.
+func tapDuoControl(ctx context.Context, udid string, panel duoScreen, label string) error {
+	target := []string{"--input-mode", "selected", "--screen-id", strconv.FormatUint(uint64(panel.ID), 10), "--screen-uuid", panel.UUID, "--udid", udid}
+	raw, err := exec.CommandContext(ctx, "axe", append([]string{"--output", "json", "tap", "--verbose", "--label", label, "--wait-timeout", "12"}, target...)...).Output()
+	if err == nil {
+		return nil
+	}
+	var receipt struct {
+		Error struct{ Code string }
+		Data  struct {
+			Result struct {
+				EnqueuedEventCount *int
+				Cleanup            string
+			}
+		}
+	}
+	if json.Unmarshal(raw, &receipt) != nil {
+		return err
+	}
+	outcome := receipt.Data.Result
+	fmt.Printf("Duo label %s: AXe code %s, input cleanup %s\n", label, receipt.Error.Code, outcome.Cleanup)
+	if outcome.EnqueuedEventCount == nil || *outcome.EnqueuedEventCount != 0 || outcome.Cleanup == "" || outcome.Cleanup == "uncertain" {
+		return err
+	}
+	type frame struct{ X, Y, Width, Height float64 }
+	type node struct {
+		Label    string `json:"AXLabel"`
+		Frame    frame
+		Hidden   bool
+		Enabled  *bool
+		Children []node
+	}
+	var tree struct{ Data struct{ Result []node } }
+	raw, err = exec.CommandContext(ctx, "axe", append([]string{"--output", "json", "describe-ui"}, target...)...).Output()
+	if err != nil || json.Unmarshal(raw, &tree) != nil {
+		return fmt.Errorf("cannot read active menu")
+	}
+	points := map[[2]int]bool{}
+	var point [2]int
+	var visit func(node)
+	visit = func(item node) {
+		f := item.Frame
+		if !item.Hidden && (item.Enabled == nil || *item.Enabled) && item.Label == label && f.Width > 0 && f.Height > 0 {
+			x, y := f.X+f.Width/2, f.Y+f.Height/2
+			if x > 0 && y > 0 && x < panel.Width && y < panel.Height {
+				point = [2]int{int(math.Round(x)), int(math.Round(y))}
+				points[point] = true
+			}
+		}
+		for _, child := range item.Children {
+			visit(child)
+		}
+	}
+	for _, root := range tree.Data.Result {
+		visit(root)
+	}
+	if len(points) != 1 {
+		return fmt.Errorf("active display has %d distinct visible centers for %s", len(points), label)
+	}
+	return exec.CommandContext(ctx, "axe", append([]string{"tap", "-x", strconv.Itoa(point[0]), "-y", strconv.Itoa(point[1])}, target...)...).Run()
+}
+
 // AXe reports the lit panel's role and oriented size in points.
 func duoDisplay(ctx context.Context, udid string) (duoScreen, float64, error) {
 	data, err := exec.CommandContext(ctx, "axe", "--output", "json", "displays", "--udid", udid).Output()
@@ -219,7 +283,7 @@ func duoDisplay(ctx context.Context, udid string) (duoScreen, float64, error) {
 	return display.ActiveScreen, display.Hinge.Degrees, nil
 }
 
-func poseRoute(mux *http.ServeMux, path, udid string) {
+func poseRoute(mux *http.ServeMux, path, udid, keysFile string) {
 	poses := map[string]int{"Closed": 0, "Partially Open": 90, "Open": 180}
 	// The partially open display can settle several degrees away from the
 	// mechanical target. Keep the end stops precise and check the tabletop pose.
@@ -305,6 +369,12 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 			return
 		}
 		controls = append(controls, key)
+		want := map[string]string{"Up Arrow": "\x1b[A", "Down Arrow": "\x1b[B", "Right Arrow": "\x1b[C", "Left Arrow": "\x1b[D", "Escape": "\x1b", "Control-C": "\x03"}[key]
+		before, err := os.Stat(keysFile)
+		if err != nil {
+			http.Error(w, "child keyboard receipt unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		panel, _, err := duoDisplay(r.Context(), udid)
 		if err != nil || panel.Role != role || panel.UUID == "" {
 			http.Error(w, "requested display unavailable", http.StatusServiceUnavailable)
@@ -313,10 +383,24 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 		// Touch each real menu item on the same measured panel even as UIKit
 		// animates from the Session menu to its nested keyboard commands.
 		for _, label := range controls {
-			tap := exec.CommandContext(r.Context(), "axe", "tap", "--input-mode", "selected",
-				"--screen-id", strconv.FormatUint(uint64(panel.ID), 10), "--screen-uuid", panel.UUID,
-				"--label", label, "--wait-timeout", "15", "--udid", udid)
-			err := tap.Run()
+			err := tapDuoControl(r.Context(), udid, panel, label)
+			if label == key && want != "" {
+				received := false
+				for deadline := time.Now().Add(5 * time.Second); r.Context().Err() == nil && time.Now().Before(deadline); {
+					data, _ := os.ReadFile(keysFile)
+					if int64(len(data)) >= before.Size() && string(data[before.Size():]) == want {
+						received = true
+						break
+					}
+					time.Sleep(100 * time.Millisecond)
+				}
+				if received {
+					fmt.Printf("Duo child received %s on %s\n", key, role)
+					err = nil
+				} else if err == nil {
+					err = fmt.Errorf("the PTY did not receive %s", key)
+				}
+			}
 			if err != nil || (key == "Hide Keyboard" && os.Getenv("TEST_RUNNER_CLISTREAM_CAPTURE_GALLERY") == "1") {
 				name := "duo-" + role + "-menu-" + strings.ToLower(strings.ReplaceAll(label, " ", "-")) + ".png"
 				if e := captureDuoScreen(r.Context(), udid, panel, filepath.Join("results", name)); e != nil {
@@ -325,7 +409,7 @@ func poseRoute(mux *http.ServeMux, path, udid string) {
 				}
 			}
 			if err != nil {
-				fmt.Printf("Duo could not tap %s on display %d\n", label, panel.ID)
+				fmt.Printf("Duo could not tap %s on display %d: %v\n", label, panel.ID, err)
 				http.Error(w, "active display control unavailable", http.StatusConflict)
 				return
 			}

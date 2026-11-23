@@ -272,7 +272,7 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 		fmt.Fprint(w, "revoked")
 	})
 	if os.Getenv("CLISTREAM_DUO_NAME") != "" {
-		poseRoute(mux, path, os.Getenv("SIMULATOR_ID"))
+		poseRoute(mux, path, os.Getenv("SIMULATOR_ID"), filepath.Join(root, "keys"))
 	}
 	if err := interactionRoutes(mux, path, root, link); err != nil {
 		return err
