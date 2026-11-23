@@ -22,6 +22,7 @@ esac
 stage=$(mktemp -d /tmp/cs-linux-ui.XXXXXX)
 container=""
 cleanup(){
+  if [[ $? != 0 && -n "$container" ]]; then docker logs "$container" 2>&1 | grep '^Finder ' || true; fi
   if [[ -n "$container" ]]; then docker rm -f "$container" >/dev/null; fi
   rm -rf "$stage"
 }

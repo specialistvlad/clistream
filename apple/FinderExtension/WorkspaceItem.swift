@@ -1,5 +1,6 @@
 import CryptoKit
 import FileProvider
+import OSLog
 import UniformTypeIdentifiers
 
 struct WorkspaceNode: Codable, Equatable {
@@ -130,6 +131,12 @@ enum WorkspaceService {
     fields["Version"] = version
     fields["Handle"] = requestID
     fields["Recursive"] = recursive
+    #if DEBUG
+      if ["create", "mkdir", "replace", "move", "remove"].contains(action) {
+        Logger(subsystem: "com.vlk.clistream", category: "FileProvider")
+          .notice("Handling Finder workspace \(action, privacy: .public)")
+      }
+    #endif
     return try call(fields)
   }
 }

@@ -94,6 +94,11 @@ extension NativeSessionTests {
     }
     let window = finder.windows.firstMatch
     XCTAssertTrue(window.waitForExistence(timeout: 10))
+    func checkpoint(_ name: String, file: StaticString = #filePath, line: UInt = #line) async throws -> String {
+      try await fixtureResponse("finder/" + name, file: file, line: line) {
+        self.rememberProviderWindow(finder, name: "finder-checkpoint")
+      }
+    }
 
     // In Finder, go up one level and copy the selected workspace's file URL.
     // This discovers the actual provider domain even when macOS renames its mount.
@@ -122,10 +127,10 @@ extension NativeSessionTests {
     board.clearContents()
     XCTAssertTrue(board.writeObjects([incoming as NSURL]))
     finder.typeKey("v", modifierFlags: .command)
-    let uploaded = try await fixtureResponse("finder/uploaded")
+    let uploaded = try await checkpoint("uploaded")
     XCTAssertEqual(uploaded, "uploaded")
     let source = folder.appendingPathComponent(filename)
-    let changed = try await fixtureResponse("finder/host-edit")
+    let changed = try await checkpoint("host-edit")
     XCTAssertEqual(changed, "edited")
     app.activate()
     app.typeKey(".", modifierFlags: .command)
@@ -168,7 +173,7 @@ extension NativeSessionTests {
     XCTAssertTrue(subfolder.waitForExistence(timeout: 12))
     subfolder.doubleClick()
     finder.typeKey("v", modifierFlags: [.command, .option])
-    let moved = try await fixtureResponse("finder/moved")
+    let moved = try await checkpoint("moved")
     XCTAssertEqual(moved, "moved")
 
     let destination = folder.appendingPathComponent("Finder Round Trip").appendingPathComponent(filename)
@@ -179,7 +184,7 @@ extension NativeSessionTests {
     }
     if let coordinationError { throw coordinationError }
     try XCTUnwrap(save).get()
-    let saved = try await fixtureResponse("finder/saved")
+    let saved = try await checkpoint("saved")
     XCTAssertEqual(saved, "saved")
 
     file.click()
@@ -190,7 +195,7 @@ extension NativeSessionTests {
     subfolder.click()
     finder.typeKey(.delete, modifierFlags: .command)
     if finder.buttons["Delete"].firstMatch.waitForExistence(timeout: 2) { finder.buttons["Delete"].firstMatch.click() }
-    let deleted = try await fixtureResponse("finder/deleted")
+    let deleted = try await checkpoint("deleted")
     XCTAssertEqual(deleted, "deleted")
     finder.typeKey("w", modifierFlags: .command)
     app.activate()

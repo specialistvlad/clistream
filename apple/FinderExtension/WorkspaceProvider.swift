@@ -24,8 +24,9 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
         try index.refreshWorkingSet()
         try persist(after: prior)
       } catch {
+        let failure = error as NSError
         log.error(
-          "Could not refresh Finder metadata: \(error.localizedDescription, privacy: .public)")
+          "Could not refresh Finder metadata: \(failure.domain, privacy: .public) \(failure.code)")
       }
     }
     poll = timer
@@ -44,6 +45,7 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
 
   private func perform<T>(
     _ work: @escaping (String) throws -> T,
+    operation: String = #function,
     complete: @escaping (Result<T, Error>) -> Void
   ) -> Progress {
     let progress = Progress(totalUnitCount: 1)
@@ -67,6 +69,10 @@ final class WorkspaceProvider: NSObject, NSFileProviderReplicatedExtension {
           if progress.isCancelled { throw CocoaError(.userCancelled) }
           throw error
         }
+      }
+      if case .failure(let error) = result {
+        let failure = error as NSError
+        self.log.error("\(operation, privacy: .public) failed: \(failure.domain, privacy: .public) \(failure.code)")
       }
       progress.completedUnitCount = 1
       complete(result)

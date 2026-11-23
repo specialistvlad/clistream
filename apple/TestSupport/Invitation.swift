@@ -2,7 +2,10 @@ import Foundation
 import XCTest
 
 /// The fixture mints a short-lived invitation only after the test app is ready.
-func fixtureResponse(_ purpose: String, at point: CGPoint? = nil, to end: CGPoint? = nil) async throws -> String {
+func fixtureResponse(
+  _ purpose: String, at point: CGPoint? = nil, to end: CGPoint? = nil,
+  file: StaticString = #filePath, line: UInt = #line, onHTTPFailure: (@MainActor () -> Void)? = nil
+) async throws -> String {
   let env = ProcessInfo.processInfo.environment
   let base = try XCTUnwrap(env["CLISTREAM_FIXTURE"])
   let endpoint = try XCTUnwrap(URL(string: base))
@@ -30,7 +33,9 @@ func fixtureResponse(_ purpose: String, at point: CGPoint? = nil, to end: CGPoin
     request.timeoutInterval = 45
   }
   let (data, response) = try await URLSession.shared.data(for: request)
-  XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+  let status = (response as? HTTPURLResponse)?.statusCode
+  if status != 200 { await onHTTPFailure?() }
+  XCTAssertEqual(status, 200, "Fixture operation \(purpose)", file: file, line: line)
   return try XCTUnwrap(String(data: data, encoding: .utf8)).trimmingCharacters(
     in: .whitespacesAndNewlines)
 }

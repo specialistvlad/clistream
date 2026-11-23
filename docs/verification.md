@@ -12,7 +12,11 @@ Open `docs/screenshots/index.html` in the checkout used for capture. The gallery
 
 ## Mac redesign and Finder · November 23, 2026
 
-The implementation passed local `make test e2e` and the old-binary compatibility suite on macOS. Both Apple schemes compiled their test products without launching an app or simulator. A production Mac archive passed strict signature verification for the app and its embedded Finder extension, including their shared App Group. These build and protocol checks precede the hosted Finder, Mac, iPhone, iPad, Duo and shared-session checks.
+The Go daemon, supervisor and CLI passed race-enabled tests, end-to-end tests and release archive checks on Linux and macOS. The Linux runner also passed the container deployment tests. The old-binary compatibility suite passed locally on macOS. [Linux results](https://github.com/specialistvlad/clistream/actions/runs/45136905954/job/137567468495) · [Mac results](https://github.com/specialistvlad/clistream/actions/runs/45136905954/job/137567468920)
+
+Both Apple schemes compiled with `build-for-testing` locally. Build `2611230925` passed strict code-signature verification for the app and its embedded Finder extension, including their App Group and network entitlements. The archive check also verified that Apple's File Provider testing entitlement was absent from both shipping bundles.
+
+On the hosted Mac, the upgrade test preserved device keys and the removal test preserved other pairings. The first Finder run registered the domain and reached the system's disabled-domain error. The app now identifies where to enable CLIStream. The next hosted test enabled the domain through Finder Locations and reached the real session folder. A later filesystem check failed and needs a separate result. [App-hosted tests](https://github.com/specialistvlad/clistream/actions/runs/45136905954/job/137567468892) · [First-use result](https://github.com/specialistvlad/clistream/actions/runs/45142840147) · [Finder activation](https://github.com/specialistvlad/clistream/actions/runs/45147022934)
 
 ## Native terminal workspace · November 22, 2026
 
