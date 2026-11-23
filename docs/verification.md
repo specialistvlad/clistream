@@ -90,6 +90,12 @@ The final full Duo rerun without screenshots passed 16 of 20 required cases. Fol
 
 The isolated four-client test passed with the native Mac, iPhone and iPad apps and an independent Go terminal client attached to the same pipe. All four exchanged input. The Mac switched to a PTY and then to a second server while the other three continued using the original child. When the Mac returned, it saw the phone’s input from its time away. [Four-client test](https://github.com/specialistvlad/clistream/actions/runs/45019186229)
 
+## TestFlight 0.1.0 (2611232303)
+
+The iPhone, iPad and Duo redesign is available to the **Vlad** internal tester group. App Store Connect reported `VALID` and `IN_BETA_TESTING` and confirmed group access. [iOS build in TestFlight](https://appstoreconnect.apple.com/apps/6837168864/testflight/ios/b420800b-5396-432e-8c46-8fb706b15f85)
+
+This beta was archived from `632987f` with release-only changes to omit the Files extension, its App Groups entitlement, its registration and the **Show in Files** action. The signed archive passed strict signature verification for the universal iOS app. Its pairing directory, saved-server lookup and enrollment code matched build `2611231650`. The Files-enabled archive still requires the provisioning change described above.
+
 ## TestFlight 0.1.0 (2611231650)
 
 The native macOS app with its Finder extension and the universal iPhone and iPad app were archived from `32b02f4`. Both archives passed strict code-signature verification. App Store Connect reported `VALID` and `IN_BETA_TESTING` for both builds and confirmed access for the existing internal tester group. The builds use the preceding beta’s encryption declaration. The full hosted test matrix for this revision was still pending at upload. [TestFlight builds](https://appstoreconnect.apple.com/apps/6837168864/testflight) · [Hosted checks for the uploaded revision](https://github.com/specialistvlad/clistream/actions/runs/45220689577)
