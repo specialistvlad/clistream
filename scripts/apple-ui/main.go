@@ -299,6 +299,7 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 				http.Error(w, "unable to deliver invitation to the simulator", http.StatusServiceUnavailable)
 				return
 			}
+			fmt.Println("Delivered the fresh repair invitation through the simulator URL dispatcher.")
 			fmt.Fprint(w, "opened")
 			return
 		}

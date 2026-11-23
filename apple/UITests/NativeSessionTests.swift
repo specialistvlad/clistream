@@ -538,7 +538,36 @@ final class NativeSessionTests: XCTestCase {
     #else
       let receipt = try await fixtureResponse("open-repair-invitation")
       XCTAssertEqual(receipt, "opened")
-      confirmPairing(pairingButton(in: app), in: app)
+      let confirm = pairingButton(in: app)
+      let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+      if !confirm.waitForExistence(timeout: 3) {
+        // Launch Services may ask permission to deliver a custom URL to the
+        // app. Confirm only the system alert which names CLIStream.
+        let alert = springboard.alerts.containing(NSPredicate(
+          format: "label CONTAINS[c] %@", "CLIStream"
+        )).firstMatch
+        let open = alert.buttons["Open"].firstMatch
+        if open.waitForExistence(timeout: 3) { open.tap() }
+      }
+      if !confirm.waitForExistence(timeout: 12) {
+        let detail = XCTAttachment(string: """
+          App foreground: \(app.state == .runningForeground)
+          App pairing error: \(app.alerts["Couldn’t pair this device"].exists)
+          Terminal visible: \(app.descendants(matching: .any)["session-terminal"].firstMatch.exists)
+          System alert: \(springboard.alerts.firstMatch.exists)
+          System Open action: \(springboard.alerts.buttons["Open"].firstMatch.exists)
+          """)
+        detail.name = "mobile-repair-state"
+        detail.lifetime = .keepAlways
+        add(detail)
+        let screen = XCTAttachment(screenshot: app.screenshot())
+        screen.name = "mobile-repair-window"
+        screen.lifetime = .keepAlways
+        add(screen)
+        XCTFail("The external repair link did not present the pairing confirmation")
+        return
+      }
+      activate(confirm)
       guard waitForStatus("Connected") else {
         XCTFail("The selected terminal did not reconnect after confirming the new invitation")
         return
@@ -680,8 +709,9 @@ final class NativeSessionTests: XCTestCase {
     return app
   }
   private func invitation() async throws -> String { try await fixtureResponse("QR") }
-  @MainActor func confirmPairing(_ pair: XCUIElement, in app: XCUIApplication) {
-    XCTAssertTrue(pair.waitForExistence(timeout: 12))
+  @MainActor func confirmPairing(_ pair: XCUIElement, in app: XCUIApplication,
+                                 file: StaticString = #filePath, line: UInt = #line) {
+    XCTAssertTrue(pair.waitForExistence(timeout: 12), file: file, line: line)
     #if os(macOS)
       app.activate()
       XCTAssertTrue(pair.wait(for: \.isHittable, toEqual: true, timeout: 10))
