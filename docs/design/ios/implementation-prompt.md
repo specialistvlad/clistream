@@ -22,10 +22,12 @@ You are implementing the iOS 27 redesign of the CLIStream app on its three targe
 | File | Draws |
 |---|---|
 | `apple/Mobile/MobileApp.swift` | iOS `NavigationSplitView`, compact and regular navigation, empty state |
-| `apple/App/WorkspaceBrowser.swift` | `WorkspaceSidebar` (shared with the Mac), offline Retry button for iOS, status bar |
+| `apple/App/WorkspaceBrowser.swift` | `WorkspaceSidebar` (shared with the Mac), offline Retry button for iOS, `WorkspaceStatusBar` |
+| `apple/App/SessionPane.swift` | Terminal pane and the connection status text under it |
 | `apple/App/SessionControls.swift` | iOS Session menu with the Keys submenu, command sheet, stop alert, Ports sheet and inspector |
 | `apple/App/Terminal.swift` | SwiftTerm terminal and its keyboard accessory |
-| `apple/App/Pairing.swift` | Pair sheet and pairing errors |
+| `apple/App/Pairing.swift` | Pair sheet, `clistream://` link handling (`onOpenURL`) and pairing errors |
+| `apple/Info.plist`, `apple/project.yml` | One Info.plist shared by the iOS and macOS targets; XcodeGen project definition |
 | `apple/UITests/SessionTests.swift`, `NativeSessionTests.swift`, `DuoPoseTests.swift` | UI suites the hosted matrix runs on iPhone, iPad and Duo |
 
 `apple/App` is shared with the Mac app, which already ships its own redesign. Put iOS-only changes behind `#if os(iOS)` or into `apple/Mobile`, so the Mac keeps its behavior.
@@ -39,6 +41,8 @@ You are implementing the iOS 27 redesign of the CLIStream app on its three targe
 - **Touch-only operation.** Every action works by touch alone, as [Native Apple clients](../../apple-client-design.md#touch-only-operation-on-iphone-and-ipad) requires; hardware keyboards and pointers add to it.
 - **Stable test hooks.** Keep the accessibility identifiers and labels the UI suites query, such as `session-<id>`, `session-terminal`, `workspace-add-server`, `workspace-view-options`, `session-ports`, `retry-server`, `server-name-field`, `Hide Keyboard`, `Show Keyboard`, `Control Key` and `Control-C`. When a control moves, for example the Keys submenu into the key bar, keep its label so tests find it, and give new controls identifiers in the same style.
 - **Repository process.** [AGENTS.md](../../../AGENTS.md) governs plans, UI automation and delivery. Apple UI tests run only on the hosted runners; local work is compilation and Go tests.
+- **Shared `main`.** Other agents commit to `main` while you work, often in the same Apple files. Rebase onto `origin/main` before each push and keep each commit to your own change.
+- **Owner's working tree.** `apple/Info.plist` may hold the owner's uncommitted edits. Before you add the camera usage string to it, show the owner the diff and ask how to commit it. Leave every other unrelated change out of your commits.
 
 ## Steps
 
@@ -48,7 +52,7 @@ You are implementing the iOS 27 redesign of the CLIStream app on its three targe
 4. **Build in slices.** Land each slice as a compiling, working increment, in this order:
    1. Servers list: inset grouped server sections, host disclosure rows, CLI rows with states, offline Retry, bottom search, swipe actions.
    2. Sidebar for regular width: 44 pt rows, pill selection, search field, Add Server and layout capsule, Hide Sidebar.
-   3. Terminal toolbar per target: inline title and subtitle, Ports and Session on iPhone, capsule groups on iPad and the Duo inner screen, stacked circles on the Duo outer screen.
+   3. Terminal toolbar per target: inline title and subtitle, Ports and Session on iPhone, capsule groups on iPad and the Duo inner screen, stacked circles on the Duo outer screen. On iPad and the Duo inner screen, connection status and PTY size move into the navigation subtitle and the bottom status line goes away.
    4. Key bar: the floating glass capsule above the keyboard, the Show Keyboard circle, horizontal overflow for `~ | / -` and F1–F8.
    5. Session menu: control row and actions, replacing the Keys submenu.
    6. Sheets and inspector: Ports (sheet on compact, inspector on regular), Add Server with Paste Invitation and Scan QR Code, Restart and Start.
