@@ -59,8 +59,8 @@ struct MobileServers: View {
         VStack {
           serverButtons
           Spacer()
-        }.labelStyle(.iconOnly).buttonStyle(.glass)
-          .buttonBorderShape(.circle).accessibilityIdentifier("duo-server-tools")
+        }.labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large)
+          .accessibilityElement(children: .contain).accessibilityIdentifier("duo-server-tools")
       }
     }
     .toolbar {

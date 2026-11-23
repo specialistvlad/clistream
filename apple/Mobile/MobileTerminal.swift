@@ -84,8 +84,8 @@ struct MobileTerminal: View {
           sessionMenu
           if !keyboard { showKeyboard }
           Spacer()
-        }.labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle)
-          .accessibilityIdentifier("duo-terminal-tools")
+        }.labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large)
+          .accessibilityElement(children: .contain).accessibilityIdentifier("duo-terminal-tools")
       }
     }
     .navigationTitle(item.Name).navigationBarTitleDisplayMode(.inline)

@@ -154,7 +154,9 @@ extension NativeSessionTests {
     let session = app.buttons["Session"].firstMatch
     XCTAssertTrue(session.waitForExistence(timeout: 10))
     if duo {
-      XCTAssertTrue(app.descendants(matching: .any)["duo-terminal-tools"].firstMatch.exists)
+      let tools = app.descendants(matching: .any)["duo-terminal-tools"].firstMatch
+      XCTAssertTrue(tools.buttons["session-ports"].firstMatch.isHittable)
+      XCTAssertTrue(tools.buttons["show-keyboard"].firstMatch.isHittable)
       try await capture("duo-outer-terminal", app)
     }
     session.tap()
@@ -197,7 +199,9 @@ extension NativeSessionTests {
     XCTAssertTrue(row.waitForExistence(timeout: 15))
     try await capture("servers-tree", app)
     if !(env["CLISTREAM_DUO_NAME"] ?? "").isEmpty {
-      XCTAssertTrue(app.descendants(matching: .any)["duo-server-tools"].firstMatch.exists)
+      let tools = app.descendants(matching: .any)["duo-server-tools"].firstMatch
+      XCTAssertTrue(tools.buttons["workspace-scan"].firstMatch.isHittable)
+      XCTAssertTrue(tools.buttons["workspace-add-server"].firstMatch.isHittable)
       try await capture("duo-outer-list", app)
     }
     let search = app.searchFields.firstMatch
