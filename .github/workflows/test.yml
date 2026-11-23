@@ -73,7 +73,8 @@ jobs:
           echo '8788838b1b32059d143cf06541b72fcaead85c16274457cdbff086510a5b17fa  axe.tgz' | shasum -a 256 -c -
           tar -xzf axe.tgz
           echo "$PWD" >> "$GITHUB_PATH"
-      - run: make apple
+      - id: build-apple
+        run: make apple
       - name: Run app-hosted and UI tests
         env:
           DEVICE: ${{ matrix.device }}
@@ -107,7 +108,7 @@ jobs:
             Duo) SIMULATOR_ID="$(simulator 'iPhone Duo')" apple/test-native.sh ;;
           esac
       - name: Verify Finder against a Linux workspace
-        if: matrix.device == 'macOS' && (!inputs.cases || contains(inputs.cases, 'testFinderWorkspaceRoundTrip'))
+        if: ${{ !cancelled() && steps.build-apple.outcome == 'success' && matrix.device == 'macOS' && (!inputs.cases || contains(inputs.cases, 'testFinderWorkspaceRoundTrip')) }}
         run: |
           if ! docker info >/dev/null 2>&1; then
             brew install docker colima qemu
@@ -147,7 +148,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 3
       - name: Verify the complete Mac design gallery
-        if: matrix.device == 'macOS' && !inputs.cases && (github.event_name != 'workflow_dispatch' || inputs.screenshots)
+        if: ${{ !cancelled() && steps.build-apple.outcome == 'success' && matrix.device == 'macOS' && !inputs.cases && (github.event_name != 'workflow_dispatch' || inputs.screenshots) }}
         run: |
           missing=0
           for board in servers-tree port-forwards open-session-menu server-menu rename-server welcome disconnected add-server confirm-server pairing-error edit-command stop-confirmation remove-server menu-file menu-edit menu-view menu-session menu-server; do
@@ -167,6 +168,7 @@ jobs:
           for bundle in apple/build/results-*/*.xcresult apple/build/shared-*.xcresult; do
             [[ -f "$bundle/Info.plist" ]] || continue
             name=$(basename "$bundle" .xcresult)
+            if [[ $bundle == apple/build/results-linux-ui-*/* ]]; then name="linux-host-$name"; fi
             report="results/$name.json"
             go run ./scripts/apple-report "$bundle" > "$report"
             cat "$report"

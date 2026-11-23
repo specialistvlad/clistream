@@ -19,7 +19,9 @@ case "${1:-iOS}" in
     dd=accept-mac ;;
   *) echo "expected iOS or macOS" >&2; exit 2 ;;
 esac
-stage=$(mktemp -d /tmp/cs-linux-ui.XXXXXX)
+# Docker on the hosted Mac can bind-mount the checkout inside its Linux VM.
+mkdir -p "$PWD/apple/build"
+stage=$(mktemp -d "$PWD/apple/build/linux-host-XXXXXXXX")
 container=""
 cleanup(){
   if [[ $? != 0 && -n "$container" ]]; then docker logs "$container" 2>&1 | grep '^Finder ' || true; fi
@@ -54,4 +56,4 @@ GITHUB_ACTIONS=true apple/acceptance-xcodebuild.sh "$platform" -quiet -project a
   -parallel-testing-enabled NO -collect-test-diagnostics never -resultBundlePath "$result/native.xcresult" \
   "-only-testing:$target/NativeSessionTests/$testCase" test
 go run ./scripts/apple-report "$result/native.xcresult" | tee "$result/cases.json"
-jq -e --arg name "$testCase()" 'any(.cases[]; .test == $name and .result == "Passed")' "$result/cases.json" >/dev/null
+jq -e --arg name "NativeSessionTests/$testCase()" 'any(.cases[]; .test == $name and .result == "Passed")' "$result/cases.json" >/dev/null
