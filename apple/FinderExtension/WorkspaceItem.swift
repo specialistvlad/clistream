@@ -1,3 +1,4 @@
+import CryptoKit
 import FileProvider
 import UniformTypeIdentifiers
 
@@ -41,10 +42,13 @@ final class WorkspaceItem: NSObject, NSFileProviderItem {
     }
   }
   var itemVersion: NSFileProviderItemVersion {
-    let content = Data((node.isRemote ? node.version : node.id).utf8)
+    // File Provider caps both components at 128 bytes. Keep the supervisor's
+    // short version for conditional writes, and hash variable-length UI metadata.
+    let content = node.isRemote ? Data(node.version.utf8) : Data(SHA256.hash(data: Data(node.id.utf8)))
+    let metadata = Data(FinderID.make(node.parent, node.name, node.version).utf8)
     return .init(
       contentVersion: content,
-      metadataVersion: Data(FinderID.make(node.parent, node.name, node.version).utf8))
+      metadataVersion: Data(SHA256.hash(data: metadata)))
   }
 }
 
