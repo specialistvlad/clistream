@@ -48,7 +48,7 @@ extension NativeSessionTests {
       pipe.click()
       comparison.rightClick()
       try clickMacMenuItem(action, in: app)
-      XCTAssertTrue(app.staticTexts[heading].firstMatch.waitForExistence(timeout: 10))
+      assertMacElement(app.staticTexts[heading].firstMatch, in: app)
       app.typeKey(.escape, modifierFlags: [])
     }
     pipe.click()
@@ -96,7 +96,7 @@ extension NativeSessionTests {
     header.rightClick()
     try clickMacMenuItem("Rename…", in: app)
     let field = app.textFields["server-name-field"].firstMatch
-    XCTAssertTrue(field.waitForExistence(timeout: 10))
+    assertMacElement(field, in: app)
     field.typeKey("a", modifierFlags: .command)
     field.typeText("unsaved-name")
     field.typeKey(.escape, modifierFlags: [])
@@ -127,6 +127,16 @@ extension NativeSessionTests {
     XCTAssertTrue(app.buttons["Paste Invitation"].firstMatch.waitForExistence(timeout: 10))
     XCTAssertTrue(pipe.waitForNonExistence(timeout: 10))
     try await capture("welcome", app)
+  }
+
+  @MainActor func assertMacElement(_ element: XCUIElement, in app: XCUIApplication,
+    function: String = #function, file: StaticString = #filePath, line: UInt = #line) {
+    if element.waitForExistence(timeout: 10) { return }
+    let attachment = XCTAttachment(screenshot: app.screenshot())
+    attachment.name = "failed-desktop-" + function.prefix(while: { $0.isLetter })
+    attachment.lifetime = .keepAlways
+    add(attachment)
+    XCTFail("Expected desktop control", file: file, line: line)
   }
 
   // macOS also exposes commands from closed main menus. Resolve the item in the

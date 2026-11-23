@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -54,15 +55,8 @@ func prepareViewers(root string) (viewerPlans, error) {
 	for _, device := range []string{"IPHONE_SIMULATOR_ID", "IPAD_SIMULATOR_ID"} {
 		id := os.Getenv(device)
 		fmt.Println("Preparing", device)
-		for _, cmd := range []*exec.Cmd{
-			exec.Command("apple/boot-simulator.sh", id),
-			exec.Command("xcrun", "simctl", "install", id, filepath.Join(products, "CLIStream.app")),
-			exec.Command("xcrun", "simctl", "install", id, filepath.Join(products, "CLIStreamUITests-Runner.app")),
-		} {
-			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-			if err := cmd.Run(); err != nil {
-				return viewerPlans{}, err
-			}
+		if err := prepareSimulator(id, products); err != nil {
+			return viewerPlans{}, fmt.Errorf("prepare %s: %w", device, err)
 		}
 		if device == "IPHONE_SIMULATOR_ID" {
 			if err := exec.Command("xcrun", "simctl", "shutdown", id).Run(); err != nil {
@@ -71,6 +65,37 @@ func prepareViewers(root string) (viewerPlans, error) {
 		}
 	}
 	return viewerPlans{macPlan, mobilePlan}, nil
+}
+
+// CoreSimulator can lose its install service immediately after an otherwise
+// successful first boot (simctl exits 204, NSMachErrorDomain -308).
+func prepareSimulator(id, products string) error {
+	run := func(program string, args ...string) error {
+		cmd := exec.Command(program, args...)
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		return cmd.Run()
+	}
+	for attempt := 0; ; attempt++ {
+		if err := run("apple/boot-simulator.sh", id); err != nil {
+			return fmt.Errorf("boot: %w", err)
+		}
+		var err error
+		for _, bundle := range []string{"CLIStream.app", "CLIStreamUITests-Runner.app"} {
+			fmt.Println("Installing", bundle)
+			err = run("xcrun", "simctl", "install", id, filepath.Join(products, bundle))
+			if err != nil {
+				err = fmt.Errorf("install %s: %w", bundle, err)
+				break
+			}
+		}
+		var exit *exec.ExitError
+		if attempt != 0 || !errors.As(err, &exit) || exit.ExitCode() != 204 {
+			return err
+		}
+		fmt.Println("Simulator installation service terminated; rebooting before retry:", err)
+		// boot-simulator may erase a failed first boot. Reinstall both products.
+		_ = run("xcrun", "simctl", "shutdown", id)
+	}
 }
 
 // Run each UI runner against the same broker. The independent CLI joins via
