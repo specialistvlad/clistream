@@ -199,24 +199,30 @@ private struct PortsPresentation: ViewModifier {
   #endif
 
   func body(content: Content) -> some View {
-    // The system adapts the inspector to a sheet at compact widths. Keep
-    // the attached terminal and its toolbar mounted across that transition.
-    content.inspector(isPresented: $presented) {
-      #if os(iOS)
-        if sizeClass == .compact {
+    #if os(iOS)
+      // Keep the terminal mounted as the window changes size. A compact
+      // sheet owns its navigation bar and Done button; the regular-width
+      // inspector owns its own header.
+      content
+        .inspector(isPresented: presentation(compact: false)) { inspectorColumn }
+        .sheet(isPresented: presentation(compact: true)) {
           NavigationStack {
             portList.navigationTitle("Ports").navigationBarTitleDisplayMode(.inline)
               .toolbar { ToolbarItem(placement: .confirmationAction) { done } }
           }
           .presentationDetents([.medium, .large])
-        } else {
-          inspectorColumn
         }
-      #else
-        inspectorColumn
-      #endif
-    }
+    #else
+      content.inspector(isPresented: $presented) { inspectorColumn }
+    #endif
   }
+
+  #if os(iOS)
+    private func presentation(compact: Bool) -> Binding<Bool> {
+      Binding(get: { presented && (sizeClass == .compact) == compact },
+              set: { value in if (sizeClass == .compact) == compact { presented = value } })
+    }
+  #endif
 
   private var inspectorColumn: some View {
     VStack(alignment: .leading, spacing: 0) {

@@ -1,11 +1,5 @@
 import SwiftUI
 
-extension Workspace {
-  func revoked(_ server: ServerProfile) -> Bool {
-    errors[server.id]?.localizedCaseInsensitiveContains("revoked") == true
-  }
-}
-
 struct DesktopSidebar: View {
   @ObservedObject var workspace: Workspace
   @ObservedObject var state: DesktopSelection

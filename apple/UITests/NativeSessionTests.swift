@@ -24,6 +24,7 @@ final class NativeSessionTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["forward-tcp"].firstMatch.waitForNonExistence(timeout: 10))
       #else
         let done = app.buttons["dismiss-ports"].firstMatch
+        XCTAssertTrue(done.wait(for: \.isHittable, toEqual: true, timeout: 10))
         activate(done)
         XCTAssertTrue(done.waitForNonExistence(timeout: 10))
       #endif
@@ -483,15 +484,20 @@ final class NativeSessionTests: XCTestCase {
       let connected = XCTNSPredicateExpectation(predicate: NSPredicate(
         format: "value BEGINSWITH %@", "Connected"), object: restored)
       XCTAssertEqual(XCTWaiter.wait(for: [connected], timeout: 15), .completed)
-      let recovered = app
     #else
-      let recovered = try await openPipe()
+      let fresh = try await fixtureResponse("QR")
+      app.open(try XCTUnwrap(URL(string: fresh)))
+      confirmPairing(pairingButton(in: app), in: app)
+      let restored = app.staticTexts["desktop-session-status"].firstMatch
+      let connected = XCTNSPredicateExpectation(
+        predicate: NSPredicate(format: "label BEGINSWITH %@", "Connected"), object: restored)
+      XCTAssertEqual(XCTWaiter.wait(for: [connected], timeout: 15), .completed)
     #endif
-    let input = recovered.descendants(matching: .any)["session-terminal"].firstMatch
+    let input = app.descendants(matching: .any)["session-terminal"].firstMatch
     activate(input)
     input.typeText("access-restored\n")
     XCTAssertTrue(
-      recovered.descendants(matching: .any).matching(
+      app.descendants(matching: .any).matching(
         NSPredicate(
           format: "value CONTAINS %@ OR label CONTAINS %@", "out:access-restored",
           "out:access-restored")

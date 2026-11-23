@@ -102,48 +102,49 @@ struct WorkspaceSession: Identifiable {
           name: UserDefaults.standard.string(forKey: "server-name-" + pin) ?? address)
         profiles.insert(updated, at: 0)
         UserDefaults.standard.set(pin, forKey: "last-paired-server")
-        watch(updated)
+        watch(updated, resumeAttachments: true)
         updateFinder()
       }
     } catch { pairing.pairingError = error.localizedDescription }
   }
   func retry(_ profile: ServerProfile) { watch(profile) }
-  private func watch(_ profile: ServerProfile) {
+  private func watch(_ profile: ServerProfile, resumeAttachments: Bool = false) {
     watchers[profile.id]?.cancel()
     watchers[profile.id] = Task { [weak self] in
       let connection = Connection(profile: profile.directory)
+      var resume = resumeAttachments
       while !Task.isCancelled {
         await connection.refresh()
         guard !Task.isCancelled else { return }
-        self?.receive(connection, from: profile)
+        self?.receive(connection, from: profile, resumeAttachments: resume)
+        if connection.listError.isEmpty { resume = false }
         try? await Task.sleep(for: .seconds(2))
       }
     }
   }
-  private func receive(_ connection: Connection, from profile: ServerProfile) {
+  private func receive(_ connection: Connection, from profile: ServerProfile, resumeAttachments: Bool) {
     guard watchers[profile.id] != nil else { return }
-    #if os(macOS)
-      let restored = revoked(profile) && connection.listError.isEmpty
-    #endif
+    let restored = connection.listError.isEmpty && (resumeAttachments || revoked(profile))
     let errorChanged = errors[profile.id] != connection.listError
     let rowsChanged = connection.listError.isEmpty && rows[profile.id] != connection.sessions
     if errorChanged { errors[profile.id] = connection.listError }
     if rowsChanged { rows[profile.id] = connection.sessions }
     if errorChanged || rowsChanged { updateFinder() }
-    #if os(macOS)
-      if restored {
-        // A repaired window still displays the old terminal. Resume its live
-        // attachment even when the operator keeps the same sidebar selection.
-        for item in connection.sessions where item.running {
-          let id = WorkspaceSession(server: profile, item: item).id
-          if let terminal = terminals[id], !terminal.attached {
-            Task { await terminal.attach(item) }
-          }
+    if restored {
+      // Pairing can return directly to an open terminal on any Apple device.
+      for item in connection.sessions where item.running {
+        let id = WorkspaceSession(server: profile, item: item).id
+        if let terminal = terminals[id], terminal.selected != nil, !terminal.attached {
+          Task { await terminal.attach(item) }
         }
       }
-    #endif
+    }
     let sample = connection.listError.isEmpty ? connection.latency : nil
     setSample(sample, for: profile.id)
+  }
+
+  func revoked(_ server: ServerProfile) -> Bool {
+    errors[server.id]?.localizedCaseInsensitiveContains("revoked") == true
   }
 
   private func setSample(_ sample: Int64?, for server: String) {
