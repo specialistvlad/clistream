@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -173,9 +174,10 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 	requests := make(chan incoming)
 	var lost <-chan struct{}
 	type registrationResult struct {
-		conn     *quic.Conn
-		revision uint64
-		err      error
+		workspaceProtocol bool
+		conn              *quic.Conn
+		revision          uint64
+		err               error
 	}
 	var latest atomic.Pointer[wire.Supervisor]
 	var recovered <-chan registrationResult
@@ -186,6 +188,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 		go func() {
 			defer workers.Done()
 			var revision uint64
+			var workspaceProtocol bool
 			c, err := retry(ctx, reg.console, time.Second, func(ctx context.Context) (*quic.Conn, error) {
 				c, err := identity.Dial(ctx, reg.dir, reg.server)
 				if err != nil {
@@ -193,9 +196,15 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 				}
 				stop := abortOnCancel(ctx, c)
 				defer stop()
+				caps, err := wire.Capabilities(c)
+				if err != nil {
+					c.CloseWithError(1, "capability discovery failed")
+					return nil, err
+				}
+				workspaceProtocol = slices.Contains(caps, wire.Workspace)
 				snapshot := latest.Load()
 				revision = snapshot.Revision
-				if err = publishState(c, *snapshot); err != nil {
+				if err = publishState(c, *snapshot, workspaceProtocol); err != nil {
 					c.CloseWithError(1, "publication failed")
 					return nil, err
 				}
@@ -203,7 +212,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 				return c, nil
 			})
 			select {
-			case ready <- registrationResult{c, revision, err}:
+			case ready <- registrationResult{conn: c, revision: revision, err: err, workspaceProtocol: workspaceProtocol}:
 			case <-ctx.Done():
 				if c != nil {
 					c.CloseWithError(0, "finished")
@@ -217,7 +226,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 		if conn == nil {
 			return
 		}
-		err := publishState(conn, state)
+		err := publishState(conn, state, reg.workspaceProtocol)
 		if err != nil {
 			conn.CloseWithError(1, "publication failed")
 			return
@@ -255,6 +264,7 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 				continue
 			}
 			conn = res.conn
+			reg.workspaceProtocol = res.workspaceProtocol
 			listen()
 			if state.Revision != res.revision {
 				publish()
@@ -275,6 +285,21 @@ func supervise(ctx context.Context, reg registration, conn *quic.Conn, state wir
 			m, st := req.msg, req.stream
 			if req.conn != conn {
 				wire.Abort(st)
+				continue
+			}
+			if m.Op == "workspace" && m.ID == state.ID && wire.WorkspaceChannel(m.Channel) {
+				workers.Add(1)
+				go func() {
+					defer workers.Done()
+					defer st.Close()
+					defer st.CancelRead(0)
+					err := root.ServeWorkspace(st, m)
+					outcome := "completed"
+					if err != nil {
+						outcome = "failed"
+					}
+					reg.console.record(activity.Event{Name: "channel", Supervisor: m.ID, Operation: m.Channel, Outcome: outcome})
+				}()
 				continue
 			}
 			if m.Op == "open" && run != nil && m.ID == state.Info.ID {

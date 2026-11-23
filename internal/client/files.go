@@ -45,6 +45,9 @@ func get(c *quic.Conn, id, path, dest string, replace bool) error {
 	}
 	s.Close()
 	defer s.CancelRead(0)
+	return receiveFile(s, dest, replace)
+}
+func receiveFile(s *quic.Stream, dest string, replace bool) error {
 	f, e := os.CreateTemp(filepath.Dir(dest), ".clistream-download-")
 	if e != nil {
 		return e

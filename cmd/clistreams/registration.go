@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -15,11 +16,13 @@ import (
 var errLegacyRole = errors.New("registration denied. Pair this device with the server again")
 
 type registration struct {
-	autoMode bool
-	dir      string
-	server   identity.Profile
-	info     wire.Session
-	console  *console
+	workspaceProtocol bool
+	workspace         bool
+	autoMode          bool
+	dir               string
+	server            identity.Profile
+	info              wire.Session
+	console           *console
 }
 
 func (r registration) connect(ctx context.Context) (*quic.Conn, error) {
@@ -31,7 +34,21 @@ func (r registration) connect(ctx context.Context) (*quic.Conn, error) {
 	}
 	stop := abortOnCancel(ctx, c)
 	defer stop()
-	st, res, e := wire.Open(c, wire.Message{Op: "register", Info: &r.info})
+	caps, e := wire.Capabilities(c)
+	if e != nil {
+		c.CloseWithError(1, "capability discovery failed")
+		return nil, e
+	}
+	info := r.info
+	msg := wire.Message{Op: "register", Info: &info}
+	if slices.Contains(caps, wire.Workspace) {
+		if r.workspace {
+			msg.Capabilities = []string{wire.Workspace}
+		}
+	} else {
+		info.PortAddresses = nil
+	}
+	st, res, e := wire.Open(c, msg)
 	if e != nil {
 		c.CloseWithError(1, "registration failed")
 		if res.Error == "registration denied" {

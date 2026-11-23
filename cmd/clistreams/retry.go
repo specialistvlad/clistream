@@ -65,8 +65,17 @@ func retry(ctx context.Context, c *console, delay time.Duration, attempt dialFun
 	}
 }
 
-func publishState(c *quic.Conn, state wire.Supervisor) error {
-	res, err := wire.Request(c, wire.Message{Op: "publish", Supervisor: &state, Capabilities: []string{wire.EditCommand, wire.RunResult}})
+func publishState(c *quic.Conn, state wire.Supervisor, workspaceProtocol bool) error {
+	advertised := []string{wire.EditCommand, wire.RunResult}
+	if workspaceProtocol {
+		if state.Workspace {
+			advertised = append(advertised, wire.Workspace)
+		}
+	} else {
+		state.Info.PortAddresses = nil
+	}
+	state.Workspace = false // The broker derives this from negotiated capabilities.
+	res, err := wire.Request(c, wire.Message{Op: "publish", Supervisor: &state, Capabilities: advertised})
 	if res.Error == "client authorization required" {
 		return denied{res.Error}
 	}

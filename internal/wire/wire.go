@@ -22,8 +22,10 @@ const MaxPlain = 128 * 1024
 type Session struct {
 	ID, Name, Mode, Host, OS string
 	Ports                    map[string]string
+	PortAddresses            map[string]string `json:",omitempty"`
 }
 type FileEntry struct {
+	ID, Version    string `json:",omitempty"`
 	Name           string
 	Directory      bool
 	Size, Modified int64
@@ -31,6 +33,7 @@ type FileEntry struct {
 
 // Supervisor describes a controller and its currently attachable run.
 type Supervisor struct {
+	Workspace       bool `json:",omitempty"`
 	RunResult       bool `json:",omitempty"`
 	EditableCommand bool `json:",omitempty"`
 	ID              string
@@ -40,11 +43,14 @@ type Supervisor struct {
 	Failed          bool `json:",omitempty"`
 }
 
+const Workspace = "workspace-v1"
 const RunResult = "run-result-v1"
 const EditCommand = "edit-command-v1"
 const ManagedSupervisors = "managed-supervisors-v1"
 
 type Message struct {
+	Recursive                 bool         `json:",omitempty"`
+	Version, ErrorKind        string       `json:",omitempty"`
 	Command                   [][]byte     `json:",omitempty"`
 	Capabilities              []string     `json:",omitempty"`
 	Supervisor                *Supervisor  `json:",omitempty"`
@@ -108,6 +114,13 @@ func Read(r io.Reader) (m Message, err error) {
 	}
 	return m, nil
 }
+
+// RemoteError carries optional machine-readable errors on negotiated channels.
+type RemoteError struct{ Kind, Message string }
+
+func (e *RemoteError) Error() string { return e.Message }
+func (m Message) Rejection() error   { return &RemoteError{Kind: m.ErrorKind, Message: m.Error} }
+
 func Fail(w io.Writer, e error) { _ = Write(w, Message{Op: "error", Error: e.Error()}) }
 func Open(c *quic.Conn, m Message) (*quic.Stream, Message, error) {
 	ctx, cancel := context.WithTimeout(c.Context(), 10*time.Second)
@@ -123,7 +136,7 @@ func Open(c *quic.Conn, m Message) (*quic.Stream, Message, error) {
 		res, e = Read(s)
 	}
 	if e == nil && res.Op != "ok" {
-		e = fmt.Errorf("request %s rejected: %s", m.Op, res.Error)
+		e = fmt.Errorf("request %s rejected: %w", m.Op, res.Rejection())
 	}
 	if e != nil {
 		Abort(s)
@@ -167,4 +180,13 @@ func Capabilities(c *quic.Conn) ([]string, error) {
 		return nil, nil
 	}
 	return res.Capabilities, err
+}
+
+// WorkspaceChannel is shared by both ends of a supervisor-scoped workspace stream.
+func WorkspaceChannel(channel string) bool {
+	switch channel {
+	case "workspace/list", "workspace/stat", "workspace/fetch", "workspace/create", "workspace/mkdir", "workspace/replace", "workspace/move", "workspace/remove":
+		return true
+	}
+	return false
 }

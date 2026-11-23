@@ -27,8 +27,9 @@ import (
 )
 
 type entry struct {
-	info wire.Session
-	conn *quic.Conn
+	workspace bool
+	info      wire.Session
+	conn      *quic.Conn
 }
 type managedEntry struct {
 	state wire.Supervisor
@@ -387,11 +388,11 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 		id := randomID(12)
 		info := *m.Info
 		info.ID = id
-		s.sessions[id] = entry{info, c}
+		s.sessions[id] = entry{info: info, conn: c, workspace: slices.Contains(m.Capabilities, wire.Workspace)}
 		ev.Session, ev.Role = id, "supervisor"
 		return wire.Write(st, wire.Message{Op: "ok", ID: id})
 	}
-	if m.Op == "list" || m.Op == "open" {
+	if m.Op == "list" || m.Op == "open" || m.Op == "workspace" {
 		clientRole.Store(true)
 		ev.Role = "client"
 		if m.Op == "list" {
@@ -422,11 +423,12 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 	case "capabilities":
 		ev.Name = "capabilities"
 		s.mu.Unlock()
-		return wire.Write(st, wire.Message{Op: "ok", Capabilities: []string{wire.ManagedSupervisors, wire.EditCommand, wire.RunResult}})
+		return wire.Write(st, wire.Message{Op: "ok", Capabilities: []string{wire.ManagedSupervisors, wire.EditCommand, wire.RunResult, wire.Workspace}})
 	case "publish":
 		ev.Name = "supervisor_publish"
 		ev.Role = "supervisor"
 		if m.Supervisor != nil {
+			m.Supervisor.Workspace = slices.Contains(m.Capabilities, wire.Workspace)
 			m.Supervisor.RunResult = slices.Contains(m.Capabilities, wire.RunResult)
 			m.Supervisor.EditableCommand = slices.Contains(m.Capabilities, wire.EditCommand)
 		}
@@ -468,12 +470,18 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 				return nil
 			}
 		}
-	case "result-supervisors", "command-supervisors", "supervisors":
+	case "workspace-supervisors", "result-supervisors", "command-supervisors", "supervisors":
 		ev.Name = "supervisor_list"
 		ev.Role = "client"
 		clientRole.Store(true)
 		rows := s.supervisors()
-		if m.Op != "result-supervisors" {
+		if m.Op != "workspace-supervisors" {
+			for i := range rows {
+				rows[i].Workspace = false
+				rows[i].Info.PortAddresses = nil
+			}
+		}
+		if m.Op != "result-supervisors" && m.Op != "workspace-supervisors" {
 			for i := range rows {
 				rows[i].RunResult = false
 			}
@@ -520,20 +528,37 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 	if m.Op == "list" {
 		items := []wire.Session{}
 		for _, v := range s.sessions {
-			items = append(items, v.info)
+			info := v.info
+			info.PortAddresses = nil
+			items = append(items, info)
 		}
 		s.mu.Unlock()
 		sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
 		return wire.Write(st, wire.Message{Op: "ok", Sessions: items})
 	}
 	v, ok := s.sessions[m.ID]
+	if m.Op == "workspace" {
+		if managed, found := s.controllers[m.ID]; found {
+			v, ok = entry{info: managed.state.Info, conn: managed.conn, workspace: managed.state.Workspace}, true
+			ev.Supervisor = managed.state.ID
+		}
+		if !ok || !v.workspace || s.devices[s.peers[v.conn]] == "" || !wire.WorkspaceChannel(m.Channel) {
+			s.mu.Unlock()
+			ev.Outcome = "failed"
+			return wire.Write(st, wire.Message{Op: "error", ErrorKind: "unavailable", Error: "workspace unavailable"})
+		}
+	}
 	s.mu.Unlock()
-	if !ok || m.Op != "open" {
+	if !ok || (m.Op != "open" && m.Op != "workspace") {
 		return errors.New("unknown session or operation")
 	}
 	ev.Session = v.info.ID
 	ev.Operation = channelOperation(m.Channel, v.info.Ports)
 	up, response, e := wire.Open(v.conn, m)
+	if e != nil && m.Op == "workspace" && response.Op == "error" {
+		ev.Outcome = "failed"
+		return wire.Write(st, response)
+	}
 	if e != nil {
 		return e
 	}
@@ -544,11 +569,17 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 	}
 	ev.Name = "channel_open"
 	s.log.Record(ev)
+	if ev.Operation == "workspace/stat" {
+		observeResult(&ev, response)
+	}
 	ev.Name = "channel_close"
 	relay(st, up, &ev)
 	return nil
 }
 func channelOperation(channel string, ports map[string]string) string {
+	if wire.WorkspaceChannel(channel) {
+		return channel
+	}
 	switch channel {
 	case "stdin", "stdout", "stderr", "pty", "fs/list", "fs/get", "fs/put", "fs/upload", "fs/cp", "fs/mv", "fs/rm", "fs/mkdir", "fs/rmdir":
 		return channel
@@ -572,11 +603,11 @@ func observeResult(ev *activity.Event, m wire.Message) {
 	case "error":
 		ev.Outcome = "failed"
 	case "end":
-		if ev.Operation == "fs/list" || ev.Operation == "fs/get" {
+		if ev.Operation == "fs/list" || ev.Operation == "fs/get" || ev.Operation == "workspace/list" || ev.Operation == "workspace/fetch" {
 			ev.Outcome = "confirmed"
 		}
 	case "ok":
-		if strings.HasPrefix(ev.Operation, "fs/") {
+		if strings.HasPrefix(ev.Operation, "fs/") || wire.WorkspaceChannel(ev.Operation) {
 			ev.Outcome = "confirmed"
 		}
 	case "exit":

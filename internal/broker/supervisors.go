@@ -42,7 +42,7 @@ func (s *Server) publish(c *quic.Conn, v *wire.Supervisor) error {
 		delete(s.sessions, old.state.Info.ID)
 	}
 	if run != "" {
-		s.sessions[run] = entry{v.Info, c}
+		s.sessions[run] = entry{info: v.Info, conn: c}
 	}
 	s.controllers[v.ID] = managedEntry{*v, c}
 	return nil
@@ -57,7 +57,7 @@ func (s *Server) supervisors() []wire.Supervisor {
 	}
 	for id, v := range s.sessions {
 		if !managed[id] {
-			rows = append(rows, wire.Supervisor{ID: id, Info: v.info})
+			rows = append(rows, wire.Supervisor{ID: id, Info: v.info, Workspace: v.workspace})
 		}
 	}
 	return rows

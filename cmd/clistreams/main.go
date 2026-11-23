@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -111,11 +112,13 @@ func run() (int, error) {
 	}
 	host, _ := os.Hostname()
 	exports := map[string]string{}
+	addresses := map[string]string{}
 	for k, v := range ports {
-		exports[strings.TrimPrefix(k, "port/")], _, _ = strings.Cut(v, ":")
+		name := strings.TrimPrefix(k, "port/")
+		exports[name], addresses[name], _ = strings.Cut(v, ":")
 	}
-	info := wire.Session{Name: filepath.Base(path), Mode: ioMode, Host: host, OS: runtime.GOOS, Ports: exports}
-	reg := registration{autoMode: *mode == "auto", dir: directory, server: saved, info: info}
+	info := wire.Session{Name: filepath.Base(path), Mode: ioMode, Host: host, OS: runtime.GOOS, Ports: exports, PortAddresses: addresses}
+	reg := registration{workspace: root != nil, autoMode: *mode == "auto", dir: directory, server: saved, info: info}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer cancel()
 	console, closeConsole := startConsole(ctx, cancel, terminal && *interactive, *local, info.Name, saved.Address)
@@ -136,7 +139,7 @@ func run() (int, error) {
 	console.openJournal(directory, instance)
 	defer console.journal.Close()
 	localInput := *interactive && *local
-	state := wire.Supervisor{ID: instance, Revision: 1, Info: info}
+	state := wire.Supervisor{Workspace: root != nil, ID: instance, Revision: 1, Info: info}
 	managed := false
 	c, e := retry(ctx, reg.console, 0, func(ctx context.Context) (*quic.Conn, error) {
 		if !*once {
@@ -146,9 +149,11 @@ func run() (int, error) {
 			}
 			stop := abortOnCancel(ctx, probe)
 			defer stop()
-			managed, err = wire.Managed(probe)
+			caps, err := wire.Capabilities(probe)
+			managed = slices.Contains(caps, wire.ManagedSupervisors)
+			reg.workspaceProtocol = slices.Contains(caps, wire.Workspace)
 			if err == nil && managed {
-				err = publishState(probe, state)
+				err = publishState(probe, state, reg.workspaceProtocol)
 			}
 			if err == nil && managed {
 				console.record(activity.Event{Name: "registered"})

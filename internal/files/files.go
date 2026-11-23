@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/specialistvlad/clistream/internal/wire"
@@ -18,8 +19,12 @@ import (
 )
 
 type Root struct {
-	dir    *os.File
-	device uint64
+	// Serialize version checks and commits from Finder and the legacy CLI.
+	mu sync.Mutex
+	// An atomic content replacement gets a new inode, but is the same Finder item.
+	aliases map[string]string
+	dir     *os.File
+	device  uint64
 }
 
 func Open(dir string) (*Root, error) {
@@ -32,7 +37,7 @@ func Open(dir string) (*Root, error) {
 		f.Close()
 		return nil, errors.New("invalid workspace root")
 	}
-	return &Root{f, uint64(i.Sys().(*syscall.Stat_t).Dev)}, nil
+	return &Root{dir: f, device: uint64(i.Sys().(*syscall.Stat_t).Dev), aliases: make(map[string]string)}, nil
 }
 func (r *Root) Close() error { return r.dir.Close() }
 func valid(p string) bool {
@@ -47,13 +52,16 @@ func valid(p string) bool {
 	return true
 }
 func (r *Root) open(p string, directory bool) (*os.File, error) {
+	return r.openFrom(r.dir, p, directory)
+}
+func (r *Root) openFrom(parent *os.File, p string, directory bool) (*os.File, error) {
 	if directory {
 		p = strings.TrimSuffix(p, "/")
 	}
 	if !valid(p) {
 		return nil, errors.New("invalid workspace path")
 	}
-	fd, e := unix.Dup(int(r.dir.Fd()))
+	fd, e := unix.Dup(int(parent.Fd()))
 	if e != nil {
 		return nil, e
 	}
@@ -64,7 +72,11 @@ func (r *Root) open(p string, directory bool) (*os.File, error) {
 			flags |= unix.O_DIRECTORY
 		} else {
 			var st unix.Stat_t
-			if err := unix.Fstatat(fd, part, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil || st.Mode&unix.S_IFMT != unix.S_IFREG || st.Nlink != 1 || uint64(st.Dev) != r.device {
+			if err := unix.Fstatat(fd, part, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+				unix.Close(fd)
+				return nil, err
+			}
+			if st.Mode&unix.S_IFMT != unix.S_IFREG || st.Nlink != 1 || uint64(st.Dev) != r.device {
 				unix.Close(fd)
 				return nil, errors.New("expected a workspace file")
 			}
@@ -183,6 +195,13 @@ func (r *Root) Handle(s io.ReadWriter, m wire.Message) error {
 	return errors.New("unknown filesystem channel")
 }
 func Send(w io.Writer, r io.Reader) error {
+	if err := sendData(w, r); err != nil {
+		return err
+	}
+	return wire.Write(w, wire.Message{Op: "end"})
+}
+
+func sendData(w io.Writer, r io.Reader) error {
 	b := make([]byte, 32768)
 	for {
 		n, e := r.Read(b)
@@ -192,7 +211,7 @@ func Send(w io.Writer, r io.Reader) error {
 			}
 		}
 		if e == io.EOF {
-			return wire.Write(w, wire.Message{Op: "end"})
+			return nil
 		}
 		if e != nil {
 			return e
@@ -212,8 +231,10 @@ func Receive(r io.Reader, w io.Writer) error {
 			if _, e = w.Write(m.Data); e != nil {
 				return e
 			}
+		case "error":
+			return m.Rejection()
 		default:
-			return fmt.Errorf("transfer failed: %s", m.Error)
+			return fmt.Errorf("unexpected transfer record: %s", m.Op)
 		}
 	}
 }
@@ -255,32 +276,41 @@ func (r *Root) writeFile(dest string, replace bool, write func(*os.File) error) 
 	}
 	defer dir.Close()
 	fd := int(dir.Fd())
+	return stageFile(dir, write, func(tmp string, _ *os.File) error {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if replace {
+			return unix.Renameat(fd, tmp, fd, path.Base(dest))
+		}
+		return unix.Linkat(fd, tmp, fd, path.Base(dest), 0)
+	})
+}
+
+func stageFile(dir *os.File, write func(*os.File) error, publish func(string, *os.File) error) error {
+	fd := int(dir.Fd())
 	var b [16]byte
 	rand.Read(b[:])
 	tmp := ".clistream-upload-" + hex.EncodeToString(b[:])
-	n, e := unix.Openat(fd, tmp, unix.O_WRONLY|unix.O_NOFOLLOW|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC, 0600)
-	if e != nil {
-		return e
+	n, err := unix.Openat(fd, tmp, unix.O_WRONLY|unix.O_NOFOLLOW|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC, 0600)
+	if err != nil {
+		return err
 	}
 	f := os.NewFile(uintptr(n), tmp)
 	defer f.Close()
 	defer unix.Unlinkat(fd, tmp, 0)
-	if e = write(f); e != nil {
-		return e
+	if err := write(f); err != nil {
+		return err
 	}
-	if e = f.Sync(); e != nil {
-		return e
+	if err := f.Sync(); err != nil {
+		return err
 	}
-	if replace {
-		return unix.Renameat(fd, tmp, fd, path.Base(dest))
-	}
-	if e = unix.Linkat(fd, tmp, fd, path.Base(dest), 0); e != nil {
-		return e
-	}
-
-	return nil
+	return publish(tmp, f)
 }
 func (r *Root) change(m wire.Message) error {
+	if m.Channel != "fs/cp" { // Copies already lock in writeFile at publication.
+		r.mu.Lock()
+		defer r.mu.Unlock()
+	}
 	src := strings.TrimSuffix(m.Path, "/")
 	requiresDir := src != m.Path
 	if !valid(src) || src == "." {

@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/quic-go/quic-go"
@@ -24,15 +25,20 @@ import (
 )
 
 type request struct {
-	Line                            string
-	Run                             string
-	Revision                        uint64
-	Command                         [][]byte
-	Op, Dir, Link, ID, Name, Handle string
-	Data                            []byte
-	Cols, Rows                      uint16
+	Recursive                             bool
+	Path, LocalPath, Destination, Version string
+	Line                                  string
+	Run                                   string
+	Revision                              uint64
+	Command                               [][]byte
+	Op, Dir, Link, ID, Name, Handle       string
+	Data                                  []byte
+	Cols, Rows                            uint16
 }
 type response struct {
+	Entry                           *wire.FileEntry   `json:",omitempty"`
+	Entries                         *[]wire.FileEntry `json:",omitempty"`
+	ErrorKind                       string            `json:",omitempty"`
 	Line                            string            `json:",omitempty"`
 	Pin                             string            `json:",omitempty"`
 	RTTMicros                       int64             `json:",omitempty"`
@@ -77,6 +83,9 @@ func (h *handle) run() {
 }
 func call(q request) (response, error) {
 	var r response
+	if strings.HasPrefix(q.Op, "workspace-") {
+		return workspaceCall(q)
+	}
 	switch q.Op {
 	case "format-command":
 		return response{Line: commandline.Format(q.Command)}, nil
@@ -105,7 +114,13 @@ func call(q request) (response, error) {
 			if err != nil {
 				return r, err
 			}
-			r.Supervisors, err = client.Supervisors(c, slices.Contains(caps, wire.ManagedSupervisors), slices.Contains(caps, wire.EditCommand), slices.Contains(caps, wire.RunResult))
+			if slices.Contains(caps, wire.Workspace) {
+				var msg wire.Message
+				msg, err = wire.Request(c, wire.Message{Op: "workspace-supervisors"})
+				r.Supervisors = msg.Supervisors
+			} else {
+				r.Supervisors, err = client.Supervisors(c, slices.Contains(caps, wire.ManagedSupervisors), slices.Contains(caps, wire.EditCommand), slices.Contains(caps, wire.RunResult))
+			}
 			r.RTTMicros = c.ConnectionStats().SmoothedRTT.Microseconds()
 			return r, err
 		}

@@ -153,6 +153,17 @@ func (p *Process) handle(s *quic.Stream) error {
 }
 func (p *Process) KillGroup() { _ = syscall.Kill(-p.Cmd.Process.Pid, syscall.SIGKILL) }
 func (p *Process) Handle(s *quic.Stream, m wire.Message) (e error) {
+	if m.Op == "workspace" && wire.WorkspaceChannel(m.Channel) {
+		err := p.Root.ServeWorkspace(s, m)
+		if p.observe != nil {
+			outcome := "completed"
+			if err != nil {
+				outcome = "failed"
+			}
+			p.observe(m.Channel, outcome)
+		}
+		return nil // ServeWorkspace already reported the outcome on this stream.
+	}
 	if m.Op != "open" {
 		return errors.New("expected open")
 	}

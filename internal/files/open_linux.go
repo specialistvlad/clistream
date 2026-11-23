@@ -55,3 +55,15 @@ func mountID(fd int) (uint64, error) {
 	}
 	return 0, errors.New("kernel mount ID unavailable")
 }
+
+func creationTime(fd int, _ *unix.Stat_t) int64 {
+	var st unix.Statx_t
+	if err := unix.Statx(fd, "", unix.AT_EMPTY_PATH, unix.STATX_BTIME, &st); err == nil && st.Mask&unix.STATX_BTIME != 0 {
+		return st.Btime.Sec*1e9 + int64(st.Btime.Nsec)
+	}
+	return 0 // Some filesystems expose only device and inode.
+}
+
+func renameExclusive(fromFD int, from string, toFD int, to string) error {
+	return unix.Renameat2(fromFD, from, toFD, to, unix.RENAME_NOREPLACE)
+}
