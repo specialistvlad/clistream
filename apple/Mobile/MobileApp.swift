@@ -39,7 +39,8 @@ struct BrowserView: View {
       } detail: {
         if let row = selected {
           MobileTerminal(
-            workspace: workspace, connection: workspace.terminal(row), actions: actions, row: row
+            workspace: workspace, connection: workspace.terminal(row), actions: actions, row: row,
+            pairAgain: { invitations.add() }
           ) {
             workspace.detach(row.id)
             selected = nil

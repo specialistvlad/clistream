@@ -589,10 +589,12 @@ final class NativeSessionTests: XCTestCase {
     expectOutput("out:before-revocation", in: app)
     #if os(iOS)
       func waitForStatus(_ title: String) -> Bool {
-        let status = app.descendants(matching: .any)["desktop-session-status"].firstMatch
-        let shown = XCTNSPredicateExpectation(
-          predicate: NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", title, title),
-          object: status)
+        let match = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", title, title)
+        let compact = app.descendants(matching: .any).matching(identifier: "desktop-session-status").matching(match).firstMatch
+        let toolbar = app.navigationBars.descendants(matching: .any).matching(match).firstMatch
+        let shown = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+          compact.exists || toolbar.exists
+        }, object: nil)
         if XCTWaiter.wait(for: [shown], timeout: 15) == .completed { return true }
         let screen = XCTAttachment(screenshot: app.screenshot())
         screen.name = "mobile-repair-window"

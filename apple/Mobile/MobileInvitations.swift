@@ -88,10 +88,15 @@ private struct MobileInvitationSheet: View {
           if let address = info.Address, let pin = info.Pin, info.Error == nil {
             Section {
               LabeledContent("Address", value: address)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Address").accessibilityValue(address)
+                .accessibilityIdentifier("pairing-address")
               LabeledContent("Identity") {
                 Text(pin.uppercased()).font(.system(.caption, design: .monospaced))
-                  .textSelection(.enabled).accessibilityIdentifier("pairing-identity")
-              }
+                  .textSelection(.enabled)
+              }.accessibilityElement(children: .combine)
+                .accessibilityLabel("Identity").accessibilityValue(pin.uppercased())
+                .accessibilityIdentifier("pairing-identity")
             } header: {
               Text("Server")
             } footer: {

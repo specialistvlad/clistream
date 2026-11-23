@@ -32,14 +32,16 @@ final class SessionTests: XCTestCase {
       XCTAssertTrue(invitation.hasPrefix("clistream://"))
       let url = try XCTUnwrap(URL(string: invitation))
       app.open(url)
-      XCTAssertTrue(app.staticTexts[address].waitForExistence(timeout: 10))
+      let reviewedAddress = app.descendants(matching: .any).matching(NSPredicate(
+        format: "identifier == %@ AND value == %@", "pairing-address", address)).firstMatch
+      XCTAssertTrue(reviewedAddress.waitForExistence(timeout: 10))
       tap(app.buttons["workspace-cancel"])
       tap(app.buttons["workspace-add-server"])
       let field = app.secureTextFields["pairing-link"]
       XCTAssertTrue(field.waitForExistence(timeout: 10))
       field.tap()
       field.typeText(invitation)
-      XCTAssertTrue(app.staticTexts[address].waitForExistence(timeout: 10))
+      XCTAssertTrue(reviewedAddress.waitForExistence(timeout: 10))
       tap(app.buttons["workspace-confirm"])
       XCTAssertTrue(
         app.descendants(matching: .any)["session-" + session].firstMatch.waitForExistence(

@@ -26,6 +26,7 @@ struct MobileTerminal: View {
   @ObservedObject var connection: Connection
   @ObservedObject var actions: MobileLifecycle
   let row: WorkspaceSession
+  let pairAgain: () -> Void
   let detach: () -> Void
   @Environment(\.regularWorkspace) private var regular
   @Environment(\.closedHinge) private var closedHinge
@@ -33,17 +34,20 @@ struct MobileTerminal: View {
   @State private var showingFiles = false
   @State private var filesError: String?
   @State private var keyboard = false
-  @State private var sample: Int64?
+  @State private var sample: String?
   @State private var grid = ""
   private var item: SessionInfo { connection.selected ?? row.item }
   private var target: WorkspaceSession { WorkspaceSession(server: row.server, item: item) }
   private var outer: Bool { !regular && closedHinge }
+  private var revoked: Bool {
+    workspace.revoked(row.server) || connection.status.localizedCaseInsensitiveContains("revoked")
+  }
   private var online: Bool {
-    connection.attached || (!item.running && workspace.errors[row.server.id] == "")
+    !revoked && (connection.attached || (!item.running && workspace.errors[row.server.id] == ""))
   }
   private var status: String {
-    guard online else { return item.running ? "Reconnecting…" : "Disconnected" }
-    return ["Connected", sample.map(MobileServers.latency)].compactMap { $0 }.joined(
+    guard online else { return item.running && !revoked ? "Reconnecting…" : "Disconnected" }
+    return ["Connected", sample].compactMap { $0 }.joined(
       separator: " · ")
   }
   private var subtitle: String {
@@ -56,23 +60,14 @@ struct MobileTerminal: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      if let current = connection.selected {
-        if current.running {
-          LiveTerminal(connection: connection).id(current.ID)
-            .padding(.horizontal, regular ? 24 : 14)
-        } else {
-          ScrollView {
-            Text(String(decoding: connection.stdout, as: UTF8.self))
-              .font(.system(.body, design: .monospaced)).textSelection(.enabled)
-              .frame(maxWidth: .infinity, alignment: .leading)
+      VStack(alignment: .leading, spacing: 0) { terminalContent }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .overlay(alignment: .bottomTrailing) {
+          if !keyboard && !outer && connection.attached {
+            showKeyboard.controlSize(.large).buttonStyle(.glass).buttonBorderShape(.circle)
+              .padding()
           }
         }
-        if !connection.status.isEmpty {
-          Text(connection.status).font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
-        }
-      } else {
-        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-      }
       if !regular {
         HStack {
           Circle().fill(online ? Color.green : .secondary).frame(width: 8, height: 8)
@@ -80,11 +75,6 @@ struct MobileTerminal: View {
           Spacer()
           Text(mode)
         }.font(.footnote).padding(.horizontal).padding(.vertical, 5)
-      }
-    }
-    .overlay(alignment: .bottomTrailing) {
-      if !keyboard && !outer && connection.attached {
-        showKeyboard.controlSize(.large).buttonStyle(.glass).buttonBorderShape(.circle).padding()
       }
     }
     .safeAreaInset(edge: .trailing, spacing: 0) {
@@ -106,7 +96,7 @@ struct MobileTerminal: View {
           ToolbarItemGroup(placement: .topBarTrailing) { lifecycleButtons }
           ToolbarSpacer(.fixed, placement: .topBarTrailing)
           ToolbarItemGroup(placement: .topBarTrailing) {
-            if item.workspace == true { filesButton }
+            if item.workspace == true && !revoked { filesButton }
             portsButton
           }
           ToolbarSpacer(.fixed, placement: .topBarTrailing)
@@ -138,10 +128,33 @@ struct MobileTerminal: View {
       sample = nil
       while !Task.isCancelled {
         if connection.attached { await connection.measureLatency() }
-        sample = connection.attached ? connection.latency : workspace.samples[row.server.id]
+        sample = (connection.attached ? connection.latency : workspace.samples[row.server.id]).map(
+          MobileServers.latency)
         if let renderer = connection.renderer { grid = "\(renderer.columns) × \(renderer.rows)" }
-        try? await Task.sleep(for: .seconds(1))
+        try? await Task.sleep(for: .seconds(2))
       }
+    }
+  }
+  @ViewBuilder private var terminalContent: some View {
+    if let current = connection.selected {
+      if current.running {
+        LiveTerminal(connection: connection).id(current.ID)
+          .padding(.horizontal, regular ? 24 : 14)
+      } else {
+        ScrollView {
+          Text(String(decoding: connection.stdout, as: UTF8.self))
+            .font(.system(.body, design: .monospaced)).textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+      }
+      if revoked {
+        Text("This device’s access to " + row.server.name + " was revoked. Pair again with a fresh invitation.")
+          .font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
+      } else if !connection.status.isEmpty {
+        Text(connection.status).font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
+      }
+    } else {
+      ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
     }
   }
   private var showKeyboard: some View {
@@ -192,8 +205,11 @@ struct MobileTerminal: View {
           Task { await connection.reconnect(item) }
         }
       }
+      if revoked {
+        Button("Pair Again…", systemImage: "link", action: pairAgain)
+      }
       Button("Ports", systemImage: "network") { ports = true }
-      if item.workspace == true { filesButton }
+      if item.workspace == true && !revoked { filesButton }
       Divider()
       Button("Detach", systemImage: "rectangle.portrait.and.arrow.right", action: detach)
     }.accessibilityIdentifier("session-menu")
