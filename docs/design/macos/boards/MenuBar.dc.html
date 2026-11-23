@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CLIStream menu bar</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/1752014949e4c974097b1904d4e19bf8">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit;cursor:default}
+</style>
+</helmet>
+<div style="position: relative; width: 1720px; height: 760px; background: #C9CFD8; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 13px; color: #363636; -webkit-font-smoothing: antialiased; overflow: hidden">
+
+<nav aria-label="Menu bar" style="position: absolute; left: 0; top: 0; right: 0; height: 32px">
+<sc-for list="{{bar}}" as="b" hint-placeholder-count="8">
+<span style="position: absolute; left: {{b.left}}; top: 4px; height: 24px; display: flex; align-items: center; padding: 0 9px; border-radius: 6px; background: {{b.bg}}; font-size: 13px; font-weight: {{b.weight}}; color: #1F1F1F">{{b.title}}</span>
+</sc-for>
+</nav>
+
+<sc-for list="{{menus}}" as="m" hint-placeholder-count="5">
+<div role="menu" aria-label="{{m.title}}" style="position: absolute; left: {{m.left}}; top: {{m.top}}; width: {{m.width}}; box-sizing: border-box; padding: 5px; border-radius: 12px; background: rgba(246,246,246,0.94); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.10), 0 10px 30px rgba(0,0,0,0.18); backdrop-filter: blur(30px) saturate(160%); -webkit-backdrop-filter: blur(30px) saturate(160%); display: flex; flex-direction: column">
+<sc-for list="{{m.items}}" as="mi" hint-placeholder-count="6">
+<sc-if value="{{mi.sep}}" hint-placeholder-val="{{ false }}">
+<span aria-hidden="true" style="height: 1px; margin: 5px 12px; background: rgba(0,0,0,0.10)"></span>
+</sc-if>
+<sc-if value="{{mi.item}}" hint-placeholder-val="{{ true }}">
+<button type="button" role="menuitem" aria-disabled="{{mi.disabled}}" style="height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 12px 0 {{mi.pad}}; border: none; border-radius: 6px; background: {{mi.bg}}; color: {{mi.fg}}; font-size: 13px; text-align: left">
+<sc-if value="{{mi.checked}}" hint-placeholder-val="{{ false }}"><span class="sf sf-checkmark" aria-hidden="true" style="width: 11px; height: 10px; margin-left: -16px; margin-right: 5px"></span></sc-if>
+<sc-if value="{{mi.hasIcon}}" hint-placeholder-val="{{ false }}"><span class="sf {{mi.icon}}" aria-hidden="true" style="width: {{mi.w}}; height: {{mi.h}}"></span></sc-if>
+<span style="flex: 1; white-space: nowrap">{{mi.label}}</span>
+<span style="font-size: 13px; color: {{mi.keyFg}}; word-spacing: 2px">{{mi.key}}</span>
+<sc-if value="{{mi.sub}}" hint-placeholder-val="{{ false }}"><span class="sf sf-chevron-right" aria-hidden="true" style="width: 7px; height: 11px"></span></sc-if>
+</button>
+</sc-if>
+</sc-for>
+</div>
+</sc-for>
+
+<div style="position: absolute; left: 120px; right: 40px; bottom: 32px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+<p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Standard order.</strong> App, File, Edit, View, then the custom Session and Server menus, then Window and Help, as the HIG orders menu bar menus.</p>
+<p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Shortcuts.</strong> Main menus show them and context menus don’t. Every shortcut uses Command, so Control combinations keep reaching the terminal. Restart ⌘R and Stop ⌘. follow Xcode’s Run and Stop.</p>
+<p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Availability.</strong> Main menus dim commands the selection can’t run, such as Send EOF for a PTY. Context menus hide them. Restart… reads Start… when the run is stopped.</p>
+<p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Kit styling.</strong> Rows are 24 pt of SF Pro 13 in a 12 pt-radius glass menu. Items are plain text, as in the kit’s Edit menu, and only the system’s own Dictation and Emoji items carry symbols.</p>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1720,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = '#0088FF';
+    const it = (label, key, opts) => {
+      const o = opts || {};
+      return {
+        item: true, sep: false, label, key: key || '', icon: o.icon || '', hasIcon: !!o.icon, w: (o.w || 0) + 'px', h: (o.h || 0) + 'px',
+        pad: o.check ? '28px' : '12px', checked: !!o.checked, sub: !!o.sub, disabled: o.disabled ? 'true' : 'false',
+        bg: o.hl ? accent : 'transparent',
+        fg: o.hl ? '#FFFFFF' : o.disabled ? 'rgba(0,0,0,0.28)' : '#1F1F1F',
+        keyFg: o.hl ? 'rgba(255,255,255,0.85)' : o.disabled ? 'rgba(0,0,0,0.22)' : 'rgba(0,0,0,0.38)'
+      };
+    };
+    const sep = { item: false, sep: true };
+    const titleAt = { File: 120, Edit: 380, View: 640, Session: 1100, Server: 1360 };
+    const open = Object.keys(titleAt);
+    const bar = [
+      { title: 'CLIStream', left: '16px', weight: 700 },
+      { title: 'File', left: '120px' }, { title: 'Edit', left: '380px' }, { title: 'View', left: '640px' },
+      { title: 'Session', left: '1100px' }, { title: 'Server', left: '1360px' },
+      { title: 'Window', left: '1560px' }, { title: 'Help', left: '1650px' }
+    ].map((b) => Object.assign({ weight: 400 }, b, { bg: open.indexOf(b.title) !== -1 ? 'rgba(0,0,0,0.10)' : 'transparent' }));
+    const menu = (title, width, items) => ({ title, items, left: titleAt[title] + 'px', top: '36px', width: width + 'px' });
+    const menus = [
+      menu('File', 230, [
+        it('New Window', '⌘ N'), it('New Tab', '⌘ T'), sep,
+        it('Add Server…', '⌘ K'), it('Paste Invitation'), sep,
+        it('Close Window', '⌘ W')
+      ]),
+      menu('Edit', 230, [
+        it('Undo', '⌘ Z', { disabled: true }), it('Redo', '⇧ ⌘ Z', { disabled: true }), sep,
+        it('Cut', '⌘ X', { disabled: true }), it('Copy', '⌘ C'), it('Paste', '⌘ V'), it('Select All', '⌘ A'), sep,
+        it('Start Dictation…', '', { icon: 'sf-mic', w: 10, h: 13 }), it('Emoji & Symbols', '', { icon: 'sf-face-smiling', w: 13, h: 13 })
+      ]),
+      menu('View', 250, [
+        it('Hide Sidebar', '⌃ ⌘ S'), it('Show Ports', '⌥ ⌘ I'), sep,
+        it('as Tree', '⌘ 1', { check: true, checked: true }), it('as List', '⌘ 2', { check: true }),
+        it('Group By', '', { sub: true, hl: true }), sep,
+        it('Enter Full Screen', 'fn F')
+      ]),
+      { title: 'Group By', left: '886px', top: '143px', width: '160px', items: [
+        it('Server', '', { check: true, checked: true }), it('Host', '', { check: true }), it('CLI Name', '', { check: true })
+      ] },
+      menu('Session', 230, [
+        it('Restart…', '⌘ R'), it('Stop…', '⌘ .'),
+        it('Send EOF', '', { disabled: true }), it('Reconnect', '', { disabled: true }), sep,
+        it('Open in New Tab'), it('Open in New Window'), sep,
+        it('Show in Finder', '⌥ ⌘ R')
+      ]),
+      menu('Server', 220, [
+        it('Rename…'), it('Reconnect'), sep,
+        it('Remove Server…', '⌘ ⌫')
+      ])
+    ];
+    return { bar, menus };
+  }
+}
+</script>
+</body>
+</html>

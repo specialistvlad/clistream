@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CLIStream main window</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="/_blob/1752014949e4c974097b1904d4e19bf8">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font:inherit;color:inherit;cursor:default}
+.sec .sec-chev{opacity:0}
+.sec:hover .sec-chev{opacity:1}
+.sf-folder{-webkit-mask-image:url(/_blob/e42db55b144edd942a7b1f4e0a717c77);mask-image:url(/_blob/e42db55b144edd942a7b1f4e0a717c77)}
+</style>
+</helmet>
+<div style="width: 1280px; height: 820px; box-sizing: border-box; padding: 40px; background: {{t.desktop}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 13px; color: {{t.label}}; -webkit-font-smoothing: antialiased">
+<div style="position: relative; width: 1200px; height: 740px; border-radius: 16px; overflow: hidden; display: flex; box-shadow: {{t.shadow}}">
+
+<nav aria-label="Servers" style="width: 256px; flex-shrink: 0; display: flex; flex-direction: column; background: {{t.sidebar}}; border-right: 1px solid {{t.edge}}">
+<div style="height: 52px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 18px">
+<div aria-hidden="true" style="display: flex; gap: 9px">
+<span style="width: 14px; height: 14px; border-radius: 7px; background: #FF5F57; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12)"></span>
+<span style="width: 14px; height: 14px; border-radius: 7px; background: #FEBC2E; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12)"></span>
+<span style="width: 14px; height: 14px; border-radius: 7px; background: #28C840; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12)"></span>
+</div>
+<button type="button" aria-label="Hide Sidebar" style="width: 36px; height: 36px; border-radius: 18px; border: none; background: {{t.btn}}; box-shadow: {{t.btnShadow}}; color: {{t.icon}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-sidebar-left" aria-hidden="true" style="width: 20px; height: 16px"></span></button>
+</div>
+
+<div style="flex: 1; overflow-y: auto; padding: 8px 10px 12px; display: flex; flex-direction: column; gap: 16px">
+<sc-if value="{{welcome}}" hint-placeholder-val="{{ false }}">
+<p style="margin: 2px 8px; color: {{t.tertiary}}; font-size: 13px; line-height: 17px">Add a server to see its CLI apps.</p>
+</sc-if>
+<sc-for list="{{servers}}" as="srv" hint-placeholder-count="2">
+<section style="display: flex; flex-direction: column">
+<div class="sec" style="height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 8px; border-radius: 8px; box-shadow: {{srv.ring}}">
+<sc-if value="{{srv.renaming}}" hint-placeholder-val="{{ false }}">
+<input type="text" aria-label="Server name" value="Build server" style="flex: 1; min-width: 0; height: 20px; box-sizing: border-box; padding: 0 5px; border: 1px solid {{t.fieldLine}}; border-radius: 5px; outline: none; background: {{t.content}}; box-shadow: 0 0 0 3.5px {{accentRing}}; font: inherit; font-size: 11px; font-weight: 700; color: {{t.label}}">
+</sc-if>
+<sc-if value="{{srv.plain}}" hint-placeholder-val="{{ true }}">
+<h2 aria-label="{{srv.label}}" style="margin: 0; flex: 1; font-size: 11px; font-weight: 700; color: {{t.tertiary}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{srv.name}}</h2>
+</sc-if>
+<span style="font-size: 11px; font-weight: 700; color: {{t.tertiary}}; font-variant-numeric: tabular-nums">{{srv.meta}}</span>
+<span class="sf sf-chevron-down sec-chev" aria-hidden="true" style="width: 10px; height: 7px; color: {{t.tertiary}}"></span>
+</div>
+<sc-if value="{{srv.offline}}" hint-placeholder-val="{{ false }}">
+<div style="height: 32px; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 14px">
+<span style="width: 20px; display: flex; justify-content: center"><span class="sf sf-wifi-slash" aria-hidden="true" style="width: 17px; height: 16px; color: {{t.secondary}}"></span></span>
+<span style="flex: 1; padding-left: 4px; font-size: 13px; color: {{t.secondary}}">{{srv.offlineText}}</span>
+<button type="button" style="height: 20px; padding: 0 9px; border-radius: 6px; border: none; background: {{t.push}}; font-size: 12px; color: {{t.label}}">{{srv.offlineButton}}</button>
+</div>
+</sc-if>
+<sc-for list="{{srv.hosts}}" as="host" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column">
+<div style="height: 32px; display: flex; align-items: center; padding: 0 8px 0 3px">
+<span style="width: 10px; display: flex; justify-content: center"><span class="sf sf-chevron-down" aria-hidden="true" style="width: 10px; height: 7px; color: {{t.secondary}}"></span></span>
+<span style="width: 18px; margin-left: 5px; display: flex; justify-content: center"><span class="sf {{host.icon}}" aria-hidden="true" style="width: 19px; height: 15px; color: {{accent}}"></span></span>
+<span style="flex: 1; padding-left: 4px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{host.name}}</span>
+<span style="font-size: 13px; color: {{t.secondary}}">{{host.os}}</span>
+</div>
+<sc-for list="{{host.rows}}" as="r" hint-placeholder-count="3">
+<sc-if value="{{r.shown}}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{r.pick}}" aria-current="{{r.current}}" aria-label="{{r.label}}" style="height: 32px; display: flex; align-items: center; padding: 0 8px 0 30px; border: none; border-radius: 8px; background: {{r.bg}}; box-shadow: {{r.ring}}; color: {{t.label}}; text-align: left">
+<span style="width: 18px; display: flex; justify-content: center"><span class="sf sf-terminal" aria-hidden="true" style="width: 18px; height: 14px; color: {{r.icon}}"></span></span>
+<span style="flex: 1; padding-left: 4px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.name}}</span>
+<span style="font-size: 13px; color: {{t.secondary}}; white-space: nowrap">{{r.caption}}</span>
+</button>
+</sc-if>
+</sc-for>
+</div>
+</sc-for>
+</section>
+</sc-for>
+</div>
+</nav>
+
+<main style="position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: {{t.content}}">
+<header style="height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 16px; border-bottom: 1px solid {{t.scrollEdge}}">
+<div style="min-width: 0; max-width: 280px; display: flex; flex-direction: column; gap: 2px">
+<h1 style="margin: 0; font-size: 15px; font-weight: 700; line-height: 18px; color: {{t.title}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{title}}</h1>
+<span style="font-size: 11px; font-weight: 500; line-height: 13px; color: {{t.tertiary}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{subtitle}}</span>
+</div>
+<div style="margin-left: 10px; height: 36px; display: flex; align-items: center; padding: 0 2px; border-radius: 18px; background: {{t.btn}}; box-shadow: {{t.btnShadow}}; color: {{t.icon}}">
+<button type="button" aria-label="Add Server" title="Add Server" style="width: 36px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-plus" aria-hidden="true" style="width: 16px; height: 15px"></span></button>
+<button type="button" aria-label="Layout and grouping" aria-haspopup="menu" title="Layout and grouping" style="width: 50px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center; gap: 4px"><span class="sf sf-list-bullet-indent" aria-hidden="true" style="width: 20px; height: 13px"></span><span class="sf sf-chevron-down" aria-hidden="true" style="width: 9px; height: 6px"></span></button>
+</div>
+<span style="flex: 1"></span>
+<sc-if value="{{session}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; align-items: center; gap: 8px">
+<sc-if value="{{tb.once}}" hint-placeholder-val="{{ false }}">
+<span style="font-size: 11px; font-weight: 500; color: {{t.tertiary}}; padding-right: 2px">Attach only</span>
+</sc-if>
+<sc-if value="{{tb.revoked}}" hint-placeholder-val="{{ false }}">
+<button type="button" aria-label="Reconnect" title="Reconnect" style="width: 36px; height: 36px; border-radius: 18px; border: none; background: {{t.btn}}; box-shadow: {{t.btnShadow}}; color: {{t.icon}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-arrow-clockwise" aria-hidden="true" style="width: 15px; height: 17px"></span></button>
+</sc-if>
+<sc-if value="{{tb.group}}" hint-placeholder-val="{{ true }}">
+<div style="height: 36px; display: flex; align-items: center; padding: 0 2px; border-radius: 18px; background: {{t.btn}}; box-shadow: {{t.btnShadow}}; color: {{t.icon}}">
+<sc-if value="{{tb.managed}}" hint-placeholder-val="{{ true }}">
+<button type="button" aria-label="Restart…" title="Restart…" style="width: 37px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-arrow-counterclockwise" aria-hidden="true" style="width: 15px; height: 17px"></span></button>
+<button type="button" aria-label="Stop…" title="Stop…" style="width: 37px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-stop" aria-hidden="true" style="width: 15px; height: 14px"></span></button>
+</sc-if>
+<sc-if value="{{tb.pipe}}" hint-placeholder-val="{{ false }}">
+<button type="button" aria-label="Send EOF" title="Send EOF" style="width: 37px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-text-append" aria-hidden="true" style="width: 18px; height: 15px"></span></button>
+</sc-if>
+</div>
+</sc-if>
+<sc-if value="{{tb.stopped}}" hint-placeholder-val="{{ false }}">
+<button type="button" style="height: 36px; display: flex; align-items: center; gap: 6px; padding: 0 15px 0 13px; border-radius: 18px; border: none; background: {{accent}}; color: #FFFFFF; font-size: 13px; font-weight: 500; box-shadow: {{t.btnShadow}}"><span class="sf sf-play-fill" aria-hidden="true" style="width: 11px; height: 13px"></span>Start…</button>
+</sc-if>
+<div style="height: 36px; display: flex; align-items: center; padding: 0 2px; border-radius: 18px; background: {{t.btn}}; box-shadow: {{t.btnShadow}}; color: {{t.icon}}">
+<sc-if value="{{tb.finder}}" hint-placeholder-val="{{ true }}">
+<button type="button" aria-label="Show in Finder" title="Show the shared folder in Finder" style="width: 37px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-folder" aria-hidden="true" style="width: 19px; height: 16px"></span></button>
+</sc-if>
+<button type="button" onClick="{{togglePorts}}" aria-pressed="{{portsPressed}}" aria-label="Ports" title="Show or hide port forwarding" style="width: 37px; height: 32px; border: none; border-radius: 16px; background: {{portsBg}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-sidebar-right" aria-hidden="true" style="width: 20px; height: 16px"></span></button>
+</div>
+<label style="width: 160px; height: 36px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 0 9px 0 12px; border-radius: 18px; background: {{t.btn}}; box-shadow: {{searchShadow}}; color: {{t.icon}}">
+<span class="sf sf-magnifyingglass" aria-hidden="true" style="width: 16px; height: 15px"></span>
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search CLIs</span>
+<input type="search" value="{{searchValue}}" onFocus="{{openSearch}}" placeholder="Search" style="flex: 1; min-width: 0; border: none; outline: none; background: transparent; font: inherit; font-size: 13px; color: {{t.label}}">
+<sc-if value="{{searchOpen}}" hint-placeholder-val="{{ false }}">
+<button type="button" onClick="{{closeSearch}}" aria-label="Clear search" style="width: 16px; height: 16px; border: none; padding: 0; background: transparent; color: {{t.clear}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-xmark-circle-fill" aria-hidden="true" style="width: 14px; height: 14px"></span></button>
+</sc-if>
+</label>
+</div>
+</sc-if>
+</header>
+
+<sc-if value="{{welcome}}" hint-placeholder-val="{{ false }}">
+<div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 40px; text-align: center">
+<span class="sf sf-network" aria-hidden="true" style="width: 48px; height: 48px; color: {{t.tertiary}}"></span>
+<h2 style="margin: 10px 0 0; font-size: 17px; font-weight: 700; color: {{t.title}}">Pair with a server</h2>
+<p style="margin: 0; max-width: 340px; font-size: 13px; line-height: 16px; color: {{t.secondary}}">Open an invitation from clistreamd, or paste one. Invitations last three minutes.</p>
+<div style="display: flex; gap: 8px; margin-top: 10px">
+<button type="button" style="height: 24px; padding: 0 12px; border-radius: 7px; border: none; background: {{t.push}}; color: {{t.label}}; font-size: 13px">Paste Invitation</button>
+<button type="button" style="height: 24px; padding: 0 12px; border-radius: 7px; border: none; background: {{accent}}; color: #FFFFFF; font-size: 13px">Add Server…</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{session}}" hint-placeholder-val="{{ true }}">
+<div style="flex: 1; min-height: 0; display: flex">
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<div role="log" aria-label="Terminal output" style="flex: 1; min-height: 0; overflow: hidden; padding: 10px 16px; font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 12.5px; line-height: 18px; white-space: pre; color: {{t.label}}">
+<sc-for list="{{lines}}" as="ln" hint-placeholder-count="8">
+<div><sc-for list="{{ln.segs}}" as="sg" hint-placeholder-count="2"><span style="color: {{sg.color}}">{{sg.text}}</span></sc-for><sc-if value="{{ln.cursor}}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="display: inline-block; width: 7.5px; height: 15px; vertical-align: -3px; background: {{t.label}}"></span></sc-if></div>
+</sc-for>
+</div>
+<sc-if value="{{tb.stopped}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-top: 1px solid {{t.hair}}">
+<span class="sf sf-stop" aria-hidden="true" style="width: 14px; height: 13px; color: {{t.secondary}}"></span>
+<span style="flex: 1; font-size: 13px; color: {{t.secondary}}">Exited with status 0 · showing the last run’s output</span>
+<button type="button" style="height: 20px; padding: 0 9px; border-radius: 6px; border: none; background: {{t.push}}; font-size: 12px">Start…</button>
+</div>
+</sc-if>
+<sc-if value="{{revoked}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-top: 1px solid {{t.hair}}">
+<span class="sf sf-exclamationmark-triangle-fill" aria-hidden="true" style="width: 17px; height: 15px; color: {{t.warning}}"></span>
+<span style="flex: 1; font-size: 13px; color: {{t.secondary}}">This device’s access to Build server was revoked. Pair again with a fresh invitation.</span>
+<button type="button" style="height: 20px; padding: 0 9px; border-radius: 6px; border: none; background: {{t.push}}; font-size: 12px">Pair Again…</button>
+</div>
+</sc-if>
+</div>
+
+<sc-if value="{{showPorts}}" hint-placeholder-val="{{ false }}">
+<aside aria-label="Ports" style="width: 280px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; padding: 16px 12px; box-sizing: border-box; background: {{t.content}}; border-left: 1px solid {{t.edge}}">
+<h2 style="margin: 0 6px; font-size: 13px; font-weight: 700; color: {{t.title}}">Ports</h2>
+<sc-if value="{{noPorts}}" hint-placeholder-val="{{ false }}">
+<p style="margin: 0 6px; font-size: 13px; line-height: 16px; color: {{t.secondary}}">This session has no shared ports.</p>
+</sc-if>
+<sc-if value="{{hasPorts}}" hint-placeholder-val="{{ true }}">
+<div style="border-radius: 10px; background: {{t.group}}; display: flex; flex-direction: column; padding: 0 10px">
+<sc-for list="{{ports}}" as="pt" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 9px 0; border-top: 1px solid {{pt.sep}}">
+<div style="display: flex; align-items: center; gap: 8px">
+<div style="flex: 1; display: flex; flex-direction: column; gap: 1px">
+<span style="font-size: 13px">{{pt.name}}</span>
+<span style="font-size: 11px; color: {{t.secondary}}">{{pt.proto}} · {{pt.target}}</span>
+</div>
+<button type="button" role="switch" aria-checked="{{pt.checked}}" aria-label="{{pt.switchLabel}}" onClick="{{pt.toggle}}" style="width: 36px; height: 16px; border: none; border-radius: 8px; padding: 2px; box-sizing: border-box; background: {{pt.track}}; display: flex; justify-content: {{pt.justify}}"><span aria-hidden="true" style="width: 20px; height: 12px; border-radius: 6px; background: #FFFFFF; box-shadow: 0 0.5px 1.5px rgba(0,0,0,0.3)"></span></button>
+</div>
+<sc-if value="{{pt.on}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; align-items: center; gap: 6px">
+<span style="flex: 1; font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', monospace; font-size: 12px">{{pt.addr}}</span>
+<button type="button" aria-label="Copy address" style="height: 20px; padding: 0 9px; border-radius: 6px; border: none; background: {{t.push}}; font-size: 12px">Copy</button>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+<p style="margin: 2px 6px 0; font-size: 11px; line-height: 14px; color: {{t.secondary}}">Forwards keep running when you close this inspector.</p>
+</sc-if>
+</aside>
+</sc-if>
+</div>
+
+<footer style="height: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 12px; border-top: 1px solid {{t.hair}}; font-size: 11px; color: {{t.secondary}}">
+<span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 4px; background: {{statusDot}}"></span>
+<span>{{statusText}}</span>
+<span style="margin-left: auto">{{modeLine}}</span>
+</footer>
+</sc-if>
+</main>
+
+<sc-if value="{{hasMenu}}" hint-placeholder-val="{{ false }}">
+<div role="menu" aria-label="{{menu.label}}" style="position: absolute; left: {{menu.left}}; top: {{menu.top}}; min-width: 180px; box-sizing: border-box; padding: 5px; border-radius: 12px; background: {{t.menu}}; box-shadow: {{t.menuShadow}}; backdrop-filter: blur(30px) saturate(160%); -webkit-backdrop-filter: blur(30px) saturate(160%); display: flex; flex-direction: column">
+<sc-for list="{{menu.items}}" as="mi" hint-placeholder-count="6">
+<sc-if value="{{mi.sep}}" hint-placeholder-val="{{ false }}">
+<span aria-hidden="true" style="height: 1px; margin: 5px 12px; background: {{t.menuSep}}"></span>
+</sc-if>
+<sc-if value="{{mi.item}}" hint-placeholder-val="{{ true }}">
+<button type="button" role="menuitem" style="height: 24px; display: flex; align-items: center; padding: 0 12px; border: none; border-radius: 6px; background: {{mi.bg}}; color: {{mi.fg}}; font-size: 13px; text-align: left">{{mi.label}}</button>
+</sc-if>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{hasModal}}" hint-placeholder-val="{{ false }}">
+<div aria-hidden="true" style="position: absolute; inset: 0; background: {{t.scrim}}"></div>
+</sc-if>
+
+<sc-if value="{{hasAlert}}" hint-placeholder-val="{{ false }}">
+<div role="alertdialog" aria-label="{{al.title}}" style="position: absolute; left: 470px; top: 220px; width: 260px; box-sizing: border-box; padding: 22px; border-radius: 18px; background: {{t.alert}}; box-shadow: 0 18px 46px rgba(0,0,0,0.25), 0 0 0 0.5px {{t.alertEdge}}; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 700; line-height: 16px; color: {{t.alertTitle}}">{{al.title}}</h2>
+<p style="margin: 0; font-size: 13px; line-height: 16px; color: {{t.label}}">{{al.message}}</p>
+<div style="display: flex; flex-direction: {{al.dir}}; gap: 8px; margin-top: 10px">
+<sc-for list="{{al.buttons}}" as="b" hint-placeholder-count="2">
+<button type="button" style="flex: 1; height: 28px; border-radius: 14px; border: none; background: {{b.bg}}; color: {{b.fg}}; font-size: 13px; font-weight: {{b.weight}}">{{b.label}}</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{hasSheet}}" hint-placeholder-val="{{ false }}">
+<div role="dialog" aria-label="{{sh.title}}" style="position: absolute; left: 380px; top: 168px; width: 440px; box-sizing: border-box; padding: 20px 20px 18px; border-radius: 24px; background: {{t.sheet}}; box-shadow: 0 18px 46px rgba(0,0,0,0.25), 0 0 0 0.5px {{t.alertEdge}}; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 4px; padding-left: 4px">
+<h2 style="margin: 0; font-size: 13px; font-weight: 700; line-height: 16px; color: {{t.title}}">{{sh.title}}</h2>
+<p style="margin: 0; font-size: 11px; line-height: 14px; color: {{t.label}}">{{sh.message}}</p>
+</div>
+<div style="display: grid; grid-template-columns: 84px minmax(0, 1fr); column-gap: 8px; row-gap: 10px; align-items: center">
+<sc-for list="{{sh.rows}}" as="rw" hint-placeholder-count="2">
+<span style="text-align: right; font-size: 13px; color: {{t.secondary}}">{{rw.label}}</span>
+<sc-if value="{{rw.field}}" hint-placeholder-val="{{ true }}">
+<input type="text" aria-label="{{rw.aria}}" value="{{rw.value}}" placeholder="{{rw.placeholder}}" style="height: 24px; box-sizing: border-box; padding: 0 7px; border: 1px solid {{t.fieldLine}}; border-radius: 6px; outline: none; background: {{t.content}}; box-shadow: {{rw.ring}}; font-family: {{rw.font}}; font-size: 13px; color: {{t.label}}">
+</sc-if>
+<sc-if value="{{rw.text}}" hint-placeholder-val="{{ false }}">
+<span style="font-family: {{rw.font}}; font-size: 13px; color: {{t.label}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{rw.value}}</span>
+</sc-if>
+</sc-for>
+</div>
+<sc-if value="{{sh.hasHelp}}" hint-placeholder-val="{{ false }}">
+<p style="margin: -8px 0 0 92px; font-size: 11px; line-height: 14px; color: {{t.secondary}}">{{sh.help}}</p>
+</sc-if>
+<div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px">
+<sc-for list="{{sh.buttons}}" as="b" hint-placeholder-count="2">
+<button type="button" aria-disabled="{{b.disabled}}" style="min-width: 76px; height: 24px; padding: 0 14px; border-radius: 6px; border: none; background: {{b.bg}}; color: {{b.fg}}; font-size: 13px; opacity: {{b.opacity}}">{{b.label}}</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"appearance":{"editor":"enum","options":["light","dark"],"default":"light","section":"Window"},"screen":{"editor":"enum","options":["session","welcome"],"default":"session","section":"Window"},"menu":{"editor":"enum","options":["none","cli","server"],"default":"none","section":"Sidebar"},"renaming":{"editor":"boolean","default":false,"section":"Sidebar"},"searchOpen":{"editor":"boolean","default":false,"section":"Toolbar"},"alert":{"editor":"enum","options":["none","remove","stop","pairError"],"default":"none","section":"Modal"},"sheet":{"editor":"enum","options":["none","pair","pairFilled","command"],"default":"none","section":"Modal"},"connection":{"editor":"enum","options":["online","revoked"],"default":"online","section":"Window"},"accent":{"editor":"color","options":["#0088FF","#9A4CDB","#F2700F","#2AB24C"],"default":"#0088FF","section":"Window"},"portsOpen":{"editor":"boolean","default":false,"section":"Window"},"selected":{"editor":"enum","options":["codex","claude","sh","worker","sync"],"default":"sh","section":"Window"},"$preview":{"width":1280,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = (this.props.appearance ?? 'light') === 'dark';
+    const welcome = (this.props.screen ?? 'session') === 'welcome';
+    const menuKind = welcome ? 'none' : (this.props.menu ?? 'none');
+    const renaming = !welcome && !!this.props.renaming;
+    const alertProp = this.props.alert;
+    const alertKind = !alertProp ? 'none' : alertProp === true ? 'remove' : alertProp;
+    const sheetKind = this.props.sheet || 'none';
+    const revoked = !welcome && (this.props.connection || 'online') === 'revoked';
+    const chosen = this.props.accent ?? '#0088FF';
+    // The kit's system blue is #0088FF in light and #0091FF in dark.
+    const accent = dark && chosen === '#0088FF' ? '#0091FF' : chosen;
+    const st = this.state || {};
+    const sel = st.sel || this.props.selected || 'sh';
+    const showPortsState = st.ports === undefined ? !!this.props.portsOpen : st.ports;
+    const searchState = st.search === undefined ? !!this.props.searchOpen : st.search;
+    const fw = st.fw || {};
+    const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const accentRing = 'rgba(' + hex(accent).join(',') + ',0.4)';
+
+    // Values read from the Apple macOS 27 UI Kit (Sketch): window, sidebar, alert and switch symbols.
+    const L = {
+      desktop: '#C9CFD8', sidebar: '#FBFBFB', content: '#FFFFFF',
+      title: '#363636', label: '#363636', secondary: '#8E8E8E', tertiary: '#B2B2B2',
+      edge: 'rgba(0,0,0,0.06)', scrollEdge: 'rgba(0,0,0,0.04)', hair: 'rgba(0,0,0,0.08)',
+      btn: '#FFFFFF', btnShadow: '0 0 0 0.5px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.10)', btnOn: '#EDEDED', icon: '#363636',
+      push: 'rgba(0,0,0,0.06)', fieldLine: 'rgba(0,0,0,0.12)', clear: 'rgba(0,0,0,0.28)',
+      selection: 'rgba(0,0,0,0.055)', group: '#F7F7F7',
+      menu: 'rgba(246,246,246,0.94)', menuSep: 'rgba(0,0,0,0.10)', menuShadow: '0 0 0 0.5px rgba(0,0,0,0.10), 0 10px 30px rgba(0,0,0,0.18)',
+      alert: '#F6F6F6', alertEdge: 'rgba(0,0,0,0.12)', alertTitle: 'rgba(0,0,0,0.85)', scrim: 'rgba(0,0,0,0.17)', sheet: '#FFFFFF', warning: '#F5A300',
+      destructive: '#F52F32', destructiveBg: 'rgba(245,47,50,0.22)',
+      green: '#28C840', stopped: '#A6A6A6', ok: '#1F8A3B', dim: '#8E8E8E', prompt: '#0070D9',
+      trackOn: '#0077EF', trackOff: 'rgba(0,0,0,0.16)',
+      shadow: '0 0 0 0.5px rgba(0,0,0,0.22), 0 20px 50px rgba(0,0,0,0.22)'
+    };
+    const D = {
+      desktop: '#1B1F26', sidebar: '#0A0A0A', content: '#1E1E1E',
+      title: '#E5E5E5', label: '#E0E0E0', secondary: '#7C7C7C', tertiary: '#5C5C5C',
+      edge: 'rgba(255,255,255,0.06)', scrollEdge: 'rgba(255,255,255,0.04)', hair: 'rgba(255,255,255,0.08)',
+      btn: '#232323', btnShadow: '0 0 0 0.5px rgba(255,255,255,0.10), 0 1px 4px rgba(0,0,0,0.5)', btnOn: '#3A3A3A', icon: '#E0E0E0',
+      push: 'rgba(255,255,255,0.10)', fieldLine: 'rgba(255,255,255,0.14)', clear: 'rgba(255,255,255,0.35)',
+      selection: 'rgba(255,255,255,0.07)', group: '#262626',
+      menu: 'rgba(38,38,38,0.94)', menuSep: 'rgba(255,255,255,0.10)', menuShadow: '0 0 0 0.5px rgba(255,255,255,0.12), 0 10px 30px rgba(0,0,0,0.5)',
+      alert: '#1A1A1A', alertEdge: 'rgba(255,255,255,0.14)', alertTitle: 'rgba(255,255,255,0.88)', scrim: 'rgba(0,0,0,0.35)', sheet: '#262626', warning: '#FFC12E',
+      destructive: '#FF6B6B', destructiveBg: '#532525',
+      green: '#30D158', stopped: '#6C6C6C', ok: '#30D158', dim: '#7C7C7C', prompt: '#5AB0FF',
+      trackOn: '#0091FF', trackOff: 'rgba(255,255,255,0.22)',
+      shadow: '0 0 0 0.5px rgba(255,255,255,0.16), 0 20px 50px rgba(0,0,0,0.6)'
+    };
+    const t = dark ? D : L;
+
+    const seg = (tone, text) => ({ text, color: { o: t.label, d: t.dim, k: t.ok, p: t.prompt }[tone] });
+    const P = {
+      codex: { name: 'codex', cmd: 'codex', host: 'build-mac', server: 'Build server', state: 'running', mode: 'PTY', ports: [],
+        lines: [[seg('p', '› '), seg('o', 'Run the tests.')], [seg('d', '  • Running make test')], [seg('o', '  18 tests passed.')], [], [seg('p', '› ')]] },
+      claude: { name: 'claude', cmd: 'claude', host: 'build-mac', server: 'Build server', state: 'running', mode: 'PTY', ports: [],
+        lines: [[seg('p', '> '), seg('o', 'Draft release notes for 0.1.0')], [seg('d', '  Reading 12 commits since 3dcb2ce…')], [], [seg('o', '  ## 0.1.0')], [seg('o', '  - Native tabs and windows on Mac')], [seg('o', '  - Ports inspector on every platform')], [], [seg('p', '> ')]] },
+      sh: { name: 'sh', cmd: '/bin/sh -l', host: 'build-mac', server: 'Build server', state: 'running', mode: 'PTY',
+        ports: [{ key: 'web', name: 'web', proto: 'TCP', target: '127.0.0.1:8080', addr: '127.0.0.1:8081', on: true }, { key: 'metrics', name: 'metrics', proto: 'UDP', target: '127.0.0.1:9125', addr: '127.0.0.1:9126', on: false }],
+        lines: [
+          [seg('p', '~/clistream $ '), seg('o', 'make test')],
+          [seg('d', 'go test -race ./cmd/... ./internal/... ./scripts/... ./tests/...')],
+          [seg('k', 'ok  '), seg('o', '  internal/activity     0.219s')],
+          [seg('k', 'ok  '), seg('o', '  internal/broker       8.280s')],
+          [seg('d', '?     internal/client      [no test files]')],
+          [seg('k', 'ok  '), seg('o', '  internal/files        0.178s')],
+          [seg('k', 'ok  '), seg('o', '  internal/identity     0.211s')],
+          [seg('k', 'ok  '), seg('o', '  internal/session      0.172s')],
+          [seg('k', 'ok  '), seg('o', '  internal/wire         0.173s')],
+          [seg('d', 'go vet ./cmd/... ./internal/... ./scripts/... ./tests/...')],
+          [seg('p', '~/clistream $ ')]
+        ] },
+      worker: { name: 'worker', cmd: 'worker --sync "./reports"', host: 'linux-01', server: 'Build server', state: 'stopped', exit: 0, mode: 'Pipe', ports: [],
+        lines: [[seg('o', 'synced 214 objects')], [seg('o', 'wrote manifest.json')], [seg('o', '2 objects skipped (unchanged)')]] },
+      sync: { name: 'sync', cmd: 'sync ./reports', host: 'linux-01', server: 'Build server', state: 'running', once: true, files: false, mode: 'Pipe', ports: [],
+        lines: [[seg('o', 'watching ./reports')], [seg('o', 'reports/2026-11-22.csv uploaded')], [seg('o', '')]] }
+    };
+
+    // The focused search field filters rows by the sample query "co".
+    const matches = (id) => !searchState || id.indexOf('co') !== -1;
+    const ringTarget = menuKind === 'cli' ? 'codex' : '';
+    const row = (id) => {
+      const p = P[id];
+      const on = id === sel;
+      return {
+        id, name: p.name, shown: matches(id),
+        caption: p.once ? 'Attach only' : p.state === 'stopped' ? 'Exit ' + p.exit : '',
+        label: p.name + ', ' + (p.state === 'stopped' ? 'stopped, exit ' + p.exit : 'running') + ', ' + p.mode,
+        current: on ? 'true' : 'false',
+        bg: on ? t.selection : 'transparent',
+        ring: id === ringTarget ? 'inset 0 0 0 2px ' + accent : 'none',
+        icon: p.state === 'running' && !revoked ? accent : t.stopped,
+        pick: () => this.setState({ sel: id })
+      };
+    };
+    const hosts = [
+      { name: 'build-mac', os: 'macOS', icon: 'sf-laptopcomputer', ids: ['codex', 'claude', 'sh'] },
+      { name: 'linux-01', os: 'Linux', icon: 'sf-desktopcomputer', ids: ['worker', 'sync'] }
+    ].filter((h) => h.ids.some(matches)).map((h) => Object.assign({}, h, { rows: h.ids.map(row) }));
+    const servers = welcome ? [] : [
+      { name: 'Build server', label: 'Server Build server', meta: revoked ? '' : '2 ms', offline: revoked, offlineText: 'Access revoked', offlineButton: 'Pair Again…',
+        renaming, plain: !renaming, ring: menuKind === 'server' || alertKind === 'remove' ? 'inset 0 0 0 2px ' + accent : 'none', hosts },
+      { name: 'Home lab', label: 'Server Home lab', meta: '', offline: true, offlineText: 'Offline', offlineButton: 'Retry', renaming: false, plain: true, ring: 'none', hosts: [] }
+    ].filter((s) => !searchState || s.hosts.length > 0);
+
+    const item = (label, hl) => ({ item: true, sep: false, label, bg: hl ? accent : 'transparent', fg: hl ? '#FFFFFF' : t.label });
+    const sep = { item: false, sep: true };
+    const menus = {
+      cli: { label: 'codex actions', left: '200px', top: '160px', items: [
+        item('Open in New Tab'), item('Open in New Window'), sep,
+        item('Restart…', true), item('Stop…'), sep,
+        item('Show Ports'), item('Show in Finder')
+      ] },
+      server: { label: 'Build server actions', left: '150px', top: '84px', items: [
+        item('Rename…', true), item('Reconnect'), sep, item('Remove Server…')
+      ] }
+    };
+
+    const p = P[sel] || P.sh;
+    const lines = p.lines.map((segs, i) => ({ segs, cursor: p.state === 'running' && !revoked && i === p.lines.length - 1 }));
+    const ports = p.ports.map((pt, i) => {
+      const on = fw[sel + pt.key] === undefined ? pt.on : fw[sel + pt.key];
+      return Object.assign({}, pt, {
+        on, checked: on ? 'true' : 'false', switchLabel: 'Forward ' + pt.name,
+        sep: i === 0 ? 'transparent' : t.hair,
+        track: on ? t.trackOn : t.trackOff, justify: on ? 'flex-end' : 'flex-start',
+        toggle: () => this.setState({ fw: Object.assign({}, fw, { [sel + pt.key]: !on }) })
+      });
+    });
+    const showPorts = !welcome && showPortsState;
+    const mono = "'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace";
+    const sans = "-apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif";
+    const ab = (label, kind) => kind === 'destructive' ? { label, bg: t.destructiveBg, fg: t.destructive, weight: 500 }
+      : kind === 'default' ? { label, bg: accent, fg: '#FFFFFF', weight: 400 } : { label, bg: t.push, fg: t.label, weight: 400 };
+    const alerts = {
+      remove: { title: 'Remove “Build server”?', message: 'This Mac forgets the server and its pairing. The device stays enrolled until the server operator revokes it.', dir: 'row', buttons: [ab('Remove', 'destructive'), ab('Cancel', 'default')] },
+      stop: { title: 'Stop “' + (P[sel] || P.sh).name + '”?', message: 'This ends the current run for everyone connected.', dir: 'row', buttons: [ab('Stop', 'destructive'), ab('Cancel', 'default')] },
+      pairError: { title: 'Couldn’t pair this device', message: 'The invitation expired or was replaced. Ask the server operator for a new one with clistreamd invite.', dir: 'column', buttons: [ab('OK', 'default')] }
+    };
+    const ring = '0 0 0 3.5px ' + accentRing;
+    const field = (label, aria, value, placeholder, font, focused) => ({ label, aria, value, placeholder, font, field: true, text: false, ring: focused ? ring : 'none' });
+    const textRow = (label, value, font) => ({ label, value, font, field: false, text: true });
+    const sb = (label, primary, disabled) => ({ label, disabled: disabled ? 'true' : 'false', opacity: disabled ? 0.45 : 1, bg: primary ? accent : t.push, fg: primary ? '#FFFFFF' : t.label });
+    const cur = P[sel] || P.sh;
+    const sheets = {
+      pair: { title: 'Pair with a server', message: 'Paste the invitation from clistreamd. Invitations last three minutes.',
+        rows: [field('Invitation:', 'Invitation', '', 'clistream://host/?token=…', sans, true)], hasHelp: false, help: '',
+        buttons: [sb('Cancel'), sb('Pair', true, true)] },
+      pairFilled: { title: 'Pair with a server', message: 'Check the server before pairing. This device can then control every CLI on it.',
+        rows: [field('Invitation:', 'Invitation', '••••••••••••••••••••••••••••••••••••••', '', sans, false), textRow('Server:', '192.168.1.20:7443', sans), textRow('Identity:', '4F2A 91C3 0B7E 55D1 … 7D0E', mono)],
+        hasHelp: false, help: '', buttons: [sb('Cancel'), sb('Pair', true)] },
+      command: { title: (cur.state === 'running' ? 'Restart “' : 'Start “') + cur.name + '”', message: cur.state === 'running' ? 'Restarting ends the current run for everyone connected.' : 'Starts a new run with this command.',
+        rows: [field('Command:', 'Command', cur.cmd, '', mono, true)], hasHelp: true, help: 'Quote arguments that contain spaces. Use "" for an empty argument.',
+        buttons: [sb('Cancel'), sb(cur.state === 'running' ? 'Restart' : 'Start', true)] }
+    };
+    const hasAlert = !!alerts[alertKind] && (!welcome || alertKind === 'pairError');
+    const hasSheet = !welcome && !!sheets[sheetKind] || (welcome && (sheetKind === 'pair' || sheetKind === 'pairFilled'));
+    const managed = p.state === 'running' && !p.once;
+    const pipe = p.mode === 'Pipe' && p.state === 'running';
+
+    return {
+      t, accent, accentRing, welcome, session: !welcome, servers, lines, ports, revoked,
+      hasAlert, al: alerts[alertKind] || alerts.stop, hasSheet, sh: sheets[sheetKind] || sheets.pair, hasModal: hasAlert || hasSheet,
+      statusDot: revoked ? t.stopped : t.green, statusText: revoked ? 'Disconnected' : 'Connected · 2 ms',
+      hasMenu: menuKind !== 'none' && !hasAlert && !hasSheet, menu: menus[menuKind] || menus.cli,
+      noPorts: ports.length === 0, hasPorts: ports.length > 0, showPorts,
+      portsPressed: showPorts ? 'true' : 'false', portsBg: showPorts ? t.btnOn : 'transparent',
+      togglePorts: () => this.setState({ ports: !showPortsState }),
+      searchOpen: searchState, searchValue: searchState ? 'co' : '',
+      searchShadow: searchState ? '0 0 0 3.5px ' + accentRing + ', ' + t.btnShadow : t.btnShadow,
+      openSearch: () => this.setState({ search: true }), closeSearch: () => this.setState({ search: false }),
+      title: welcome ? 'Servers' : p.name,
+      subtitle: welcome ? 'None paired' : p.host + ' — ' + p.server,
+      tb: { managed: managed && !revoked, pipe: pipe && !revoked, group: (managed || pipe) && !revoked, stopped: p.state === 'stopped' && !revoked, once: !!p.once && !revoked, revoked, finder: p.files !== false && !revoked },
+      modeLine: p.state === 'running' ? p.mode : p.mode + ' · Stopped'
+    };
+  }
+}
+</script>
+</body>
+</html>

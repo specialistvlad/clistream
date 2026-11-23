@@ -6,6 +6,29 @@ The design target for the CLIStream Mac app on macOS 27, in formats that people 
 |---|---|
 | [spec.md](spec.md) | Every screen, state, menu, sheet and alert, with copy, measurements and the SwiftUI component that draws each element. |
 | [tokens.json](tokens.json) | Colors for light and dark, typography, metrics and SF Symbol names, each tagged with its source in Apple's UI Kit. |
+| [implementation-prompt.md](implementation-prompt.md) | Handoff prompt for a coding agent that implements this design. |
+| [boards/](boards/) | Canvas sources: `Main.dc.html` (every main-window state) and `MenuBar.dc.html`. |
+
+## Board states
+
+Each window board on the canvas renders `Main.dc.html` with these props. Unlisted props keep their defaults: light appearance, `sh` selected, connected, nothing open.
+
+| Board | Props |
+|---|---|
+| Main window, light | defaults |
+| Main window, dark | `appearance="dark"` `portsOpen` `menu="cli"` |
+| Server context menu | `menu="server"` `searchOpen` |
+| Inline server rename | `appearance="dark"` `renaming` `selected="worker"` |
+| First launch | `screen="welcome"` |
+| Access revoked | `connection="revoked"` |
+| Pair sheet, empty | `screen="welcome"` `sheet="pair"` |
+| Pair sheet, link pasted | `sheet="pairFilled"` |
+| Pairing error | `screen="welcome"` `alert="pairError"` |
+| Restart command sheet | `sheet="command"` |
+| Stop alert | `alert="stop"` |
+| Remove Server alert | `alert="remove"` |
+
+Other props: `selected` (`codex`, `claude`, `sh`, `worker`, `sync`) and `accent`.
 
 ## Using this reference
 
