@@ -141,8 +141,8 @@ extension NativeSessionTests {
     XCTAssertTrue(pipe.waitForExistence(timeout: 15))
     XCTAssertFalse(header.exists)
     pipe.click()
-    let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
-    terminal.typeText("surviving-profile\n")
+    expectOutput("preview-ready", in: app)
+    app.typeText("surviving-profile\n")
     expectOutput("out:surviving-profile", in: app)
     app.menuBarItems["Server"].click()
     try clickMacMenuItem("Remove Server…", in: app)
