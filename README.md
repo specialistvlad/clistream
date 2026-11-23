@@ -110,7 +110,7 @@ Run `clistreamd devices` to list enrolled fingerprints and `clistreamd revoke FI
 Run `make test e2e` for race-enabled Go tests, vet and multi-process acceptance tests. Use `make dist` to build checksummed Linux and macOS archives for amd64 and arm64. On macOS with Xcode and XcodeGen, `make apple` builds the shared Go XCFramework and generates the native project.
 
 - [Product requirements](docs/requirements.md)
-- [Apple client interaction design](docs/apple-client-design.md)
+- [Apple client interaction design](docs/apple-client-design.md) and [macOS design reference](docs/design/macos/README.md)
 - [Wire protocol](docs/protocol.md)
 - [Implementation plan](docs/implementation-plan.md) and [verification record](docs/verification.md)
 - [MIT license](LICENSE)

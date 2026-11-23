@@ -6,7 +6,7 @@ CLIStream has a dedicated macOS application and a universal iPhone and iPad appl
 
 `apple/Desktop` owns AppKit window tabbing and the Finder-style browser. `apple/Mobile` owns compact and split-view navigation. The shared views in `apple/App` display a session, edit commands and forward user actions to a `Connection` scoped to a server and supervisor. Each connection owns its terminal renderer, stream and port forwards. Closing one tab releases only that tab’s resources.
 
-`Core.swift` translates actions into requests to the Go bridge in `apple/Bridge`. The bridge owns native handles. Supervisor discovery, run output and QUIC attachments live in `internal/client`, where the Go CLI can use them as well. Layout changes belong in Swift and use the same actions as existing controls.
+`Core.swift` translates actions into requests to the Go bridge in `apple/Bridge`. The bridge owns native handles. Supervisor discovery, run output and QUIC attachments live in `internal/client`, where the Go CLI can use them as well. Layout changes belong in Swift and use the same actions as existing controls. The macOS design target, with measurements from Apple's macOS 27 UI Kit, is in the [macOS design reference](design/macos/README.md).
 
 ## Pair and discover
 
