@@ -98,6 +98,19 @@ final class SessionTests: XCTestCase {
       // On the closed Duo the software keyboard leaves only a few rows for a menu.
       // Dismiss it before browsing all the arrow commands.
       if app.keyboards.firstMatch.exists {
+        if duo {
+          // A fresh system keyboard can present its one-time QuickPath tutorial.
+          // Its keyboard overlay intercepts input intended for the native menu.
+          let tutorial = NSPredicate(format: "label BEGINSWITH %@", "Speed up your typing by sliding")
+          for surface in [app, XCUIApplication(bundleIdentifier: "com.apple.springboard")] {
+            let message = surface.staticTexts.matching(tutorial).firstMatch
+            if message.waitForExistence(timeout: 1) {
+              tap(surface.buttons["Continue"].firstMatch)
+              XCTAssertTrue(message.waitForNonExistence(timeout: 8))
+              break
+            }
+          }
+        }
         try await selectKey("Hide Keyboard")
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 10))
       }
