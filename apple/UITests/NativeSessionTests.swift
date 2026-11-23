@@ -230,6 +230,9 @@ final class NativeSessionTests: XCTestCase {
 
   @MainActor func testEditArgumentsAndRestart() async throws {
     let app = try await openPipe()
+    #if os(iOS)
+      expectOutput("preview-ready", in: app)
+    #endif
     action("Restart…", app)
     let field = app.textFields["command-line"].firstMatch
     if !field.waitForExistence(timeout: 12) {
@@ -305,9 +308,28 @@ final class NativeSessionTests: XCTestCase {
 
   @MainActor private func action(_ title: String, _ app: XCUIApplication) {
     #if os(iOS)
-      activate(app.buttons["Session"].firstMatch)
+      let menu = app.buttons["Session"].firstMatch
+      guard menu.wait(for: \.isHittable, toEqual: true, timeout: 12) else {
+        recordDuoFailure("session-menu", in: app)
+        XCTFail("The Session toolbar button was unavailable")
+        return
+      }
+      // Keep the gesture on the active display while UIKit replaces the
+      // toolbar button's accessibility element with the presented menu.
+      let frame = menu.frame
+      let origin = app.frame.origin
+      app.coordinate(withNormalizedOffset: .zero)
+        .withOffset(CGVector(dx: frame.midX - origin.x, dy: frame.midY - origin.y)).tap()
+      let item = app.buttons[title].firstMatch
+      guard item.wait(for: \.isHittable, toEqual: true, timeout: 12) else {
+        recordDuoFailure("session-action", in: app)
+        XCTFail("The Session menu did not present " + title)
+        return
+      }
+      activate(item)
+    #else
+      activate(app.buttons[title].firstMatch)
     #endif
-    activate(app.buttons[title].firstMatch)
   }
 
   @MainActor func capture(_ name: String, _ app: XCUIApplication) async throws {
