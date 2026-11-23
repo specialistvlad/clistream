@@ -33,6 +33,12 @@ extension NativeSessionTests {
         screen.name = "files-checkpoint-window"
         screen.lifetime = .keepAlways
         self.add(screen)
+        if let state = try? await fixtureResponse("files/provider-state") {
+          let report = XCTAttachment(string: state)
+          report.name = "files-provider-state"
+          report.lifetime = .keepAlways
+          self.add(report)
+        }
       }
       files.terminate()
       app.activate()

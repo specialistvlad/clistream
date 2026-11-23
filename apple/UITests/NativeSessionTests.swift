@@ -121,6 +121,8 @@ final class NativeSessionTests: XCTestCase {
       func showServerList(for id: String) {
         let row = app.descendants(matching: .any)["session-" + id].firstMatch
         if row.waitForExistence(timeout: 6) && row.isHittable { return }
+        let sidebar = app.buttons["Show Sidebar"].firstMatch
+        if sidebar.isHittable { sidebar.tap() }
         let add = app.buttons["workspace-add-server"].firstMatch
         if !add.exists || !add.isHittable {
           let back = app.navigationBars.descendants(matching: .any)["Back"].firstMatch
@@ -349,6 +351,15 @@ final class NativeSessionTests: XCTestCase {
 
   @MainActor private func action(_ title: String, _ app: XCUIApplication) {
     #if os(iOS)
+      let command = title.replacingOccurrences(of: "…", with: "")
+      let identifier = "session-" + command.lowercased().replacingOccurrences(of: " ", with: "-")
+      // Regular width places lifecycle commands directly in the toolbar. A
+      // presented Session menu can expose both copies to accessibility.
+      let toolbarAction = app.navigationBars.buttons[identifier].firstMatch
+      if toolbarAction.isHittable {
+        toolbarAction.tap()
+        return
+      }
       let menu = app.buttons["Session"].firstMatch
       guard menu.wait(for: \.isHittable, toEqual: true, timeout: 12) else {
         recordDuoFailure("session-menu", in: app)
@@ -362,8 +373,6 @@ final class NativeSessionTests: XCTestCase {
       let origin = appFrame.origin
       app.coordinate(withNormalizedOffset: .zero)
         .withOffset(CGVector(dx: frame.midX - origin.x, dy: frame.midY - origin.y)).tap()
-      let command = title.replacingOccurrences(of: "…", with: "")
-      let identifier = "session-" + command.lowercased().replacingOccurrences(of: " ", with: "-")
       let labels = [title, command, command + "..."]
       // Read the enabled state and bounds from the same native menu snapshot.
       // UIKit can replace an action between two AX queries during presentation.

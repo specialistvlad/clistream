@@ -209,6 +209,7 @@ extension NativeSessionTests {
     let clear = search.buttons.firstMatch
     XCTAssertTrue(clear.exists)
     clear.tap()
+    search.tap()
     search.typeText("sh")
     XCTAssertTrue(row.waitForExistence(timeout: 8))
     XCTAssertFalse(oneShot.exists)

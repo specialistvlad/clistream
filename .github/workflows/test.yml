@@ -128,22 +128,13 @@ jobs:
             go run ./scripts/apple-report "$bundle" > "native-reports/$(basename "$bundle" .xcresult).json"
           done
           if [[ -n ${SIMULATOR_ID:-} ]] && jq -e '.cases[] | select(.result == "Failed" and (.test | contains("testFilesWorkspaceRoundTrip")))' native-reports/native.json >/dev/null; then
-            group=$(xcrun simctl get_app_container "$SIMULATOR_ID" com.vlk.clistream.acceptance group.com.vlk.clistream.acceptance.workspace || true)
-            if [[ -f "$group/CLIStream/finder-servers.json" ]]; then
-              jq 'length | "App Group server count \(.)"' -r "$group/CLIStream/finder-servers.json"
-            else
-              echo "Files catalog missing from app group"
-            fi
-            if [[ -f "$group/CLIStream/finder-index.plist" ]]; then
-              plutil -convert json -o - "$group/CLIStream/finder-index.plist" | jq '.nodes | length | "Provider index item count \(.)"' -r
-            fi
-            xcrun simctl spawn "$SIMULATOR_ID" log show --last 45m --style compact --predicate 'subsystem == "com.vlk.clistream" AND category == "FileProvider"' | tail -25
+            bash apple/inspect-mobile-provider.sh "$SIMULATOR_ID" | tee native-reports/mobile-files-state.txt
           fi
       - uses: actions/upload-artifact@v4
         if: ${{ failure() && steps.native-ui.outcome == 'failure' && matrix.device != 'shared' }}
         with:
           name: native-report-${{ matrix.device }}
-          path: native-reports/*.json
+          path: native-reports/
           if-no-files-found: ignore
       - name: Collect gallery screenshots
         if: always() && matrix.device != 'shared'
@@ -157,7 +148,7 @@ jobs:
             jq -r '.[] | .attachments[].suggestedHumanReadableName | select(test("^audit-[0-9]+-[0-9]+-[a-z-]+_")) | split("_")[0]' "$staging/manifest.json"
             jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | test("^(command-review|ports-inspector|terminal-output|mobile-repair|mobile-invitation|mobile-paired-list|files-checkpoint|finder-open-error|finder-locations|finder-settings|finder-checkpoint)-window_")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0])] | @tsv' "$staging/manifest.json" |
               while IFS=$'\t' read -r file name; do cp "$staging/$file" "results/$name.png"; done
-            jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | test("^(finder-(open-error|locations|settings|checkpoint)-message|mobile-repair-state)_")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0])] | @tsv' "$staging/manifest.json" |
+            jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | test("^(finder-(open-error|locations|settings|checkpoint)-message|mobile-repair-state|files-provider-state)_")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0])] | @tsv' "$staging/manifest.json" |
               while IFS=$'\t' read -r file name; do cp "$staging/$file" "results/$name.txt"; done
             jq -r '.[] | .attachments[] | select(.suggestedHumanReadableName | startswith("failed-desktop-")) | [.exportedFileName, (.suggestedHumanReadableName | split("_")[0])] | @tsv' "$staging/manifest.json" |
               while IFS=$'\t' read -r file name; do cp "$staging/$file" "results/$name.png"; done

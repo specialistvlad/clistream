@@ -366,6 +366,20 @@ while IFS= read -r line; do echo "out:$line"; echo "err:$line" >&2; done
 		}
 		w.Write(data)
 	}
+	mux.HandleFunc(path+"files/provider-state", func(w http.ResponseWriter, r *http.Request) {
+		id := os.Getenv("SIMULATOR_ID")
+		if id == "" {
+			fmt.Fprint(w, "Simulator diagnostics are collected on the Mac host.")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "bash", "apple/inspect-mobile-provider.sh", id)
+		cmd.Stdout = w
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintln(w, "Simulator inspection interrupted.")
+		}
+	})
 	if id := os.Getenv("SIMULATOR_ID"); id != "" {
 		mux.HandleFunc(path+"open-repair-invitation", issue)
 		prepareInput := func(w http.ResponseWriter, r *http.Request) {
