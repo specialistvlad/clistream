@@ -294,19 +294,23 @@ final class NativeSessionTests: XCTestCase {
     field.typeKey("a", modifierFlags: .command)
     field.typeText("'")
     expectCommand("'")
-    XCTAssertTrue(app.buttons["Restart"].firstMatch.wait(for: \.isEnabled, toEqual: false, timeout: 5))
+    #if os(macOS)
+      let confirm = app.buttons["desktop-sheet-confirm"].firstMatch
+    #else
+      let confirm = app.buttons["workspace-confirm"].firstMatch
+    #endif
+    XCTAssertTrue(confirm.wait(for: \.isEnabled, toEqual: false, timeout: 5))
     field.typeKey("a", modifierFlags: .command)
     field.typeText(saved + " 'two words' ")
     field.typeText("\"\"")
     expectCommand(saved + " 'two words' \"\"")
     try await capture("restart-confirmation",app)
     #if os(iOS)
-      let confirm = app.buttons["workspace-confirm"].firstMatch
       XCTAssertTrue(app.buttons["workspace-cancel"].firstMatch.wait(for: \.isHittable, toEqual: true, timeout: 10))
       XCTAssertTrue(confirm.wait(for: \.isHittable, toEqual: true, timeout: 10))
       activate(confirm)
     #else
-      activate(app.buttons["Restart"].firstMatch)
+      activate(confirm)
     #endif
     let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
     expectOutput("args=2", in: app)

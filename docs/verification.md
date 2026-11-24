@@ -12,7 +12,9 @@ Open `docs/screenshots/index.html` in the checkout used for capture. The gallery
 
 ## Apple design revision · November 24, 2026
 
-The macOS and iOS Simulator schemes compiled with Xcode 27.1 using `build-for-testing`. Hosted UI results and gallery review are pending.
+The macOS and iOS Simulator schemes compiled with Xcode 27.1 using `build-for-testing`. Local `make test e2e` and the hosted macOS and Linux Go jobs passed. The Mac gallery passed its file check. The first Mac UI run reported one failure in Edit Arguments and Restart. The test now addresses the sheet’s confirmation by identifier because the toolbar also has a Restart control. [Initial hosted matrix](https://github.com/specialistvlad/clistream/actions/runs/45311058676)
+
+Both the iOS 27.2 Duo run and a fresh iOS 27.1 run failed simulator data migration before XCTest started. Duo UI and gallery verification remain open. [Duo retry](https://github.com/specialistvlad/clistream/actions/runs/45312693750)
 
 ## Mobile redesign and Files · November 23, 2026
 

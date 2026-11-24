@@ -18,6 +18,7 @@ private struct DesktopFormSheet<Fields: View>: View {
         Spacer()
         Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
         Button(action, action: submit).disabled(!enabled).keyboardShortcut(.defaultAction)
+          .accessibilityIdentifier("desktop-sheet-confirm")
       }
     }.padding(20).frame(width: 440)
   }
