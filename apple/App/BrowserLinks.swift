@@ -5,6 +5,7 @@ struct ProjectLink: View {
     Link(destination: URL(string: "https://github.com/specialistvlad/clistream")!) {
       Label("CLIStream on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
         .labelStyle(.iconOnly)
+        .foregroundStyle(.primary)
     }
     .accessibilityIdentifier("project-github")
   }

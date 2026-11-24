@@ -200,6 +200,7 @@ private struct DesktopWindow: View {
           .accessibilityIdentifier("session-ports").help("Show or hide port forwarding")
       }
     }
+    ToolbarSpacer(.fixed)
     ToolbarItem { ProjectLink().help("Open the CLIStream project on GitHub") }
     ToolbarItem {
       DesktopSearchField(query: $state.query).frame(width: 160)
