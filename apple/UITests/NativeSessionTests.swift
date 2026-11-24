@@ -175,6 +175,8 @@ final class NativeSessionTests: XCTestCase {
     XCTAssertTrue(retry.waitForExistence(timeout: 25), "The offline server must offer Retry")
     captureCurrent("server-offline", app)
     activate(app.descendants(matching: .any)["session-" + pipe].firstMatch)
+    XCTAssertTrue(field.wait(for: \.isHittable, toEqual: true, timeout: 15))
+    expectOutput("out:first-server-marker", in: app)
     activate(field)
     field.typeText("still-connected\n")
     XCTAssertTrue(output("out:still-connected").waitForExistence(timeout: 10))

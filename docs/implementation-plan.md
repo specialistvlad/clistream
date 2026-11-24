@@ -16,6 +16,8 @@ The follow-up audit identified four interface corrections. Render standard title
 
 Compile both Apple schemes and exercise the Mac Session and CLI contextual menus, Mac TCP and UDP forwarding controls, iPad sidebar and attach-only terminal, and compact Phone and Duo layouts on hosted runners. Use the Mac gallery to compare rendered menu symbols and the iPad gallery to compare toolbar groups. Keep the current native guide, README and requirements behavior and record the verification results.
 
+Compact iPhone and Duo navigation now opens a CLI through an explicit row action. This avoids relying on split-view selection changes to navigate when the same row is selected again. Regular-width iPad and Duo keep the native selection link. macOS, the Go daemon, supervisor and CLI on macOS and Linux, protocol and deployment need no changes. The hosted two-server case checks that the restored terminal contains the first server’s output before sending a new marker to it. Record the focused and matrix results in the verification record.
+
 ## Universal iOS redesign and Files · November 23, 2026
 
 | Screens in the design | Current view | Target |

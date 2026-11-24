@@ -236,17 +236,16 @@ struct MobileServers: View {
     }.accessibilityIdentifier("workspace-host-" + host)
   }
   private func leaf(_ row: WorkspaceSession, detail: String = "") -> some View {
-    NavigationLink(value: row.id) {
-      HStack {
-        Image(systemName: "terminal").foregroundStyle(
-          row.item.running ? Color.accentColor : .secondary)
-        Text(row.item.Name)
-        Spacer()
-        let label =
-          !row.item.running
-          ? row.item.exitCode.map { "Exit \($0)" } ?? "Stopped"
-          : (row.item.revision ?? 0) == 0 ? "Attach only" : detail
-        if !label.isEmpty { Text(label).font(.caption).foregroundStyle(.secondary) }
+    Group {
+      if regular {
+        NavigationLink(value: row.id) { sessionLabel(row.item, detail: detail) }
+      } else {
+        Button {
+          activate(row)
+        } label: {
+          sessionLabel(row.item, detail: detail)
+            .contentShape(Rectangle())
+        }.buttonStyle(.plain)
       }
     }.accessibilityIdentifier("session-" + row.item.id)
       .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -264,5 +263,26 @@ struct MobileServers: View {
           }.tint(.accentColor)
         }
       }
+  }
+
+  private func sessionLabel(_ item: SessionInfo, detail: String) -> some View {
+    let caption = if !item.running {
+      item.exitCode.map { "Exit \($0)" } ?? "Stopped"
+    } else if (item.revision ?? 0) == 0 {
+      "Attach only"
+    } else {
+      detail
+    }
+    return HStack {
+      Image(systemName: "terminal").foregroundStyle(item.running ? Color.accentColor : .secondary)
+      Text(item.Name)
+      Spacer()
+      if !caption.isEmpty { Text(caption).font(.caption).foregroundStyle(.secondary) }
+      if !regular {
+        Image(systemName: "chevron.right")
+          .font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+          .accessibilityHidden(true)
+      }
+    }
   }
 }
