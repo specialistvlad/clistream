@@ -107,6 +107,7 @@ private struct DesktopConnectionStatus: View {
 }
 
 struct DesktopPorts: View {
+  @Environment(\.openURL) private var openURL
   @ObservedObject var connection: Connection
   let item: SessionInfo
   var body: some View {
@@ -135,7 +136,8 @@ struct DesktopPorts: View {
                   NSPasteboard.general.setString(address, forType: .string)
                 }.controlSize(.small)
                 if let url = ForwardLink.url(protocolName: item.Ports?[name], address: address) {
-                  Link("Open", destination: url).accessibilityIdentifier("forward-open-" + name)
+                  Button("Open") { openURL(url) }
+                    .controlSize(.small).accessibilityIdentifier("forward-open-" + name)
                 }
               }
             }

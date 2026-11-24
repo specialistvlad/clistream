@@ -46,7 +46,7 @@ struct MobileServers: View {
           text: $query, placement: !regular ? .toolbar : .sidebar, prompt: "Search")
       }
     }
-    .navigationTitle("Servers")
+    .navigationTitle(regular ? "" : "Servers")
     .navigationBarTitleDisplayMode(closedHinge ? .inline : .automatic)
     .safeAreaInset(edge: .trailing, spacing: 0) {
       if closedHinge && !regular && invitations.page == nil {
@@ -64,9 +64,10 @@ struct MobileServers: View {
       }
       if invitations.page == nil && (!closedHinge || regular) {
         if !regular { ToolbarItem(placement: .topBarLeading) { ProjectLink() } }
-        ToolbarItemGroup(placement: .topBarTrailing) {
-          serverButtons
-          if regular && !isDuo { ProjectLink() }
+        ToolbarItemGroup(placement: .topBarTrailing) { serverButtons }
+        if regular && !isDuo {
+          ToolbarSpacer(.fixed, placement: .topBarTrailing)
+          ToolbarItem(placement: .topBarTrailing) { ProjectLink() }
         }
       }
     }

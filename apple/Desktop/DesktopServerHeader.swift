@@ -41,6 +41,7 @@ struct DesktopServerHeader: View {
         Button("Reconnect") { workspace.retry(server) }
         Divider()
         Button("Remove Server…", systemImage: "trash") { state.alert = .remove(server) }
+          .labelStyle(.titleAndIcon)
       }
     }
   }

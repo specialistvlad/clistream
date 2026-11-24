@@ -138,25 +138,25 @@ struct DesktopSidebar: View {
           Divider()
           Button(item.running ? "Restart" : "Start", systemImage: item.running ? "arrow.counterclockwise" : "play.fill") {
             state.perform(item.running ? .restart : .start, on: row, using: openWindow)
-          }
+          }.labelStyle(.titleAndIcon)
           if item.running {
-            Button("Stop", systemImage: "stop") { state.perform(.stop, on: row, using: openWindow) }
+            Button("Stop", systemImage: "stop") { state.perform(.stop, on: row, using: openWindow) }.labelStyle(.titleAndIcon)
           }
           if item.editable == true {
-            Button("Edit Arguments…", systemImage: "pencil") { state.perform(.edit, on: row, using: openWindow) }
+            Button("Edit Arguments…", systemImage: "pencil") { state.perform(.edit, on: row, using: openWindow) }.labelStyle(.titleAndIcon)
           }
         }
         if item.Mode == "pipe" && workspace.existingTerminal(row)?.attached == true {
-          Button("Send EOF", systemImage: "text.append") { state.perform(.eof, on: row, using: openWindow) }
+          Button("Send EOF", systemImage: "text.append") { state.perform(.eof, on: row, using: openWindow) }.labelStyle(.titleAndIcon)
         }
         if revoked || (item.running && workspace.existingTerminal(row)?.attached != true) {
-          Button("Reconnect", systemImage: "arrow.clockwise") { state.perform(.reconnect, on: row, using: openWindow) }
+          Button("Reconnect", systemImage: "arrow.clockwise") { state.perform(.reconnect, on: row, using: openWindow) }.labelStyle(.titleAndIcon)
         }
         Divider()
         if !revoked && item.workspace == true {
-          Button("Show in Finder", systemImage: "folder") { state.perform(.finder, on: row, using: openWindow) }
+          Button("Show in Finder", systemImage: "folder") { state.perform(.finder, on: row, using: openWindow) }.labelStyle(.titleAndIcon)
         }
-        Button("Show Ports", systemImage: "sidebar.right") { state.perform(.ports, on: row, using: openWindow) }
+        Button("Show Ports", systemImage: "sidebar.right") { state.perform(.ports, on: row, using: openWindow) }.labelStyle(.titleAndIcon)
       }
     }
   }

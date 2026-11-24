@@ -75,20 +75,21 @@ struct DesktopCommands: Commands {
       let running = context?.row?.item.running ?? true
       Button(running ? "Restart" : "Start", systemImage: running ? "arrow.counterclockwise" : "play.fill") {
         context?.perform(running ? .restart : .start)
-      }.keyboardShortcut("r").disabled(context?.managed != true || context?.revoked == true)
+      }
+      .labelStyle(.titleAndIcon).keyboardShortcut("r").disabled(context?.managed != true || context?.revoked == true)
       Button("Stop", systemImage: "stop") { context?.perform(.stop) }
-        .keyboardShortcut(".").disabled(!running || context?.managed != true || context?.revoked == true)
+        .labelStyle(.titleAndIcon).keyboardShortcut(".").disabled(!running || context?.managed != true || context?.revoked == true)
       Button("Edit Arguments…", systemImage: "pencil") { context?.perform(.edit) }
-        .keyboardShortcut("<").disabled(context?.row?.item.editable != true || context?.revoked == true)
+        .labelStyle(.titleAndIcon).keyboardShortcut("<").disabled(context?.row?.item.editable != true || context?.revoked == true)
       Button("Send EOF", systemImage: "text.append") { context?.perform(.eof) }
-        .disabled(context?.row?.item.Mode != "pipe" || context?.attached != true)
+        .labelStyle(.titleAndIcon).disabled(context?.row?.item.Mode != "pipe" || context?.attached != true)
       Button("Reconnect", systemImage: "arrow.clockwise") { context?.perform(.reconnect) }
-        .disabled(context?.reconnect != true)
+        .labelStyle(.titleAndIcon).disabled(context?.reconnect != true)
       Divider()
       Button("Show in Finder", systemImage: "folder") { context?.perform(.finder) }
-        .keyboardShortcut("r", modifiers: [.option, .command]).disabled(context?.finder != true)
+        .labelStyle(.titleAndIcon).keyboardShortcut("r", modifiers: [.option, .command]).disabled(context?.finder != true)
       Button("Show Ports", systemImage: "sidebar.right") { context?.state.ports.toggle() }
-        .disabled(context?.row == nil).keyboardShortcut("i", modifiers: [.option, .command])
+        .labelStyle(.titleAndIcon).disabled(context?.row == nil).keyboardShortcut("i", modifiers: [.option, .command])
     }
     CommandMenu("Server") {
       Button("Rename…") { if let context, let server = context.server { context.rename(server) } }
@@ -98,7 +99,7 @@ struct DesktopCommands: Commands {
       Divider()
       Button("Remove Server…", systemImage: "trash") {
         if let server = context?.server { context?.state.alert = .remove(server) }
-      }.keyboardShortcut(.delete).disabled(context?.server == nil)
+      }.labelStyle(.titleAndIcon).keyboardShortcut(.delete).disabled(context?.server == nil)
     }
   }
 }

@@ -83,7 +83,12 @@ final class NativeSessionTests: XCTestCase {
         let endpoint = address.label
       #endif
       let port = try XCTUnwrap(endpoint.split(separator: ":").last.flatMap { UInt16($0) })
-      XCTAssertEqual(app.descendants(matching: .any)["forward-open-" + proto].firstMatch.exists, proto == "tcp")
+      #if os(macOS)
+        let openForward = app.buttons["forward-open-" + proto].firstMatch
+      #else
+        let openForward = app.descendants(matching: .any)["forward-open-" + proto].firstMatch
+      #endif
+      XCTAssertEqual(openForward.exists, proto == "tcp")
       if proto == "tcp" { try await capture("port-forwards", app) }
       closePorts()
       try exchange(port: port, datagram: proto == "udp")
@@ -476,6 +481,10 @@ final class NativeSessionTests: XCTestCase {
     XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
     try await capture("terminal", app)
     XCTAssertFalse(app.buttons["Restart"].exists)
+    #if os(iOS)
+      XCTAssertFalse(app.buttons["session-stop"].exists)
+      XCTAssertFalse(app.buttons["session-edit-arguments"].exists)
+    #endif
     let previous = try await fixtureResponse("CONTROL-COUNT")
     #if os(iOS)
       openTerminalKeys(in: app)

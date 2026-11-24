@@ -12,6 +12,10 @@ Build sidebar and toolbars, immediate lifecycle and separate command editing, TC
 
 Compile each slice and both schemes after shared changes. Update native lifecycle, pairing, Ports, Mac command and adaptive mobile cases. Verify clicked-row and key-window routing, saved arguments, edits, TCP browser targets, and the shared native and Go session on hosted runners. Capture each revised board in both appearances, including Duo poses. Reconcile README, native guide, requirements and security coverage and record the hosted results. Push to main after local verification.
 
+The follow-up audit identified four interface corrections. Render standard title-and-icon labels in Mac menus, use a native button for Open in Mac Ports, give GitHub a separate placement in the iPad sidebar toolbar, and hide managed run controls for mobile attach-only or revoked sessions. The iPad and Duo inner sidebars use the titleless toolbar in the design board. The iPhone and Duo outer layouts retain their Servers title. These view changes reuse the existing shared connections and URL handling. Linux and macOS Go binaries, protocol, credentials, deployment and workspace behavior require no changes.
+
+Compile both Apple schemes and exercise the Mac Session and CLI contextual menus, Mac TCP and UDP forwarding controls, iPad sidebar and attach-only terminal, and compact Phone and Duo layouts on hosted runners. Use the Mac gallery to compare rendered menu symbols and the iPad gallery to compare toolbar groups. Keep the current native guide, README and requirements behavior and record the verification results.
+
 ## Universal iOS redesign and Files · November 23, 2026
 
 | Screens in the design | Current view | Target |

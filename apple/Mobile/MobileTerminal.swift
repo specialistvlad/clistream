@@ -182,18 +182,20 @@ struct MobileTerminal: View {
       .accessibilityIdentifier("session-ports")
   }
   @ViewBuilder private var lifecycleButtons: some View {
-    let row = target
-    Button(
-      item.running ? "Restart" : "Start",
-      systemImage: item.running ? "arrow.counterclockwise" : "play"
-    ) {
-      Task { await actions.perform(row.item.running ? .restart : .start, row, in: workspace) }
-    }.disabled(revoked || (item.revision ?? 0) == 0)
+    if !revoked && (item.revision ?? 0) > 0 {
+      let row = target
+      Button(
+        item.running ? "Restart" : "Start",
+        systemImage: item.running ? "arrow.counterclockwise" : "play"
+      ) {
+        Task { await actions.perform(row.item.running ? .restart : .start, row, in: workspace) }
+      }
       .accessibilityIdentifier(item.running ? "session-restart" : "session-start")
-    Button("Stop", systemImage: "stop", role: .destructive) {
-      Task { await actions.perform(.stop, row, in: workspace) }
+      Button("Stop", systemImage: "stop", role: .destructive) {
+        Task { await actions.perform(.stop, row, in: workspace) }
+      }
+        .disabled(!item.running).accessibilityIdentifier("session-stop")
     }
-      .disabled(revoked || !item.running || (item.revision ?? 0) == 0).accessibilityIdentifier("session-stop")
   }
   @ViewBuilder private var editArguments: some View {
     if item.editable == true && !revoked {

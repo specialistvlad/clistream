@@ -18,6 +18,8 @@ The focused Mac command-editor case passed. The first Mac run also passed the Fi
 
 Both the iOS 27.2 Duo run and a fresh iOS 27.1 run failed simulator data migration before XCTest started. Duo UI and gallery verification remain open. [Duo retry](https://github.com/specialistvlad/clistream/actions/runs/45312693750)
 
+The follow-up sets the Mac menu label style explicitly, changes Open to a native button, separates the iPad GitHub control, and omits mobile lifecycle actions for attach-only and revoked sessions. Both Xcode schemes compiled with `build-for-testing`. Hosted interaction and visual checks are pending.
+
 ## Mobile redesign and Files · November 23, 2026
 
 | Target | Verified on hosted runners | Still open |
