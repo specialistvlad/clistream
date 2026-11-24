@@ -4,6 +4,14 @@
 
 The clients support live sessions, managed commands, retained results, and named port forwarding. The Mac app provides writable Finder workspaces. The owner approved writable iOS Files workspaces as part of the mobile redesign. [Native client guide](apple-client-design.md) · [Verification record](verification.md)
 
+## Apple design revision · November 24, 2026
+
+Approved scope follows steps 2, 4, 5 and 7 of the [Mac handoff](design/macos/implementation-prompt.md) and [mobile handoff](design/ios/implementation-prompt.md). Use DesktopApp and DesktopSidebar for the Mac window, menus and first launch, DesktopTerminal for stopped and revoked output and Ports, and DesktopSheets and DesktopCommands for pairing, command review and key-window commands. Use MobileServers for iPhone, iPad and Duo navigation and first launch, MobileTerminal and TerminalKeyBar for adaptive terminal controls, and MobileSheets, MobileInvitations and MobileScanner for Ports, pairing and scanning.
+
+Build sidebar and toolbars, immediate lifecycle and separate command editing, TCP Open, then sheets and alerts. Use the existing Swift connection and command parser. The Go daemon, supervisor, CLI and bridge on Linux and macOS already implement the required operations. The protocol, deployment guide and terminal-client behavior need no changes. Preserve existing Finder and Files behavior. Signed Files and standalone Files verification remain outstanding.
+
+Compile each slice and both schemes after shared changes. Update native lifecycle, pairing, Ports, Mac command and adaptive mobile cases. Verify clicked-row and key-window routing, saved arguments, edits, TCP browser targets, and the shared native and Go session on hosted runners. Capture each revised board in both appearances, including Duo poses. Reconcile README, native guide, requirements and security coverage and record the hosted results. Push to main after local verification.
+
 ## Universal iOS redesign and Files · November 23, 2026
 
 | Screens in the design | Current view | Target |

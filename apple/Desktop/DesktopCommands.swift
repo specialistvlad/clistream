@@ -62,9 +62,6 @@ struct DesktopCommands: Commands {
         .disabled(context == nil)
     }
     CommandGroup(after: .sidebar) {
-      Button(context?.state.ports == true ? "Hide Ports" : "Show Ports") { context?.state.ports.toggle() }
-        .disabled(context?.row == nil).keyboardShortcut("i", modifiers: [.option, .command])
-      Divider()
       Picker("Layout", selection: $flat) {
         Text("as Tree").tag(false).keyboardShortcut("1")
         Text("as List").tag(true).keyboardShortcut("2")
@@ -72,22 +69,26 @@ struct DesktopCommands: Commands {
       Menu("Group By") { Picker("Group By", selection: $grouping) { groupChoices }.pickerStyle(.inline) }
     }
     CommandMenu("Session") {
+      Button("Open in New Tab") { context?.perform(.tab) }.disabled(context?.row == nil)
+      Button("Open in New Window") { context?.perform(.window) }.disabled(context?.row == nil)
+      Divider()
       let running = context?.row?.item.running ?? true
-      Button(running ? "Restart…" : "Start…", systemImage: running ? "arrow.counterclockwise" : "play.fill") {
-        context?.perform(.restart)
+      Button(running ? "Restart" : "Start", systemImage: running ? "arrow.counterclockwise" : "play.fill") {
+        context?.perform(running ? .restart : .start)
       }.keyboardShortcut("r").disabled(context?.managed != true || context?.revoked == true)
-      Button("Stop…", systemImage: "stop") { context?.perform(.stop) }
+      Button("Stop", systemImage: "stop") { context?.perform(.stop) }
         .keyboardShortcut(".").disabled(!running || context?.managed != true || context?.revoked == true)
+      Button("Edit Arguments…", systemImage: "pencil") { context?.perform(.edit) }
+        .keyboardShortcut("<").disabled(context?.row?.item.editable != true || context?.revoked == true)
       Button("Send EOF", systemImage: "text.append") { context?.perform(.eof) }
         .disabled(context?.row?.item.Mode != "pipe" || context?.attached != true)
       Button("Reconnect", systemImage: "arrow.clockwise") { context?.perform(.reconnect) }
         .disabled(context?.reconnect != true)
       Divider()
-      Button("Open in New Tab") { context?.perform(.tab) }.disabled(context?.row == nil)
-      Button("Open in New Window") { context?.perform(.window) }.disabled(context?.row == nil)
-      Divider()
-      Button("Show in Finder") { context?.perform(.finder) }
+      Button("Show in Finder", systemImage: "folder") { context?.perform(.finder) }
         .keyboardShortcut("r", modifiers: [.option, .command]).disabled(context?.finder != true)
+      Button("Show Ports", systemImage: "sidebar.right") { context?.state.ports.toggle() }
+        .disabled(context?.row == nil).keyboardShortcut("i", modifiers: [.option, .command])
     }
     CommandMenu("Server") {
       Button("Rename…") { if let context, let server = context.server { context.rename(server) } }

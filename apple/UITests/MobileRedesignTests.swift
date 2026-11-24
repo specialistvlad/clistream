@@ -63,7 +63,7 @@ extension NativeSessionTests {
       if confirmation == "Cancel" { XCTAssertTrue(row.exists) }
     }
     XCTAssertTrue(app.staticTexts["No Servers"].firstMatch.waitForExistence(timeout: 15))
-    XCTAssertTrue(app.buttons["welcome-paste-invitation"].firstMatch.exists)
+    XCTAssertFalse(app.buttons["welcome-paste-invitation"].firstMatch.exists)
   }
 
   @MainActor func testScanAndPasteInvitationReview() async throws {
@@ -104,9 +104,12 @@ extension NativeSessionTests {
     try await capture("add-server", app)
     app.buttons["workspace-cancel"].tap()
     XCTAssertTrue(app.staticTexts["No Servers"].waitForExistence(timeout: 10))
-    app.buttons["welcome-paste-invitation"].firstMatch.tap()
-    XCTAssertTrue(confirm.wait(for: \.isEnabled, toEqual: true, timeout: 12))
-    app.buttons["workspace-cancel"].tap()
+    XCTAssertFalse(app.buttons["welcome-paste-invitation"].firstMatch.exists)
+    let project = app.descendants(matching: .any)["project-github"].firstMatch
+    let onDuo = app.descendants(matching: .any)["duo-server-tools"].firstMatch.exists
+    if onDuo || (ProcessInfo.processInfo.environment["CLISTREAM_DUO_NAME"] ?? "").isEmpty {
+      XCTAssertTrue(project.exists)
+    }
     app.buttons["workspace-add-server"].firstMatch.tap()
     app.buttons["pairing-paste-invitation"].firstMatch.tap()
     XCTAssertTrue(confirm.wait(for: \.isEnabled, toEqual: true, timeout: 12))
@@ -229,23 +232,17 @@ extension NativeSessionTests {
     XCTAssertTrue(stop.waitForExistence(timeout: 5))
     try await capture("swipe-actions", app)
     stop.tap()
-    let stopAlert = app.alerts.firstMatch
-    XCTAssertTrue(stopAlert.label.hasPrefix("Stop “"))
-    stopAlert.buttons["Stop"].tap()
+    XCTAssertFalse(app.alerts.firstMatch.exists)
     XCTAssertTrue(row.waitForExistence(timeout: 12))
     row.swipeLeft()
     let start = app.buttons["Start"].firstMatch
     XCTAssertTrue(start.waitForExistence(timeout: 10))
     start.tap()
-    let confirm = app.buttons["workspace-confirm"].firstMatch
-    XCTAssertTrue(confirm.wait(for: \.isEnabled, toEqual: true, timeout: 15))
-    confirm.tap()
-    XCTAssertTrue(confirm.waitForNonExistence(timeout: 10))
     row.swipeLeft()
-    app.buttons["Restart"].firstMatch.tap()
-    XCTAssertTrue(app.textFields["command-line"].waitForExistence(timeout: 12))
-    confirm.tap()
-    XCTAssertTrue(confirm.waitForNonExistence(timeout: 10))
+    let restart = app.buttons["Restart"].firstMatch
+    XCTAssertTrue(restart.waitForExistence(timeout: 12))
+    restart.tap()
+    XCTAssertFalse(app.textFields["command-line"].exists)
     row.tap()
     expectOutput("preview-ready", in: app)
   }

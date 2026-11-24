@@ -87,9 +87,16 @@ private struct MobileInvitationSheet: View {
         let info = Core.inspect(flow.link.trimmingCharacters(in: .whitespacesAndNewlines))
         Form {
           Section {
-            SecureField("Pairing link", text: $flow.link, prompt: Text("clistream://host/?token=…"))
-              .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-              .accessibilityIdentifier("pairing-link")
+            if info.Error == nil, info.Address != nil, info.Pin != nil {
+              Text(flow.link.trimmingCharacters(in: .whitespacesAndNewlines))
+                .font(.system(.body, design: .monospaced)).lineLimit(1).truncationMode(.tail)
+                .accessibilityIdentifier("pairing-link")
+            } else {
+              TextField("Pairing link", text: $flow.link, prompt: Text("clistream://host/?token=…"))
+                .font(.system(.body, design: .monospaced))
+                .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                .accessibilityIdentifier("pairing-link")
+            }
             InvitationPasteButton(review: flow.add).accessibilityIdentifier("pairing-paste-invitation")
             Button("Scan QR Code", systemImage: "qrcode.viewfinder", action: flow.scan)
           } header: {

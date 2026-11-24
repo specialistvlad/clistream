@@ -61,6 +61,7 @@ private struct DesktopWindow: View {
   var body: some View {
     NavigationSplitView {
       DesktopSidebar(workspace: workspace, state: state, flat: flat, grouping: grouping)
+        .toolbar { sidebarToolbar }
         .navigationSplitViewColumnWidth(min: 210, ideal: 256, max: 400)
     } detail: {
       Group {
@@ -113,12 +114,6 @@ private struct DesktopWindow: View {
     .alert(state.alert?.title ?? "", isPresented: Binding(get: { state.alert != nil },
       set: { if !$0 { state.alert = nil } }), presenting: state.alert) { alert in
       switch alert {
-      case .stop(let row):
-        Button("Stop", role: .destructive) { state.change(.stop, row: row) }
-        Button("Cancel", role: .cancel) {}.keyboardShortcut(.defaultAction)
-      case .restart(let row):
-        Button("Restart", role: .destructive) { state.change(.restart, row: row) }
-        Button("Cancel", role: .cancel) {}.keyboardShortcut(.defaultAction)
       case .remove(let server):
         Button("Remove", role: .destructive) {
           do { try workspace.remove(server) }
@@ -150,7 +145,7 @@ private struct DesktopWindow: View {
     }
   }
 
-  @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+  @ToolbarContentBuilder private var sidebarToolbar: some ToolbarContent {
     ToolbarItemGroup {
       Button("Add Server", systemImage: "plus") { state.pair("") }
         .accessibilityIdentifier("workspace-add-server")
@@ -160,14 +155,18 @@ private struct DesktopWindow: View {
         Picker("Group by", selection: $grouping) { groupChoices }.pickerStyle(.inline)
       }.accessibilityIdentifier("workspace-view-options")
     }
+  }
+
+  @ToolbarContentBuilder private var toolbar: some ToolbarContent {
     ToolbarSpacer(.flexible)
     if let row {
       let item = row.item
       if item.running && !actions.revoked {
         ToolbarItemGroup {
           if actions.managed {
-            Button("Restart…", systemImage: "arrow.counterclockwise") { actions.perform(.restart) }
-            Button("Stop…", systemImage: "stop") { actions.perform(.stop) }
+            Button("Restart", systemImage: "arrow.counterclockwise") { actions.perform(.restart) }
+            Button("Stop", systemImage: "stop") { actions.perform(.stop) }
+            if item.editable == true { editArguments }
           }
           if item.Mode == "pipe" {
             Button("Send EOF", systemImage: "text.append") { actions.perform(.eof) }
@@ -177,9 +176,10 @@ private struct DesktopWindow: View {
       }
       if !item.running && actions.managed && !actions.revoked {
         ToolbarItem {
-          Button("Start…", systemImage: "play.fill") { actions.perform(.restart) }
+          Button("Start", systemImage: "play.fill") { actions.perform(.start) }
             .labelStyle(.titleAndIcon).buttonStyle(.borderedProminent)
         }
+        if item.editable == true { ToolbarItem { editArguments } }
       } else if !actions.managed && !actions.revoked {
         ToolbarItem {
           Text("Attach only").foregroundStyle(.tertiary)
@@ -200,8 +200,13 @@ private struct DesktopWindow: View {
           .accessibilityIdentifier("session-ports").help("Show or hide port forwarding")
       }
     }
+    ToolbarItem { ProjectLink().help("Open the CLIStream project on GitHub") }
     ToolbarItem {
       DesktopSearchField(query: $state.query).frame(width: 160)
     }.sharedBackgroundVisibility(.hidden)
+  }
+  private var editArguments: some View {
+    Button("Edit Arguments…", systemImage: "pencil") { actions.perform(.edit) }
+      .accessibilityIdentifier("session-edit-arguments")
   }
 }

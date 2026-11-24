@@ -20,6 +20,8 @@ The November 20 managed-terminal run records the Go suites on both operating sys
 
 ## Engineering checks
 
+The November 24 Apple cases cover immediate run actions in the toolbar, Mac context menu and mobile swipe actions, separate command review, and the TCP Open control. See the verification record for execution status.
+
 The Mac redesign adds `testDesktopSearchAndCommands`, `testKeyWindowMenuCommands` and `testPasteInvitationAndRemoveServer` to F2 and F10. They exercise the shipping menu bar, clicked-row targeting, search, rename cancellation, pairing review, and removal across relaunch. The gallery check requires native sheets, alerts and menus in both appearances.
 
 For F9, `testFinderWorkspaceRoundTrip` opens Finder through the selected terminal, copies in a document, reads a host-side edit, moves and saves the file, deletes it, and checks the bytes and final folder state on the host. `TestProviderWorkspace` exercises the wire contract. The `internal/files` workspace tests cover concurrent saves, mutation during transfer and confinement. Executed results are recorded separately. [Verification](../verification.md)

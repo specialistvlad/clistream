@@ -52,8 +52,8 @@ struct DesktopTerminal: View {
           action: "Pair Again…") { state.pair("") }
       } else if !item.running {
         let message = item.exitCode.map { "Exited with status " + String($0) } ?? "Stopped"
-        strip(symbol: "stop", warning: false, text: message + " · showing the last run’s output", action: "Start…") {
-          actions.perform(.restart)
+        strip(symbol: "stop", warning: false, text: message + " · showing the last run’s output", action: "Start", edit: row.item.editable == true ? { actions.perform(.edit) } : nil) {
+          actions.perform(.start)
         }
       } else if !connection.status.isEmpty {
         Text(connection.status).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
@@ -75,7 +75,7 @@ struct DesktopTerminal: View {
       }
     }
   }
-  private func strip(symbol: String, warning: Bool, text: String, action: String, perform: @escaping () -> Void) -> some View {
+  private func strip(symbol: String, warning: Bool, text: String, action: String, edit: (() -> Void)? = nil, perform: @escaping () -> Void) -> some View {
     VStack(spacing: 0) {
       Divider()
       HStack {
@@ -83,6 +83,9 @@ struct DesktopTerminal: View {
         Text(text)
         Spacer()
         Button(action, action: perform).controlSize(.small)
+        if let edit {
+          Button("Edit Arguments…", systemImage: "pencil", action: edit).controlSize(.small)
+        }
       }.font(.callout).padding(.horizontal, 16).padding(.vertical, 6)
     }
   }
@@ -131,6 +134,9 @@ struct DesktopPorts: View {
                   NSPasteboard.general.clearContents()
                   NSPasteboard.general.setString(address, forType: .string)
                 }.controlSize(.small)
+                if let url = ForwardLink.url(protocolName: item.Ports?[name], address: address) {
+                  Link("Open", destination: url).accessibilityIdentifier("forward-open-" + name)
+                }
               }
             }
           }

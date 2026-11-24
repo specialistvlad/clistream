@@ -180,7 +180,7 @@ jobs:
           DEVICE: ${{ matrix.device }}
         run: |
           case "$DEVICE" in
-            iPhone) boards="servers-tree swipe-actions terminal-key-bar session-menu port-forwards add-server scan-qr edit-command stop-confirmation welcome pairing-error" ;;
+            iPhone) boards="servers-tree swipe-actions terminal-key-bar session-menu port-forwards add-server scan-qr edit-command welcome pairing-error" ;;
             iPad) boards="ipad-main ipad-ports" ;;
             Duo) boards="duo-outer-list duo-outer-terminal duo-partially-open duo-inner duo-inner-ports" ;;
           esac
@@ -198,7 +198,7 @@ jobs:
         if: ${{ !cancelled() && steps.build-apple.outcome == 'success' && matrix.device == 'macOS' && !inputs.cases && (github.event_name != 'workflow_dispatch' || inputs.screenshots) }}
         run: |
           missing=0
-          for board in servers-tree port-forwards open-session-menu server-menu rename-server welcome disconnected add-server confirm-server pairing-error edit-command stop-confirmation remove-server menu-file menu-edit menu-view menu-session menu-server; do
+          for board in servers-tree port-forwards open-session-menu server-menu rename-server welcome disconnected add-server confirm-server pairing-error edit-command remove-server menu-file menu-edit menu-view menu-session menu-server; do
             for appearance in '' '-dark'; do
               file="gallery/$board$appearance.png"
               if [[ ! -s "$file" ]]; then

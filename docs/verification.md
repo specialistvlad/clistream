@@ -10,6 +10,10 @@ To run one Apple UI suite on an isolated Mac, open **Actions → Test → Run wo
 
 Open `docs/screenshots/index.html` in the checkout used for capture. The gallery groups full-resolution PNGs by the native Mac app, iPhone, iPad, iPhone Duo, and the Go terminal client on macOS and Linux. The hosted Apple matrix exports named PNGs from the running apps. Gallery artifacts are available for three days. The terminal captures use output from the compiled Go programs connected to a pseudo-terminal. Git ignores the entire gallery, so a fresh clone contains only the published README animation.
 
+## Apple design revision · November 24, 2026
+
+The macOS and iOS Simulator schemes compiled with Xcode 27.1 using `build-for-testing`. Hosted UI results and gallery review are pending.
+
 ## Mobile redesign and Files · November 23, 2026
 
 | Target | Verified on hosted runners | Still open |

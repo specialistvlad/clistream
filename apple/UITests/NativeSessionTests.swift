@@ -25,7 +25,7 @@ final class NativeSessionTests: XCTestCase {
       XCTAssertTrue(app.staticTexts["No Servers"].waitForExistence(timeout: 12))
       try await capture("welcome", app)
       activate(app.buttons["workspace-add-server"].firstMatch)
-      let invitation = app.secureTextFields["pairing-link"].firstMatch
+      let invitation = app.textFields["pairing-link"].firstMatch
       XCTAssertTrue(invitation.waitForExistence(timeout: 12))
       XCTAssertFalse(app.buttons["workspace-confirm"].firstMatch.isEnabled)
       activate(app.buttons["workspace-cancel"].firstMatch)
@@ -83,7 +83,8 @@ final class NativeSessionTests: XCTestCase {
         let endpoint = address.label
       #endif
       let port = try XCTUnwrap(endpoint.split(separator: ":").last.flatMap { UInt16($0) })
-      try await capture("port-forwards", app)
+      XCTAssertEqual(app.descendants(matching: .any)["forward-open-" + proto].firstMatch.exists, proto == "tcp")
+      if proto == "tcp" { try await capture("port-forwards", app) }
       closePorts()
       try exchange(port: port, datagram: proto == "udp")
       activate(app.descendants(matching: .any)["session-ports"].firstMatch)
@@ -196,14 +197,12 @@ final class NativeSessionTests: XCTestCase {
   }
   @MainActor func testManagedLifecycle() async throws {
     let app = try await openPipe()
-    action("Stop…", app)
-    XCTAssertTrue(app.buttons["Stop"].firstMatch.waitForExistence(timeout: 10))
-    try await capture("stop-confirmation", app)
-    activate(app.buttons["Stop"].firstMatch)
+    action("Stop", app)
+    XCTAssertFalse(app.alerts.firstMatch.exists)
     #if os(macOS)
       let endpoint = try XCTUnwrap(ProcessInfo.processInfo.environment["CLISTREAM_ENDPOINT"])
       let header = app.descendants(matching: .any)["Server " + endpoint].firstMatch
-      XCTAssertTrue(app.buttons["Start…"].firstMatch.waitForExistence(timeout: 15))
+      XCTAssertTrue(app.buttons["Start"].firstMatch.waitForExistence(timeout: 15))
       header.rightClick()
       try clickMacMenuItem("Rename…", in: app)
       let name = serverNameEditor(in: app)
@@ -211,15 +210,12 @@ final class NativeSessionTests: XCTestCase {
       try await capture("rename-server", app)
       app.typeKey(.escape, modifierFlags: [])
     #endif
-    action("Start…", app)
-    XCTAssertTrue(app.buttons["Start"].firstMatch.waitForExistence(timeout: 12))
-    try await capture("start-command", app)
-    activate(app.buttons["Start"].firstMatch)
+    action("Start", app)
     let terminal = app.descendants(matching: .any)["session-terminal"].firstMatch
     activate(terminal)
     terminal.typeText("after-start\n")
     expectOutput("out:after-start", in: app)
-    action("Restart…", app)
+    action("Edit Arguments…", app)
     XCTAssertTrue(app.textFields["command-line"].waitForExistence(timeout: 10))
     #if os(iOS)
       activate(app.buttons["workspace-cancel"].firstMatch)
@@ -250,8 +246,7 @@ final class NativeSessionTests: XCTestCase {
     )).firstMatch
     XCTAssertTrue(result.waitForExistence(timeout: 15))
     try await capture("completed-session",app)
-    action("Start…", app)
-    activate(app.buttons["Start"].firstMatch)
+    action("Start", app)
     XCTAssertTrue(terminal.waitForExistence(timeout: 15))
   }
 
@@ -260,7 +255,7 @@ final class NativeSessionTests: XCTestCase {
     #if os(iOS)
       expectOutput("preview-ready", in: app)
     #endif
-    action("Restart…", app)
+    action("Edit Arguments…", app)
     let field = app.textFields["command-line"].firstMatch
     // Opening the review sheet may need a second read after a transport timeout.
     // Surface a rejected read immediately, and keep the UI and output assertions.
@@ -676,7 +671,7 @@ final class NativeSessionTests: XCTestCase {
       XCTAssertTrue(repair.exists)
       repair.click()
       let fresh = try await fixtureResponse("QR")
-      let link = app.secureTextFields["pairing-link"].firstMatch
+      let link = app.textFields["pairing-link"].firstMatch
       XCTAssertTrue(link.waitForExistence(timeout: 10))
       link.typeText(fresh)
       confirmPairing(pairingButton(in: app), in: app)
@@ -910,7 +905,7 @@ final class NativeSessionTests: XCTestCase {
       _ link: String, in app: XCUIApplication, captureEmpty: Bool = false
     ) async throws {
       app.typeKey("k", modifierFlags: .command)
-      let field = app.secureTextFields.firstMatch
+      let field = app.textFields.firstMatch
       XCTAssertTrue(field.waitForExistence(timeout: 12))
       if captureEmpty { try await capture("add-server", app) }
       field.typeText(link)

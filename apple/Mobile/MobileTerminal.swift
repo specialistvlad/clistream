@@ -94,7 +94,7 @@ struct MobileTerminal: View {
     .toolbar {
       if !outer {
         if regular {
-          ToolbarItemGroup(placement: .topBarTrailing) { lifecycleButtons }
+          ToolbarItemGroup(placement: .topBarTrailing) { lifecycleButtons; editArguments }
           ToolbarSpacer(.fixed, placement: .topBarTrailing)
           ToolbarItemGroup(placement: .topBarTrailing) {
             if item.workspace == true && !revoked { filesButton }
@@ -184,14 +184,24 @@ struct MobileTerminal: View {
   @ViewBuilder private var lifecycleButtons: some View {
     let row = target
     Button(
-      item.running ? "Restart…" : "Start…",
+      item.running ? "Restart" : "Start",
       systemImage: item.running ? "arrow.counterclockwise" : "play"
     ) {
-      Task { await actions.review(row, in: workspace) }
-    }.disabled((item.revision ?? 0) == 0)
+      Task { await actions.perform(row.item.running ? .restart : .start, row, in: workspace) }
+    }.disabled(revoked || (item.revision ?? 0) == 0)
       .accessibilityIdentifier(item.running ? "session-restart" : "session-start")
-    Button("Stop…", systemImage: "stop", role: .destructive) { actions.confirmation = .stop(row) }
-      .disabled(!item.running || (item.revision ?? 0) == 0).accessibilityIdentifier("session-stop")
+    Button("Stop", systemImage: "stop", role: .destructive) {
+      Task { await actions.perform(.stop, row, in: workspace) }
+    }
+      .disabled(revoked || !item.running || (item.revision ?? 0) == 0).accessibilityIdentifier("session-stop")
+  }
+  @ViewBuilder private var editArguments: some View {
+    if item.editable == true && !revoked {
+      Button("Edit Arguments…", systemImage: "pencil") {
+        let row = target
+        Task { await actions.review(row) }
+      }.accessibilityIdentifier("session-edit-arguments")
+    }
   }
   private var sessionMenu: some View {
     Menu("Session", systemImage: "ellipsis") {
@@ -202,6 +212,7 @@ struct MobileTerminal: View {
             "session-send-eof")
       }
       Divider()
+      editArguments
       if item.running && !connection.attached {
         Button("Reconnect", systemImage: "arrow.clockwise") {
           Task { await connection.reconnect(item) }

@@ -45,7 +45,7 @@ struct CommandSheet: View {
     let action = item.running ? "Restart" : "Start"
     let parsed = Core.call(["Op": "parse-command", "Line": line])
     MobileFormSheet(
-      title: action + " “" + item.Name + "”", confirmation: action,
+      title: "Edit Arguments", confirmation: action,
       enabled: parsed.Command != nil, cancel: { dismiss() }, confirm: launch
     ) {
       Section {
@@ -56,7 +56,7 @@ struct CommandSheet: View {
       } footer: {
         Text(
           item.running
-            ? "Quote arguments that contain spaces. Use \"\" for an empty argument. Restarting ends the current run for everyone connected."
+            ? "Quote arguments that contain spaces. Use \"\" for an empty argument. Saving restarts “\(item.Name)” for everyone connected."
             : "Quote arguments that contain spaces. Use \"\" for an empty argument.")
       }
     }
@@ -133,6 +133,11 @@ struct PortsPresentation: ViewModifier {
                 UIPasteboard.general.string = address
               }
               .labelStyle(.iconOnly).buttonStyle(.borderless)
+              if let url = ForwardLink.url(protocolName: session.Ports?[name], address: address) {
+                Link("Open", destination: url)
+                  .buttonStyle(.bordered).buttonBorderShape(.capsule)
+                  .accessibilityIdentifier("forward-open-" + name)
+              }
             }
           }
         }

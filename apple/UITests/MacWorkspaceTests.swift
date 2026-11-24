@@ -46,13 +46,18 @@ extension NativeSessionTests {
     ports.click()
 
     // A context action uses the clicked CLI even when a different terminal has focus.
-    for (action, heading) in [("Restart…", "Restart “comm”"), ("Stop…", "Stop “comm”?")] {
-      pipe.click()
-      comparison.rightClick()
-      try clickMacMenuItem(action, in: app)
-      assertMacElement(macText(heading, in: app), in: app)
-      app.typeKey(.escape, modifierFlags: [])
-    }
+    pipe.click()
+    comparison.rightClick()
+    try clickMacMenuItem("Edit Arguments…", in: app)
+    assertMacElement(macText("Edit Arguments for “comm”", in: app), in: app)
+    app.typeKey(.escape, modifierFlags: [])
+    comparison.rightClick()
+    try clickMacMenuItem("Stop", in: app)
+    XCTAssertTrue(app.buttons["Start"].firstMatch.waitForExistence(timeout: 12))
+    comparison.rightClick()
+    try clickMacMenuItem("Start", in: app)
+    XCTAssertTrue(app.buttons["Restart"].firstMatch.waitForExistence(timeout: 12))
+    XCTAssertTrue(app.descendants(matching: .any)["project-github"].firstMatch.exists)
   }
 
   @MainActor func testKeyWindowMenuCommands() async throws {
@@ -61,8 +66,8 @@ extension NativeSessionTests {
     let pipeID = try XCTUnwrap(env["CLISTREAM_PIPE_ID"])
     let pipe = app.descendants(matching: .any)["session-" + pipeID].firstMatch
     let search = app.searchFields.firstMatch
-    for (menu, item) in [("File", "Paste Invitation"), ("Edit", "Copy"), ("View", "Show Ports"),
-                         ("Session", "Restart…"), ("Server", "Remove Server…")] {
+    for (menu, item) in [("File", "Paste Invitation"), ("Edit", "Copy"), ("View", "as Tree"),
+                         ("Session", "Restart"), ("Server", "Remove Server…")] {
       if menu == "Edit" {
         search.click()
         search.typeText("sh")
@@ -85,7 +90,7 @@ extension NativeSessionTests {
     let newWindow = app.windows.containing(.any, identifier: "session-attach-only").firstMatch
     assertMacElement(newWindow, in: app)
     app.menuBarItems["Session"].click()
-    let restart = app.menuBarItems["Session"].menuItems["Restart…"].firstMatch
+    let restart = app.menuBarItems["Session"].menuItems["Restart"].firstMatch
     assertMacElement(restart, in: app)
     if !restart.wait(for: \.isEnabled, toEqual: false, timeout: 6) {
       let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
@@ -97,7 +102,8 @@ extension NativeSessionTests {
     app.typeKey(.escape, modifierFlags: [])
     app.typeKey("w", modifierFlags: .command)
     pipe.click()
-    app.typeKey("r", modifierFlags: .command)
+    app.menuBarItems["Session"].click()
+    try clickMacMenuItem("Edit Arguments…", in: app)
     XCTAssertTrue(app.textFields["command-line"].firstMatch.waitForExistence(timeout: 10))
     app.typeKey(.escape, modifierFlags: [])
   }

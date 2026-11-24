@@ -139,10 +139,7 @@ extension NativeSessionTests {
                     "Expected the saved Mac server to be offline during the Linux Finder round trip")
     }
     app.typeKey(".", modifierFlags: .command)
-    let stop = app.buttons["Stop"].firstMatch
-    XCTAssertTrue(stop.waitForExistence(timeout: 10))
-    stop.click()
-    XCTAssertTrue(app.buttons["Start…"].firstMatch.waitForExistence(timeout: 15))
+    XCTAssertTrue(app.buttons["Start"].firstMatch.waitForExistence(timeout: 15))
     XCTAssertTrue(show.exists, "Stopping a managed child lost its workspace")
     finder.activate()
 
@@ -205,9 +202,6 @@ extension NativeSessionTests {
     finder.typeKey("w", modifierFlags: .command)
     app.activate()
     app.typeKey("r", modifierFlags: .command)
-    let start = app.buttons["Start"].firstMatch
-    XCTAssertTrue(start.waitForExistence(timeout: 10))
-    start.click()
     XCTAssertTrue(app.descendants(matching: .any)["session-terminal"].firstMatch.waitForExistence(timeout: 15))
     XCTAssertTrue(show.exists)
 

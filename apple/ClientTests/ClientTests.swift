@@ -7,6 +7,14 @@ import XCTest
 
 /// Runs in the built app on macOS or in the iOS simulator. All calls use its linked Go client.
 final class ClientTests: XCTestCase {
+  func testForwardBrowserURL() {
+    XCTAssertEqual(ForwardLink.url(protocolName: "tcp", address: "127.0.0.1:49152")?.absoluteString,
+                   "http://127.0.0.1:49152")
+    XCTAssertNil(ForwardLink.url(protocolName: "udp", address: "127.0.0.1:49152"))
+    XCTAssertNil(ForwardLink.url(protocolName: "tcp", address: "example.com:80"))
+    XCTAssertNil(ForwardLink.url(protocolName: "tcp", address: "127.0.0.1:49152/unexpected"))
+  }
+
   func testCommandLookupRetry() async {
     var target = SessionInfo(ID: "child", Name: "sh", Mode: "pipe", Host: "mac", OS: "darwin", Ports: nil)
     target.supervisor = "supervisor"

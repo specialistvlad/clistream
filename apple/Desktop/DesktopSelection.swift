@@ -7,7 +7,7 @@ enum SidebarSelection: Hashable {
 }
 
 enum DesktopAction {
-  case restart, stop, eof, reconnect, ports, finder, tab, window
+  case start, restart, stop, edit, eof, reconnect, ports, finder, tab, window
 }
 
 enum DesktopSheet: Identifiable {
@@ -22,13 +22,11 @@ enum DesktopSheet: Identifiable {
 }
 
 enum DesktopAlert: Identifiable {
-  case stop(WorkspaceSession), restart(WorkspaceSession), remove(ServerProfile), pairError(String), error(String)
+  case remove(ServerProfile), pairError(String), error(String)
 
   var id: String { title }
   var title: String {
     switch self {
-    case .stop(let row): return "Stop “" + row.item.Name + "”?"
-    case .restart(let row): return "Restart “" + row.item.Name + "”?"
     case .remove(let server): return "Remove “" + server.name + "”?"
     case .pairError: return "Couldn’t pair this device"
     case .error: return "Action failed"
@@ -36,7 +34,6 @@ enum DesktopAlert: Identifiable {
   }
   var message: String {
     switch self {
-    case .stop, .restart: return "This ends the current run for everyone connected."
     case .remove: return "This Mac forgets the server and its pairing. The device stays enrolled until the server operator revokes it."
     case .error(let message), .pairError(let message): return message
     }
@@ -156,7 +153,9 @@ enum DesktopAlert: Identifiable {
       owner.selection = .session(row.id)
       let connection = Workspace.shared.terminal(row)
       switch action {
-      case .restart:
+      case .start: owner.change(.start, row: row)
+      case .restart: owner.change(.restart, row: row)
+      case .edit:
         if row.item.editable == true {
           Task {
             let reply = await connection.manage(.command, item: row.item)
@@ -166,9 +165,8 @@ enum DesktopAlert: Identifiable {
               owner.sheet = .command(row, line)
             } else { owner.alert = .error(reply.Error ?? "Command unavailable") }
           }
-        } else if row.item.running { owner.alert = .restart(row) }
-        else { owner.change(.start, row: row) }
-      case .stop: owner.alert = .stop(row)
+        }
+      case .stop: owner.change(.stop, row: row)
       case .eof: connection.send(.eof)
       case .ports: owner.ports = true
       case .reconnect:

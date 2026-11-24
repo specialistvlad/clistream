@@ -37,7 +37,7 @@ final class SessionTests: XCTestCase {
       XCTAssertTrue(reviewedAddress.waitForExistence(timeout: 10))
       tap(app.buttons["workspace-cancel"])
       tap(app.buttons["workspace-add-server"])
-      let field = app.secureTextFields["pairing-link"]
+      let field = app.textFields["pairing-link"]
       XCTAssertTrue(field.waitForExistence(timeout: 10))
       field.tap()
       field.typeText(invitation)

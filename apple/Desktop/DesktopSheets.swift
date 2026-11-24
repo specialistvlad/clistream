@@ -42,8 +42,8 @@ struct DesktopPairSheet: View {
         guard valid else { return }
         confirm(link.trimmingCharacters(in: .whitespacesAndNewlines))
       }) {
-      SecureField("Invitation", text: $link, prompt: Text("clistream://host/?token=…"))
-        .focused($focused).accessibilityIdentifier("pairing-link")
+      TextField("Invitation", text: $link, prompt: Text("clistream://host/?token=…"))
+        .font(.system(.body, design: .monospaced)).focused($focused).accessibilityIdentifier("pairing-link")
       if valid, let address = inspected.Address, let pin = inspected.Pin {
         LabeledContent("Server", value: address)
         LabeledContent("Identity") {
@@ -70,8 +70,8 @@ struct DesktopCommandSheet: View {
   }
   var body: some View {
     let action = row.item.running ? "Restart" : "Start"
-    DesktopFormSheet(title: action + " “" + row.item.Name + "”",
-      message: row.item.running ? "Restarting ends the current run for everyone connected." : "Starts a new run with this command.",
+    DesktopFormSheet(title: "Edit Arguments for “" + row.item.Name + "”",
+      message: row.item.running ? "Saving restarts “\(row.item.Name)” for everyone connected." : "Saving starts “\(row.item.Name)” with this command.",
       action: action, enabled: parsed.Command != nil, submit: launch) {
       LabeledContent("Command") {
         VStack(alignment: .leading) {

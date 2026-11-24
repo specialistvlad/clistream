@@ -39,6 +39,8 @@ For F2, display the advertised host in `clistream://HOST/?token=TOKEN`. Shell co
 
 For F2 and F3, pairing through either Go CLI must let the other reconnect on the same OS account. Reuse the sole legacy profile or prefer the client profile when both address and pin match. Keep conflicting connections until explicit pairing.
 
+For F2, F3, F8 and F10, verify the visible signed invitation and explicit pairing confirmation, immediate native run controls with saved arguments, separate command editing, and browser opening only for enabled TCP forwards.
+
 For F10, every user-facing action offered on iPhone or iPad must work by touch alone. Verify the complete workflows on both simulators using the onscreen keyboard and the visible controls. [Touch-only interaction requirements](apple-client-design.md#touch-only-operation-on-iphone-and-ipad)
 
 ### Session folder selection

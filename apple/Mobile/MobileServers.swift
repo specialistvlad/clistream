@@ -16,6 +16,11 @@ struct MobileServers: View {
   @State private var renaming: ServerProfile?
   @State private var name = ""
 
+  private var isDuo: Bool {
+    // A regular-width phone is the Duo inner layout.
+    regular && UIDevice.current.userInterfaceIdiom == .phone
+  }
+
   private var matches: [WorkspaceSession] {
     workspace.sessions.filter {
       query.isEmpty || $0.item.Name.localizedCaseInsensitiveContains(query)
@@ -36,17 +41,6 @@ struct MobileServers: View {
             "Scan the QR code that clistreamd shows, or paste its invitation. Invitations last three minutes."
           )
         }
-        .safeAreaInset(edge: .bottom) {
-          VStack {
-            InvitationPasteButton(review: invitations.add)
-              .accessibilityIdentifier("welcome-paste-invitation")
-              .buttonStyle(.glass).frame(maxWidth: .infinity)
-            Button(action: invitations.scan) {
-              Label("Scan QR Code", systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
-            }.buttonStyle(.glassProminent)
-          }
-          .controlSize(.large).buttonBorderShape(.capsule).padding()
-        }
       } else {
         adaptiveList.searchable(
           text: $query, placement: !regular ? .toolbar : .sidebar, prompt: "Search")
@@ -55,20 +49,25 @@ struct MobileServers: View {
     .navigationTitle("Servers")
     .navigationBarTitleDisplayMode(closedHinge ? .inline : .automatic)
     .safeAreaInset(edge: .trailing, spacing: 0) {
-      if closedHinge && !regular {
+      if closedHinge && !regular && invitations.page == nil {
         VStack {
           serverButtons
+          ProjectLink()
           Spacer()
         }.labelStyle(.iconOnly).buttonStyle(.glass).buttonBorderShape(.circle).controlSize(.large)
           .accessibilityElement(children: .contain).accessibilityIdentifier("duo-server-tools")
       }
     }
     .toolbar {
-      if !regular && !workspace.profiles.isEmpty {
+      if invitations.page == nil && !regular && !workspace.profiles.isEmpty {
         DefaultToolbarItem(kind: .search, placement: .bottomBar)
       }
-      if !closedHinge || regular {
-        ToolbarItemGroup(placement: .topBarTrailing) { serverButtons }
+      if invitations.page == nil && (!closedHinge || regular) {
+        if !regular { ToolbarItem(placement: .topBarLeading) { ProjectLink() } }
+        ToolbarItemGroup(placement: .topBarTrailing) {
+          serverButtons
+          if regular && !isDuo { ProjectLink() }
+        }
       }
     }
     .sheet(item: $renaming, content: renameSheet)
@@ -250,17 +249,17 @@ struct MobileServers: View {
       }
     }.accessibilityIdentifier("session-" + row.item.id)
       .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-        if (row.item.revision ?? 0) > 0 {
+        if (row.item.revision ?? 0) > 0 && !workspace.revoked(row.server) {
           if row.item.running {
             Button("Stop", systemImage: "stop.fill", role: .destructive) {
-              actions.confirmation = .stop(row)
+              Task { await actions.perform(.stop, row, in: workspace) }
             }
           }
           Button(
             row.item.running ? "Restart" : "Start",
             systemImage: row.item.running ? "arrow.counterclockwise" : "play"
           ) {
-            Task { await actions.review(row, in: workspace) }
+            Task { await actions.perform(row.item.running ? .restart : .start, row, in: workspace) }
           }.tint(.accentColor)
         }
       }

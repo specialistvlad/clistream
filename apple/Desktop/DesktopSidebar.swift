@@ -136,18 +136,27 @@ struct DesktopSidebar: View {
         Button("Open in New Window") { state.open(row, tab: false, using: openWindow) }
         if !revoked && (item.revision ?? 0) > 0 {
           Divider()
-          Button(item.running ? "Restart…" : "Start…", systemImage: item.running ? "arrow.counterclockwise" : "play.fill") {
-            state.perform(.restart, on: row, using: openWindow)
+          Button(item.running ? "Restart" : "Start", systemImage: item.running ? "arrow.counterclockwise" : "play.fill") {
+            state.perform(item.running ? .restart : .start, on: row, using: openWindow)
           }
           if item.running {
-            Button("Stop…", systemImage: "stop") { state.perform(.stop, on: row, using: openWindow) }
+            Button("Stop", systemImage: "stop") { state.perform(.stop, on: row, using: openWindow) }
+          }
+          if item.editable == true {
+            Button("Edit Arguments…", systemImage: "pencil") { state.perform(.edit, on: row, using: openWindow) }
           }
         }
-        Divider()
-        Button("Show Ports") { state.perform(.ports, on: row, using: openWindow) }
-        if !revoked && item.workspace == true {
-          Button("Show in Finder") { state.perform(.finder, on: row, using: openWindow) }
+        if item.Mode == "pipe" && workspace.existingTerminal(row)?.attached == true {
+          Button("Send EOF", systemImage: "text.append") { state.perform(.eof, on: row, using: openWindow) }
         }
+        if revoked || (item.running && workspace.existingTerminal(row)?.attached != true) {
+          Button("Reconnect", systemImage: "arrow.clockwise") { state.perform(.reconnect, on: row, using: openWindow) }
+        }
+        Divider()
+        if !revoked && item.workspace == true {
+          Button("Show in Finder", systemImage: "folder") { state.perform(.finder, on: row, using: openWindow) }
+        }
+        Button("Show Ports", systemImage: "sidebar.right") { state.perform(.ports, on: row, using: openWindow) }
       }
     }
   }
