@@ -980,7 +980,16 @@ extension XCTestCase {
         XCTAssertTrue(show.waitForExistence(timeout: 12), file: file, line: line)
         show.tap()
       }
-      XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 12), file: file, line: line)
+      let keyboard = app.keyboards.firstMatch
+      XCTAssertTrue(keyboard.waitForExistence(timeout: 12), file: file, line: line)
+      // A fresh simulator can show the system’s swipe-typing introduction
+      // instead of the terminal accessory on its first software keyboard.
+      let introduction = app.staticTexts.containing(NSPredicate(
+        format: "label BEGINSWITH %@", "Speed up your typing by sliding your finger")).firstMatch
+      if introduction.exists {
+        let proceed = app.buttons["Continue"].firstMatch
+        if proceed.isHittable { proceed.tap() }
+      }
     }
 
     @MainActor func touchTerminalKey(_ name: String, in app: XCUIApplication, file: StaticString = #filePath,

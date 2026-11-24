@@ -14,6 +14,8 @@ Open `docs/screenshots/index.html` in the checkout used for capture. The gallery
 
 The macOS and iOS Simulator schemes compiled with Xcode 27.1 using `build-for-testing`. Local `make test e2e` and the hosted macOS and Linux Go jobs passed. The Mac gallery passed its file check. The first Mac UI run reported one failure in Edit Arguments and Restart. The test now addresses the sheet’s confirmation by identifier because the toolbar also has a Restart control. [Initial hosted matrix](https://github.com/specialistvlad/clistream/actions/runs/45311058676)
 
+The focused Mac command-editor case passed. The first Mac run also passed the Finder round trips against Mac and Linux hosts. On iPhone, pairing review, immediate lifecycle and swipe actions, command editing, and port forwarding passed. The keyboard gallery captured the system’s first-use swipe-typing introduction, which blocked the accessory. The test now dismisses it before capturing. The standalone Files case remains open. The shared run timed out at the three-viewer rendezvous. [Mac editor rerun](https://github.com/specialistvlad/clistream/actions/runs/45313837230) · [iPhone results](https://github.com/specialistvlad/clistream/actions/runs/45311058676/job/138166599169) · [Shared results](https://github.com/specialistvlad/clistream/actions/runs/45311058676/job/138166599055)
+
 Both the iOS 27.2 Duo run and a fresh iOS 27.1 run failed simulator data migration before XCTest started. Duo UI and gallery verification remain open. [Duo retry](https://github.com/specialistvlad/clistream/actions/runs/45312693750)
 
 ## Mobile redesign and Files · November 23, 2026
@@ -95,6 +97,10 @@ The Duo passed 19 required cases together. A focused fold test passed the remain
 The final full Duo rerun without screenshots passed 16 of 20 required cases. Fold continuity, editing arguments and restarting, independent server routing, and expired pairing failed in this run. Each passed in the runs linked above. A consistently green full Duo run remains outstanding. [Final Duo run without screenshots](https://github.com/specialistvlad/clistream/actions/runs/45018283535/job/137195278598)
 
 The isolated four-client test passed with the native Mac, iPhone and iPad apps and an independent Go terminal client attached to the same pipe. All four exchanged input. The Mac switched to a PTY and then to a second server while the other three continued using the original child. When the Mac returned, it saw the phone’s input from its time away. [Four-client test](https://github.com/specialistvlad/clistream/actions/runs/45019186229)
+
+## TestFlight 0.1.0 (2611240242)
+
+The November 24 macOS beta was archived from `f654f8d` with the Finder extension. App Store Connect reported `VALID` and `IN_BETA_TESTING` and confirmed access for the **Vlad** internal group. [macOS build in TestFlight](https://appstoreconnect.apple.com/apps/6837168864/testflight/macos/9fcac915-3b0e-4962-b0a9-e24ee0dccccf)
 
 ## TestFlight 0.1.0 (2611232303)
 
