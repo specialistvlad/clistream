@@ -43,6 +43,10 @@ extension FocusedValues {
   ForEach(["Server", "Host", "CLI Name"], id: \.self) { Text($0).tag($0) }
 }
 
+@MainActor func desktopMenuButton(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+  Button(action: action) { Label(title, systemImage: symbol).labelStyle(.titleAndIcon) }
+}
+
 struct DesktopCommands: Commands {
   @FocusedValue(\.desktopContext) private var context
   @AppStorage("workspace-list") private var flat = false
@@ -73,23 +77,23 @@ struct DesktopCommands: Commands {
       Button("Open in New Window") { context?.perform(.window) }.disabled(context?.row == nil)
       Divider()
       let running = context?.row?.item.running ?? true
-      Button(running ? "Restart" : "Start", systemImage: running ? "arrow.counterclockwise" : "play.fill") {
+      desktopMenuButton(running ? "Restart" : "Start", symbol: running ? "arrow.counterclockwise" : "play.fill") {
         context?.perform(running ? .restart : .start)
       }
-      .labelStyle(.titleAndIcon).keyboardShortcut("r").disabled(context?.managed != true || context?.revoked == true)
-      Button("Stop", systemImage: "stop") { context?.perform(.stop) }
-        .labelStyle(.titleAndIcon).keyboardShortcut(".").disabled(!running || context?.managed != true || context?.revoked == true)
-      Button("Edit Arguments…", systemImage: "pencil") { context?.perform(.edit) }
-        .labelStyle(.titleAndIcon).keyboardShortcut("<").disabled(context?.row?.item.editable != true || context?.revoked == true)
-      Button("Send EOF", systemImage: "text.append") { context?.perform(.eof) }
-        .labelStyle(.titleAndIcon).disabled(context?.row?.item.Mode != "pipe" || context?.attached != true)
-      Button("Reconnect", systemImage: "arrow.clockwise") { context?.perform(.reconnect) }
-        .labelStyle(.titleAndIcon).disabled(context?.reconnect != true)
+      .keyboardShortcut("r").disabled(context?.managed != true || context?.revoked == true)
+      desktopMenuButton("Stop", symbol: "stop") { context?.perform(.stop) }
+        .keyboardShortcut(".").disabled(!running || context?.managed != true || context?.revoked == true)
+      desktopMenuButton("Edit Arguments…", symbol: "pencil") { context?.perform(.edit) }
+        .keyboardShortcut("<").disabled(context?.row?.item.editable != true || context?.revoked == true)
+      desktopMenuButton("Send EOF", symbol: "text.append") { context?.perform(.eof) }
+        .disabled(context?.row?.item.Mode != "pipe" || context?.attached != true)
+      desktopMenuButton("Reconnect", symbol: "arrow.clockwise") { context?.perform(.reconnect) }
+        .disabled(context?.reconnect != true)
       Divider()
-      Button("Show in Finder", systemImage: "folder") { context?.perform(.finder) }
-        .labelStyle(.titleAndIcon).keyboardShortcut("r", modifiers: [.option, .command]).disabled(context?.finder != true)
-      Button("Show Ports", systemImage: "sidebar.right") { context?.state.ports.toggle() }
-        .labelStyle(.titleAndIcon).disabled(context?.row == nil).keyboardShortcut("i", modifiers: [.option, .command])
+      desktopMenuButton("Show in Finder", symbol: "folder") { context?.perform(.finder) }
+        .keyboardShortcut("r", modifiers: [.option, .command]).disabled(context?.finder != true)
+      desktopMenuButton("Show Ports", symbol: "sidebar.right") { context?.state.ports.toggle() }
+        .disabled(context?.row == nil).keyboardShortcut("i", modifiers: [.option, .command])
     }
     CommandMenu("Server") {
       Button("Rename…") { if let context, let server = context.server { context.rename(server) } }
@@ -97,9 +101,9 @@ struct DesktopCommands: Commands {
       Button("Reconnect") { if let server = context?.server { Workspace.shared.retry(server) } }
         .disabled(context?.server == nil)
       Divider()
-      Button("Remove Server…", systemImage: "trash") {
+      desktopMenuButton("Remove Server…", symbol: "trash") {
         if let server = context?.server { context?.state.alert = .remove(server) }
-      }.labelStyle(.titleAndIcon).keyboardShortcut(.delete).disabled(context?.server == nil)
+      }.keyboardShortcut(.delete).disabled(context?.server == nil)
     }
   }
 }

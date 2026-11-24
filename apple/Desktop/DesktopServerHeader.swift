@@ -40,8 +40,7 @@ struct DesktopServerHeader: View {
         Button("Rename…") { state.rename(server, in: group) }
         Button("Reconnect") { workspace.retry(server) }
         Divider()
-        Button("Remove Server…", systemImage: "trash") { state.alert = .remove(server) }
-          .labelStyle(.titleAndIcon)
+        desktopMenuButton("Remove Server…", symbol: "trash") { state.alert = .remove(server) }
       }
     }
   }
