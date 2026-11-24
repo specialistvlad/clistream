@@ -135,6 +135,7 @@ extension NativeSessionTests {
     let confirm = pairingButton(in: app)
     XCTAssertFalse(confirm.exists)
     app.buttons["workspace-cancel"].tap()
+    XCTAssertTrue(scan.wait(for: \.isHittable, toEqual: true, timeout: 12))
     _ = try await fixtureResponse("scan-sample/invitation")
     scan.tap()
     XCTAssertTrue(confirm.wait(for: \.isEnabled, toEqual: true, timeout: 10))

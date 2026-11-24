@@ -142,12 +142,10 @@ final class NativeSessionTests: XCTestCase {
         }
         // An expanded offline server can push the live server below the fold.
         // SwiftUI creates its rows as the real sidebar scrolls into view.
-        let list = app.collectionViews.firstMatch
+        let list = app.collectionViews["workspace-servers-list"].firstMatch
         XCTAssertTrue(list.waitForExistence(timeout: 8))
-        for _ in 0..<12 {
-          if row.exists && row.isHittable { return }
-          list.swipeUp()
-        }
+        for _ in 0..<8 where !row.isHittable { list.swipeDown() }
+        for _ in 0..<12 where !row.isHittable { list.swipeUp() }
         XCTAssertTrue(row.exists && row.isHittable, "The server list did not reveal the requested session")
       }
       showServerList(for: id)
@@ -504,6 +502,9 @@ final class NativeSessionTests: XCTestCase {
 
   #if os(macOS)
     @MainActor private func sendControlC(to terminal: XCUIElement, in app: XCUIApplication) {
+      app.activate()
+      XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+      XCTAssertTrue(terminal.wait(for: \.isHittable, toEqual: true, timeout: 12))
       terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.3)).click()
       app.typeKey("c", modifierFlags: .control)
     }

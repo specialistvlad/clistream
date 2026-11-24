@@ -18,6 +18,8 @@ Compile both Apple schemes and exercise the Mac Session and CLI contextual menus
 
 Compact iPhone and Duo navigation now opens a CLI through an explicit row action. This avoids relying on split-view selection changes to navigate when the same row is selected again. Regular-width iPad and Duo keep the native selection link. macOS, the Go daemon, supervisor and CLI on macOS and Linux, protocol and deployment need no changes. The hosted two-server case checks that the restored terminal contains the first server’s output before sending a new marker to it. Record the focused and matrix results in the verification record.
 
+The CI follow-up moves mobile keyboard focus to terminal mounting, scales Retry explicitly with Dynamic Type, and improves hosted synchronization for Mac window changes, shared PTY focus, iPad server selection and scanner dismissal. Go commands, daemon, supervisor, deployment and protocol on Linux and macOS keep the same policies. Current feature guides already describe the affected user flows. Compile both Apple schemes, run focused Mac and mobile regressions on GitHub, and record remaining Files and simulator failures in the verification record. Keep the mobile TestFlight packaging without Files while App Group signing is unavailable.
+
 ## Universal iOS redesign and Files · November 23, 2026
 
 | Screens in the design | Current view | Target |

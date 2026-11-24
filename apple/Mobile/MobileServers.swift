@@ -9,6 +9,7 @@ struct MobileServers: View {
   @Environment(\.closedHinge) private var closedHinge
   @Environment(\.regularWorkspace) private var regular
   @Environment(\.dynamicTypeSize) private var textSize
+  @ScaledMetric(relativeTo: .body) private var retryFontSize: CGFloat = 17
   @AppStorage("workspace-list") private var flat = false
   @AppStorage("workspace-group") private var grouping = "Server"
   @State private var query = ""
@@ -107,7 +108,7 @@ struct MobileServers: View {
                   Label("Offline", systemImage: "wifi.slash").foregroundStyle(.secondary)
                   if !textSize.isAccessibilitySize { Spacer() }
                   Button { workspace.retry(server) } label: {
-                    Text("Retry").font(.body).fixedSize()
+                    Text("Retry").font(.system(size: retryFontSize)).fixedSize()
                   }.buttonStyle(.borderless).accessibilityIdentifier("retry-server")
                 }
               }
@@ -153,7 +154,7 @@ struct MobileServers: View {
           }
         }
       }
-    }
+    }.accessibilityIdentifier("workspace-servers-list")
   }
 
   @ViewBuilder private var serverButtons: some View {

@@ -135,10 +135,17 @@ private func visibleText(in view: TerminalView) -> String {
   private final class TouchTerminal: TerminalView {
     override func didMoveToWindow() {
       super.didMoveToWindow()
-      guard window != nil else { return }
+      guard let window else {
+        if isFirstResponder { _ = resignFirstResponder() }
+        return
+      }
       if !(inputAccessoryView is TerminalKeyBar) { inputAccessoryView = TerminalKeyBar(terminal: self) }
       applyPalette()
       applyTextSize()
+      DispatchQueue.main.async { [weak self, weak window] in
+        guard let self, let window, self.window === window else { return }
+        _ = self.becomeFirstResponder()
+      }
     }
 
     override init(frame: CGRect) {
@@ -221,7 +228,6 @@ private func visibleText(in view: TerminalView) -> String {
       view.accessibilityLabel = "Terminal"
       view.accessibilityIdentifier = "session-terminal"
       connection.install(view)
-      DispatchQueue.main.async { _ = view.becomeFirstResponder() }
       return view
     }
     func updateUIView(_ view: TerminalView, context: Context) {}

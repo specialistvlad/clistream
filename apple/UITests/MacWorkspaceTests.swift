@@ -100,7 +100,9 @@ extension NativeSessionTests {
       XCTFail("The active attach-only window enabled Restart")
     }
     app.typeKey(.escape, modifierFlags: [])
-    app.typeKey("w", modifierFlags: .command)
+    newWindow.typeKey("w", modifierFlags: .command)
+    XCTAssertTrue(newWindow.waitForNonExistence(timeout: 12))
+    XCTAssertTrue(pipe.wait(for: \.isHittable, toEqual: true, timeout: 12))
     pipe.click()
     app.menuBarItems["Session"].click()
     try clickMacMenuItem("Edit Arguments…", in: app)
