@@ -100,9 +100,13 @@ The final full Duo rerun without screenshots passed 16 of 20 required cases. Fol
 
 The isolated four-client test passed with the native Mac, iPhone and iPad apps and an independent Go terminal client attached to the same pipe. All four exchanged input. The Mac switched to a PTY and then to a second server while the other three continued using the original child. When the Mac returned, it saw the phone’s input from its time away. [Four-client test](https://github.com/specialistvlad/clistream/actions/runs/45019186229)
 
+## TestFlight 0.1.0 (2611240603)
+
+The November 24 mobile beta was archived from `fd0fee7` with the Files-free release configuration. The hosted iPhone checks passed search and swipe actions and switching between sessions on two servers. The latter verified that the first server’s terminal was visible and accepted fresh input after switching back. App Store Connect reported `VALID` and `IN_BETA_TESTING` and confirmed access for the **Vlad** internal group. [Focused iPhone checks](https://github.com/specialistvlad/clistream/actions/runs/45337627291) · [iOS build in TestFlight](https://appstoreconnect.apple.com/apps/6837168864/testflight/ios/c7b7ad83-17a6-4f75-847c-86a25080782b)
+
 ## TestFlight 0.1.0 (2611240553)
 
-The follow-up macOS beta was archived from `030b9b1` with Finder. App Store Connect reported `VALID` and `IN_BETA_TESTING` and confirmed access for the **Vlad** internal group. The mobile beta archive passed signature verification without Files and remains local while the broader mobile checks run. [macOS build in TestFlight](https://appstoreconnect.apple.com/apps/6837168864/testflight/macos/3c05997f-a8f1-43dc-bf86-939e99ffe663) · [Hosted matrix](https://github.com/specialistvlad/clistream/actions/runs/45330416491)
+The follow-up macOS beta was archived from `030b9b1` with Finder. App Store Connect reported `VALID` and `IN_BETA_TESTING` and confirmed access for the **Vlad** internal group. The mobile follow-up shipped as build `2611240603`. [macOS build in TestFlight](https://appstoreconnect.apple.com/apps/6837168864/testflight/macos/3c05997f-a8f1-43dc-bf86-939e99ffe663) · [Hosted matrix](https://github.com/specialistvlad/clistream/actions/runs/45330416491)
 
 ## TestFlight 0.1.0 (2611240242)
 
