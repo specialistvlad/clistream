@@ -18,7 +18,7 @@ The focused Mac command-editor case passed. The first Mac run also passed the Fi
 
 Both the iOS 27.2 Duo run and a fresh iOS 27.1 run failed simulator data migration before XCTest started. Duo UI and gallery verification remain open. [Duo retry](https://github.com/specialistvlad/clistream/actions/runs/45312693750)
 
-The follow-up sets the Mac menu label style explicitly, changes Open to a native button, separates the iPad GitHub control, and omits mobile lifecycle actions for attach-only and revoked sessions. Both Xcode schemes compiled with `build-for-testing`. Hosted interaction and visual checks are pending.
+The follow-up sets the Mac menu label style explicitly, changes Open to a native button, separates the iPad GitHub control, and omits mobile lifecycle actions for attach-only and revoked sessions. Both Xcode schemes compiled with `build-for-testing`. The focused Mac and iPad checks passed. The hosted screenshots show the Mac menu symbols and Open button and a standalone iPad GitHub circle. [Mac checks](https://github.com/specialistvlad/clistream/actions/runs/45330638120) · [iPad checks](https://github.com/specialistvlad/clistream/actions/runs/45330430283)
 
 ## Mobile redesign and Files · November 23, 2026
 
@@ -99,6 +99,10 @@ The Duo passed 19 required cases together. A focused fold test passed the remain
 The final full Duo rerun without screenshots passed 16 of 20 required cases. Fold continuity, editing arguments and restarting, independent server routing, and expired pairing failed in this run. Each passed in the runs linked above. A consistently green full Duo run remains outstanding. [Final Duo run without screenshots](https://github.com/specialistvlad/clistream/actions/runs/45018283535/job/137195278598)
 
 The isolated four-client test passed with the native Mac, iPhone and iPad apps and an independent Go terminal client attached to the same pipe. All four exchanged input. The Mac switched to a PTY and then to a second server while the other three continued using the original child. When the Mac returned, it saw the phone’s input from its time away. [Four-client test](https://github.com/specialistvlad/clistream/actions/runs/45019186229)
+
+## TestFlight 0.1.0 (2611240553)
+
+The follow-up macOS beta was archived from `030b9b1` with Finder. App Store Connect reported `VALID` and `IN_BETA_TESTING` and confirmed access for the **Vlad** internal group. The mobile beta archive passed signature verification without Files and remains local while the broader mobile checks run. [macOS build in TestFlight](https://appstoreconnect.apple.com/apps/6837168864/testflight/macos/3c05997f-a8f1-43dc-bf86-939e99ffe663) · [Hosted matrix](https://github.com/specialistvlad/clistream/actions/runs/45330416491)
 
 ## TestFlight 0.1.0 (2611240242)
 
