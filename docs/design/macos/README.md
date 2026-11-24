@@ -24,8 +24,7 @@ Each window board on the canvas renders `Main.dc.html` with these props. Unliste
 | Pair sheet, empty | `screen="welcome"` `sheet="pair"` |
 | Pair sheet, link pasted | `sheet="pairFilled"` |
 | Pairing error | `screen="welcome"` `alert="pairError"` |
-| Restart command sheet | `sheet="command"` |
-| Stop alert | `alert="stop"` |
+| Edit Arguments sheet | `sheet="command"` |
 | Remove Server alert | `alert="remove"` |
 
 Other props: `selected` (`codex`, `claude`, `sh`, `worker`, `sync`) and `accent`.

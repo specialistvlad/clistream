@@ -15,6 +15,7 @@ This specification defines the target design for the macOS app's main window, sh
 | Window | Unified toolbar with title, sidebar and content. System corner radius. Default size 1200 × 740. | `WindowGroup` + `NavigationSplitView` |
 | Traffic lights | 14 pt, centers at x 25, 48, 71 and y 26, inside the sidebar. | System |
 | Sidebar toggle | 36 pt glass circle at the trailing edge of the sidebar's titlebar area, symbol `sidebar.left`. | System (`SidebarCommands`) |
+| Sidebar toolbar | Capsule with **Add Server** (`plus`) and the **Layout and grouping** pull-down (`list.bullet.indent`), 6 pt before the sidebar toggle. It hides with the sidebar; File › Add Server… and the View menu keep both commands. | `ToolbarItem` in the sidebar column |
 | Toolbar | 52 pt tall, no background bar, faint scroll-edge line above content. | `.toolbar` |
 | Title | Program name, SF Pro Bold 15, label color. | `.navigationTitle` |
 | Subtitle | `HOST — SERVER`, SF Pro Medium 11, tertiary label. | `.navigationSubtitle` |
@@ -51,7 +52,7 @@ Selection is the system's rounded highlight (radius 8): gray while the terminal 
 
 ### Layout and grouping
 
-The toolbar's layout pull-down and the View menu set two remembered preferences.
+The sidebar toolbar's layout pull-down and the View menu set two remembered preferences.
 
 | Preference | Values | Result |
 |---|---|---|
@@ -60,11 +61,11 @@ The toolbar's layout pull-down and the View menu set two remembered preferences.
 
 ### Context menus
 
-No keyboard shortcuts, unavailable items hidden, and an ellipsis on items that need more input. Icons mark key actions only, on every item of a group or none: Restart… (`arrow.counterclockwise`) with Stop… (`stop`), and Remove Server… (`trash`, the standard Delete icon). Other items are plain text.
+No keyboard shortcuts, unavailable items hidden, and an ellipsis on items that need more input. The CLI menu offers the toolbar's session commands in toolbar order with the toolbar's symbols, on every item of a group: Restart (`arrow.counterclockwise`), Stop (`stop`) and Edit Arguments… (`pencil`), then Show in Finder (`folder`) and Show Ports (`sidebar.right`). Remove Server… uses `trash`, the standard Delete icon. The tab and window group and the other server items are plain text.
 
 | Target | Items |
 |---|---|
-| CLI row | Open in New Tab · Open in New Window — Restart… (Start… when stopped) · Stop… — Show Ports · Show in Finder |
+| CLI row | Open in New Tab · Open in New Window — Restart (Start when stopped) · Stop · Edit Arguments… — Show in Finder · Show Ports |
 | Server header | Rename… · Reconnect — Remove Server… |
 
 **Rename…** turns the header into an inline text field with the system focus ring. Return saves and Escape cancels. Return on a selected server header starts rename, as in Finder.
@@ -75,46 +76,48 @@ Toolbar items are 36 pt glass circles or capsules drawn by the system. Prefer sy
 
 | Position | Item | Visible when |
 |---|---|---|
-| After the title | Capsule: **Add Server** (`plus`) and **Layout and grouping** pull-down (`list.bullet.indent`) | Always |
-| Trailing group | Capsule: **Restart…** (`arrow.counterclockwise`) and **Stop…** (`stop`) | Running managed run |
+| Trailing group | Capsule: **Restart** (`arrow.counterclockwise`), **Stop** (`stop`) and **Edit Arguments…** (`pencil`) | Running managed run |
 | Trailing group | **Send EOF** (`text.append`) in the same capsule | Pipe run |
-| Trailing | **Start…**, tinted accent with `play.fill`, the window's one prominent action | Stopped run |
+| Trailing | **Start**, tinted accent with `play.fill`, the window's one prominent action, followed by an **Edit Arguments…** circle (`pencil`) | Stopped run |
 | Trailing | `Attach only`, plain tertiary text | One-shot run |
 | Trailing | **Reconnect** circle (`arrow.clockwise`) | Server revoked or attachment lost |
 | Trailing | Capsule: **Show in Finder** (`folder`) and **Ports** (`sidebar.right`, pressed while the inspector is open) | Any session. Show in Finder hides when the supervisor runs with `--files=FALSE` or access is revoked. |
+| Trailing | **CLIStream on GitHub** circle (`chevron.left.forwardslash.chevron.right`), tooltip `Open the CLIStream project on GitHub`, opens `https://github.com/specialistvlad/clistream` | Always |
 | Trailing edge | **Search CLIs** field, 160 × 36, placeholder `Search`, filters the sidebar | Always |
+
+Restart stops the run and starts it again with the same arguments. Start launches a stopped program with its last arguments. Stop ends the run for every viewer. All three act at once, so their labels carry no ellipsis. **Edit Arguments…** opens the Edit Arguments sheet.
 
 ## Terminal content
 
 | State | Content |
 |---|---|
 | Running | Live terminal with a block cursor. |
-| Stopped | Retained output of the last run. A bottom strip shows `stop`, `Exited with status N · showing the last run’s output` and a small **Start…** button. |
+| Stopped | Retained output of the last run. A bottom strip shows `stop`, `Exited with status N · showing the last run’s output` and a small **Start** button. |
 | Revoked | The last output stays visible without a cursor. A bottom strip shows `exclamationmark.triangle.fill` in the warning color, `This device’s access to SERVER was revoked. Pair again with a fresh invitation.` and **Pair Again…**. The status bar reads `Disconnected`. |
 
 ## Ports inspector
 
-A trailing inspector, 280 pt (230–400), toggled by the Ports toolbar item and **View › Show Ports**. It has no Done button. Use `.inspector` with a grouped `Form`.
+A trailing inspector, 280 pt (230–400), toggled by the Ports toolbar item and **Session › Show Ports**. It has no Done button. Use `.inspector` with a grouped `Form`.
 
 - Heading `Ports`, SF Pro Bold 13.
 - A grouped box with one row per named export: name, `TCP · 127.0.0.1:8080` caption and a mini switch (36 × 16).
-- When a forward is on, a second line shows the local address in SF Mono and a small **Copy** button.
+- When a forward is on, a second line shows the local address in SF Mono, a small **Copy** button and, for TCP, a small **Open** button that opens `http://` plus the local address in the default browser.
 - Footer: `Forwards keep running when you close this inspector.`
 - With no exports: `This session has no shared ports.`
 
 ## Menu bar
 
-Standard order: app menu, File, Edit, View, Session, Server, Window, Help. Icons follow the HIG's June 2026 rule (key actions only, a whole group or none): the Session menu's run-control group uses the toolbar symbols, Remove Server… uses `trash`, and the system supplies the Dictation and Emoji icons. Other items are plain text. Main menus show shortcuts and dim unavailable commands. Every shortcut uses Command, so Control combinations reach the terminal.
+Standard order: app menu, File, Edit, View, Session, Server, Window, Help. The Session menu carries the same commands as the CLI context menu in the same order, with the toolbar's symbols; the Server menu matches the server context menu. Icons cover a whole group or none: Remove Server… uses `trash`, the system supplies the Dictation and Emoji icons, and the other groups are plain text. Main menus show shortcuts and dim unavailable commands. Every shortcut uses Command, so Control combinations reach the terminal.
 
 | Menu | Items |
 |---|---|
 | File | New Window ⌘N · New Tab ⌘T — Add Server… ⌘K · Paste Invitation — Close Window ⌘W |
 | Edit | Undo ⌘Z · Redo ⇧⌘Z — Cut ⌘X · Copy ⌘C · Paste ⌘V · Select All ⌘A — Start Dictation… · Emoji & Symbols |
-| View | Hide Sidebar ⌃⌘S · Show Ports ⌥⌘I — as Tree ⌘1 · as List ⌘2 · Group By ▸ (Server, Host, CLI Name) — Enter Full Screen |
-| Session | Restart… ⌘R (Start… when stopped) · Stop… ⌘. · Send EOF · Reconnect — Open in New Tab · Open in New Window — Show in Finder ⌥⌘R |
+| View | Hide Sidebar ⌃⌘S — as Tree ⌘1 · as List ⌘2 · Group By ▸ (Server, Host, CLI Name) — Enter Full Screen |
+| Session | Open in New Tab · Open in New Window — Restart ⌘R (Start when stopped) · Stop ⌘. · Edit Arguments… ⌘< · Send EOF · Reconnect — Show in Finder ⌥⌘R · Show Ports ⌥⌘I |
 | Server | Rename… · Reconnect — Remove Server… ⌘⌫ |
 
-Restart ⌘R and Stop ⌘. follow Xcode's Run and Stop. Implement with `.commands`: `CommandGroup` for File and View, `CommandMenu("Session")` and `CommandMenu("Server")`, routed to the key window through focused scene values.
+Restart ⌘R, Stop ⌘. and Edit Arguments… ⌘< follow Xcode's Run, Stop and Edit Scheme…. Implement with `.commands`: `CommandGroup` for File and View, `CommandMenu("Session")` and `CommandMenu("Server")`, routed to the key window through focused scene values.
 
 ## Sheets
 
@@ -123,8 +126,8 @@ Sheets follow the kit's dialog: 440 pt wide, radius 24, title SF Pro Bold 13, me
 | Sheet | Title and message | Rows | Buttons |
 |---|---|---|---|
 | Pair, empty | `Pair with a server` · `Paste the invitation from clistreamd. Invitations last three minutes.` | Invitation: focused field, placeholder `clistream://host/?token=…` | Cancel · **Pair** (disabled until the link is valid) |
-| Pair, link pasted | `Pair with a server` · `Check the server before pairing. This device can then control every CLI on it.` | Invitation: masked · Server: `192.168.1.20:7443` · Identity: fingerprint in SF Mono | Cancel · **Pair** |
-| Restart or Start | `Restart “NAME”` · `Restarting ends the current run for everyone connected.` (Start: `Starts a new run with this command.`) | Command: focused SF Mono field, prefilled with the current command. Help below: `Quote arguments that contain spaces. Use "" for an empty argument.` | Cancel · **Restart** or **Start** |
+| Pair, link pasted | `Pair with a server` · `Check the server before pairing. This device can then control every CLI on it.` | Invitation: the link in SF Mono, `clistream://192.168.1.20:7443/?token=…` · Server: `192.168.1.20:7443` · Identity: fingerprint in SF Mono | Cancel · **Pair** |
+| Edit Arguments | `Edit Arguments for “NAME”` · `Saving restarts “NAME” for everyone connected.` (stopped: `Saving starts “NAME” with this command.`) | Command: focused SF Mono field, prefilled with the current command. Help below: `Quote arguments that contain spaces. Use "" for an empty argument.` | Cancel · **Restart** or **Start** |
 
 ## Alerts
 
@@ -132,7 +135,6 @@ Alerts follow the kit's side-by-side alert: 260 pt wide, 22 pt padding, radius 1
 
 | Alert | Title | Message | Buttons |
 |---|---|---|---|
-| Stop | `Stop “NAME”?` | `This ends the current run for everyone connected.` | Stop (destructive) · **Cancel** |
 | Remove server | `Remove “SERVER”?` | `This Mac forgets the server and its pairing. The device stays enrolled until the server operator revokes it.` | Remove (destructive) · **Cancel** |
 | Pairing error | `Couldn’t pair this device` | `The invitation expired or was replaced. Ask the server operator for a new one with clistreamd invite.` | **OK**, full width |
 
@@ -148,7 +150,10 @@ Alerts follow the kit's side-by-side alert: 260 pt wide, 22 pt padding, radius 1
 | Paste Invitation | Reads a `clistream://` link from the pasteboard and opens the Pair sheet with it filled in. |
 | Remove Server… | Deletes the local server profile and its enrollment directory after the alert confirms. Server-side revocation stays with the operator. |
 | Show in Finder | Opens the session's shared workspace in Finder through the CLIStream File Provider domain, at `CLIStream › SERVER › HOST › PROGRAM`. Requires the replicated File Provider described under [Future file access](../../apple-client-design.md#future-file-access). |
-| Context menu lifecycle actions | Restart…, Stop… and Show Ports activate the clicked row, then run the same flow as the toolbar. |
+| Context menu lifecycle actions | Restart, Stop, Edit Arguments…, Show in Finder and Show Ports activate the clicked row, then run the same flow as the toolbar. |
+| Edit Arguments… | Edits the command line in a sheet, then restarts a running program or starts a stopped one. Restart and Stop act at once with the current arguments. |
+| Open port | Opens an enabled TCP forward in the default browser from the Ports inspector. |
+| GitHub link | Opens the CLIStream project on GitHub from the toolbar. |
 | Menu bar commands | The Session, Server and View items above, enabled by the key window's selection. |
 
 ## Screens
@@ -166,8 +171,7 @@ Each screen below is a board on the design canvas. Shipping screenshots with the
 | Pair sheet, empty | Invitation field focused | `add-server.png` |
 | Pair sheet, link pasted | Server and identity shown | `confirm-server.png` |
 | Pairing error | Expired invitation | `pairing-error.png` |
-| Restart command sheet | Command field focused | `edit-command.png` |
-| Stop alert | Destructive confirmation | `stop-confirmation.png` |
+| Edit Arguments sheet | Command field focused | `edit-command.png` |
 | Remove Server alert | Destructive confirmation | none |
 | Menu bar | File, Edit, View, Session and Server open | none |
 

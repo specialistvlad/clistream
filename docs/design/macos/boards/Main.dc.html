@@ -16,6 +16,7 @@ body{margin:0}
 button{font:inherit;color:inherit;cursor:default}
 .sec .sec-chev{opacity:0}
 .sec:hover .sec-chev{opacity:1}
+.sf-chevron-left-forwardslash-chevron-right{-webkit-mask-image:url(/_blob/5f1d9ddeabea0244018abad36d623224);mask-image:url(/_blob/5f1d9ddeabea0244018abad36d623224)}
 .sf-folder{-webkit-mask-image:url(/_blob/e42db55b144edd942a7b1f4e0a717c77);mask-image:url(/_blob/e42db55b144edd942a7b1f4e0a717c77)}
 </style>
 </helmet>
@@ -29,7 +30,13 @@ button{font:inherit;color:inherit;cursor:default}
 <span style="width: 14px; height: 14px; border-radius: 7px; background: #FEBC2E; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12)"></span>
 <span style="width: 14px; height: 14px; border-radius: 7px; background: #28C840; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.12)"></span>
 </div>
+<div style="display: flex; align-items: center; gap: 6px">
+<div style="height: 36px; display: flex; align-items: center; padding: 0 2px; border-radius: 18px; background: {{t.btn}}; box-shadow: {{t.btnShadow}}; color: {{t.icon}}">
+<button type="button" aria-label="Add Server" title="Add Server" style="width: 36px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-plus" aria-hidden="true" style="width: 16px; height: 15px"></span></button>
+<button type="button" aria-label="Layout and grouping" aria-haspopup="menu" title="Layout and grouping" style="width: 50px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center; gap: 4px"><span class="sf sf-list-bullet-indent" aria-hidden="true" style="width: 20px; height: 13px"></span><span class="sf sf-chevron-down" aria-hidden="true" style="width: 9px; height: 6px"></span></button>
+</div>
 <button type="button" aria-label="Hide Sidebar" style="width: 36px; height: 36px; border-radius: 18px; border: none; background: {{t.btn}}; box-shadow: {{t.btnShadow}}; color: {{t.icon}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-sidebar-left" aria-hidden="true" style="width: 20px; height: 16px"></span></button>
+</div>
 </div>
 
 <div style="flex: 1; overflow-y: auto; padding: 8px 10px 12px; display: flex; flex-direction: column; gap: 16px">
@@ -85,10 +92,6 @@ button{font:inherit;color:inherit;cursor:default}
 <h1 style="margin: 0; font-size: 15px; font-weight: 700; line-height: 18px; color: {{t.title}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{title}}</h1>
 <span style="font-size: 11px; font-weight: 500; line-height: 13px; color: {{t.tertiary}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{subtitle}}</span>
 </div>
-<div style="margin-left: 10px; height: 36px; display: flex; align-items: center; padding: 0 2px; border-radius: 18px; background: {{t.btn}}; box-shadow: {{t.btnShadow}}; color: {{t.icon}}">
-<button type="button" aria-label="Add Server" title="Add Server" style="width: 36px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-plus" aria-hidden="true" style="width: 16px; height: 15px"></span></button>
-<button type="button" aria-label="Layout and grouping" aria-haspopup="menu" title="Layout and grouping" style="width: 50px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center; gap: 4px"><span class="sf sf-list-bullet-indent" aria-hidden="true" style="width: 20px; height: 13px"></span><span class="sf sf-chevron-down" aria-hidden="true" style="width: 9px; height: 6px"></span></button>
-</div>
 <span style="flex: 1"></span>
 <sc-if value="{{session}}" hint-placeholder-val="{{ true }}">
 <div style="display: flex; align-items: center; gap: 8px">
@@ -101,8 +104,9 @@ button{font:inherit;color:inherit;cursor:default}
 <sc-if value="{{tb.group}}" hint-placeholder-val="{{ true }}">
 <div style="height: 36px; display: flex; align-items: center; padding: 0 2px; border-radius: 18px; background: {{t.btn}}; box-shadow: {{t.btnShadow}}; color: {{t.icon}}">
 <sc-if value="{{tb.managed}}" hint-placeholder-val="{{ true }}">
-<button type="button" aria-label="Restart…" title="Restart…" style="width: 37px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-arrow-counterclockwise" aria-hidden="true" style="width: 15px; height: 17px"></span></button>
-<button type="button" aria-label="Stop…" title="Stop…" style="width: 37px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-stop" aria-hidden="true" style="width: 15px; height: 14px"></span></button>
+<button type="button" aria-label="Restart" title="Stop and start with the same arguments" style="width: 37px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-arrow-counterclockwise" aria-hidden="true" style="width: 15px; height: 17px"></span></button>
+<button type="button" aria-label="Stop" title="Stop" style="width: 37px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-stop" aria-hidden="true" style="width: 15px; height: 14px"></span></button>
+<button type="button" aria-label="Edit Arguments…" title="Edit the arguments, then restart" style="width: 37px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-pencil" aria-hidden="true" style="width: 15px; height: 15px"></span></button>
 </sc-if>
 <sc-if value="{{tb.pipe}}" hint-placeholder-val="{{ false }}">
 <button type="button" aria-label="Send EOF" title="Send EOF" style="width: 37px; height: 32px; border: none; border-radius: 16px; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-text-append" aria-hidden="true" style="width: 18px; height: 15px"></span></button>
@@ -110,7 +114,8 @@ button{font:inherit;color:inherit;cursor:default}
 </div>
 </sc-if>
 <sc-if value="{{tb.stopped}}" hint-placeholder-val="{{ false }}">
-<button type="button" style="height: 36px; display: flex; align-items: center; gap: 6px; padding: 0 15px 0 13px; border-radius: 18px; border: none; background: {{accent}}; color: #FFFFFF; font-size: 13px; font-weight: 500; box-shadow: {{t.btnShadow}}"><span class="sf sf-play-fill" aria-hidden="true" style="width: 11px; height: 13px"></span>Start…</button>
+<button type="button" style="height: 36px; display: flex; align-items: center; gap: 6px; padding: 0 15px 0 13px; border-radius: 18px; border: none; background: {{accent}}; color: #FFFFFF; font-size: 13px; font-weight: 500; box-shadow: {{t.btnShadow}}"><span class="sf sf-play-fill" aria-hidden="true" style="width: 11px; height: 13px"></span>Start</button>
+<button type="button" aria-label="Edit Arguments…" title="Edit the arguments, then start" style="width: 36px; height: 36px; border-radius: 18px; border: none; background: {{t.btn}}; box-shadow: {{t.btnShadow}}; color: {{t.icon}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-pencil" aria-hidden="true" style="width: 15px; height: 15px"></span></button>
 </sc-if>
 <div style="height: 36px; display: flex; align-items: center; padding: 0 2px; border-radius: 18px; background: {{t.btn}}; box-shadow: {{t.btnShadow}}; color: {{t.icon}}">
 <sc-if value="{{tb.finder}}" hint-placeholder-val="{{ true }}">
@@ -118,6 +123,7 @@ button{font:inherit;color:inherit;cursor:default}
 </sc-if>
 <button type="button" onClick="{{togglePorts}}" aria-pressed="{{portsPressed}}" aria-label="Ports" title="Show or hide port forwarding" style="width: 37px; height: 32px; border: none; border-radius: 16px; background: {{portsBg}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-sidebar-right" aria-hidden="true" style="width: 20px; height: 16px"></span></button>
 </div>
+<a href="https://github.com/specialistvlad/clistream" target="_blank" rel="noopener" aria-label="CLIStream on GitHub" title="Open the CLIStream project on GitHub" style="width: 36px; height: 36px; border-radius: 18px; background: {{t.btn}}; box-shadow: {{t.btnShadow}}; color: {{t.icon}}; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><span class="sf sf-chevron-left-forwardslash-chevron-right" aria-hidden="true" style="width: 20px; height: 14px"></span></a>
 <label style="width: 160px; height: 36px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 0 9px 0 12px; border-radius: 18px; background: {{t.btn}}; box-shadow: {{searchShadow}}; color: {{t.icon}}">
 <span class="sf sf-magnifyingglass" aria-hidden="true" style="width: 16px; height: 15px"></span>
 <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search CLIs</span>
@@ -154,7 +160,7 @@ button{font:inherit;color:inherit;cursor:default}
 <div style="display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-top: 1px solid {{t.hair}}">
 <span class="sf sf-stop" aria-hidden="true" style="width: 14px; height: 13px; color: {{t.secondary}}"></span>
 <span style="flex: 1; font-size: 13px; color: {{t.secondary}}">Exited with status 0 · showing the last run’s output</span>
-<button type="button" style="height: 20px; padding: 0 9px; border-radius: 6px; border: none; background: {{t.push}}; font-size: 12px">Start…</button>
+<button type="button" style="height: 20px; padding: 0 9px; border-radius: 6px; border: none; background: {{t.push}}; font-size: 12px">Start</button>
 </div>
 </sc-if>
 <sc-if value="{{revoked}}" hint-placeholder-val="{{ false }}">
@@ -187,6 +193,9 @@ button{font:inherit;color:inherit;cursor:default}
 <div style="display: flex; align-items: center; gap: 6px">
 <span style="flex: 1; font-family: 'SF Mono', ui-monospace, 'JetBrains Mono', monospace; font-size: 12px">{{pt.addr}}</span>
 <button type="button" aria-label="Copy address" style="height: 20px; padding: 0 9px; border-radius: 6px; border: none; background: {{t.push}}; font-size: 12px">Copy</button>
+<sc-if value="{{pt.tcp}}" hint-placeholder-val="{{ true }}">
+<button type="button" aria-label="Open {{pt.name}} in the browser" style="height: 20px; padding: 0 9px; border-radius: 6px; border: none; background: {{t.push}}; font-size: 12px">Open</button>
+</sc-if>
 </div>
 </sc-if>
 </div>
@@ -378,8 +387,8 @@ class Component extends DCLogic {
     const menus = {
       cli: { label: 'codex actions', left: '200px', top: '160px', items: [
         item('Open in New Tab'), item('Open in New Window'), sep,
-        item('Restart…', true, 'sf-arrow-counterclockwise', 12, 14), item('Stop…', false, 'sf-stop', 12, 11), sep,
-        item('Show Ports'), item('Show in Finder')
+        item('Restart', true, 'sf-arrow-counterclockwise', 12, 14), item('Stop', false, 'sf-stop', 12, 11), item('Edit Arguments…', false, 'sf-pencil', 12, 12), sep,
+        item('Show in Finder', false, 'sf-folder', 14, 12), item('Show Ports', false, 'sf-sidebar-right', 15, 12)
       ] },
       server: { label: 'Build server actions', left: '150px', top: '84px', items: [
         item('Rename…', true), item('Reconnect'), sep, item('Remove Server…', false, 'sf-trash', 12, 14)
@@ -391,7 +400,7 @@ class Component extends DCLogic {
     const ports = p.ports.map((pt, i) => {
       const on = fw[sel + pt.key] === undefined ? pt.on : fw[sel + pt.key];
       return Object.assign({}, pt, {
-        on, checked: on ? 'true' : 'false', switchLabel: 'Forward ' + pt.name,
+        on, tcp: pt.proto === 'TCP', checked: on ? 'true' : 'false', switchLabel: 'Forward ' + pt.name,
         sep: i === 0 ? 'transparent' : t.hair,
         track: on ? t.trackOn : t.trackOff, justify: on ? 'flex-end' : 'flex-start',
         toggle: () => this.setState({ fw: Object.assign({}, fw, { [sel + pt.key]: !on }) })
@@ -417,9 +426,9 @@ class Component extends DCLogic {
         rows: [field('Invitation:', 'Invitation', '', 'clistream://host/?token=…', sans, true)], hasHelp: false, help: '',
         buttons: [sb('Cancel'), sb('Pair', true, true)] },
       pairFilled: { title: 'Pair with a server', message: 'Check the server before pairing. This device can then control every CLI on it.',
-        rows: [field('Invitation:', 'Invitation', '••••••••••••••••••••••••••••••••••••••', '', sans, false), textRow('Server:', '192.168.1.20:7443', sans), textRow('Identity:', '4F2A 91C3 0B7E 55D1 … 7D0E', mono)],
+        rows: [field('Invitation:', 'Invitation', 'clistream://192.168.1.20:7443/?token=7Q2MX9KD4RTA', '', mono, false), textRow('Server:', '192.168.1.20:7443', sans), textRow('Identity:', '4F2A 91C3 0B7E 55D1 … 7D0E', mono)],
         hasHelp: false, help: '', buttons: [sb('Cancel'), sb('Pair', true)] },
-      command: { title: (cur.state === 'running' ? 'Restart “' : 'Start “') + cur.name + '”', message: cur.state === 'running' ? 'Restarting ends the current run for everyone connected.' : 'Starts a new run with this command.',
+      command: { title: 'Edit Arguments for “' + cur.name + '”', message: cur.state === 'running' ? 'Saving restarts “' + cur.name + '” for everyone connected.' : 'Saving starts “' + cur.name + '” with this command.',
         rows: [field('Command:', 'Command', cur.cmd, '', mono, true)], hasHelp: true, help: 'Quote arguments that contain spaces. Use "" for an empty argument.',
         buttons: [sb('Cancel'), sb(cur.state === 'running' ? 'Restart' : 'Start', true)] }
     };

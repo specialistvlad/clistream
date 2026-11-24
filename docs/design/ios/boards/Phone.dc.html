@@ -16,6 +16,7 @@ body{margin:0}
 button{font:inherit;color:inherit;cursor:default}
 .sf-keyboard{-webkit-mask-image:url(/_blob/066cb24e307a212918800dacd48b57f9);mask-image:url(/_blob/066cb24e307a212918800dacd48b57f9)}
 .sf-qrcode-viewfinder{-webkit-mask-image:url(/_blob/187590152f11b97313f7a2fa1f895f8d);mask-image:url(/_blob/187590152f11b97313f7a2fa1f895f8d)}
+.sf-chevron-left-forwardslash-chevron-right{-webkit-mask-image:url(/_blob/5f1d9ddeabea0244018abad36d623224);mask-image:url(/_blob/5f1d9ddeabea0244018abad36d623224)}
 .kit-keyboard{background-image:url(/_blob/3b1169016c1039ea835806d8fb5e16ca);background-size:402px 874px;background-position:0 -540px;background-repeat:no-repeat}
 </style>
 </helmet>
@@ -36,20 +37,26 @@ button{font:inherit;color:inherit;cursor:default}
 
 <sc-if value="{{scrList}}" hint-placeholder-val="{{ true }}">
 <sc-if value="{{isPhone}}" hint-placeholder-val="{{ true }}">
+<sc-if value="{{chromeOn}}" hint-placeholder-val="{{ true }}">
 <div style="position: absolute; right: 16px; top: 56px; height: 44px; display: flex; align-items: center; padding: 0 4px; border-radius: 22px; background: {{t.glass}}; box-shadow: {{t.glassShadow}}">
 <button type="button" aria-label="Scan QR Code" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-qrcode-viewfinder" aria-hidden="true" style="width: 20px; height: 19px"></span></button>
 <button type="button" aria-label="Add Server" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-plus" aria-hidden="true" style="width: 19px; height: 18px"></span></button>
 <button type="button" aria-label="Layout and grouping" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-list-bullet-indent" aria-hidden="true" style="width: 22px; height: 14px"></span></button>
 </div>
+<a href="https://github.com/specialistvlad/clistream" target="_blank" rel="noopener" aria-label="CLIStream on GitHub" style="position: absolute; left: 16px; top: 56px; width: 44px; height: 44px; border-radius: 22px; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; color: {{t.label}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-chevron-left-forwardslash-chevron-right" aria-hidden="true" style="width: 23px; height: 16px"></span></a>
+</sc-if>
 <h1 style="position: absolute; left: 16px; top: 102px; margin: 0; font-size: 34px; font-weight: 700; letter-spacing: 0.3px">Servers</h1>
 </sc-if>
 <sc-if value="{{isDuo}}" hint-placeholder-val="{{ false }}">
 <h1 style="position: absolute; left: 20px; top: 26px; margin: 0; font-size: 17px; font-weight: 600">Servers</h1>
+<sc-if value="{{chromeOn}}" hint-placeholder-val="{{ true }}">
 <div style="position: absolute; right: 20px; top: 116px; display: flex; flex-direction: column; gap: 10px">
 <button type="button" aria-label="Scan QR Code" style="width: 44px; height: 44px; border-radius: 22px; border: none; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-qrcode-viewfinder" aria-hidden="true" style="width: 20px; height: 19px"></span></button>
 <button type="button" aria-label="Add Server" style="width: 44px; height: 44px; border-radius: 22px; border: none; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-plus" aria-hidden="true" style="width: 19px; height: 18px"></span></button>
 <button type="button" aria-label="Layout and grouping" style="width: 44px; height: 44px; border-radius: 22px; border: none; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-list-bullet-indent" aria-hidden="true" style="width: 22px; height: 14px"></span></button>
+<a href="https://github.com/specialistvlad/clistream" target="_blank" rel="noopener" aria-label="CLIStream on GitHub" style="width: 44px; height: 44px; border-radius: 22px; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; color: {{t.label}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-chevron-left-forwardslash-chevron-right" aria-hidden="true" style="width: 23px; height: 16px"></span></a>
 </div>
+</sc-if>
 </sc-if>
 
 <div style="position: absolute; left: 16px; right: {{listRight}}; top: {{listTop}}; display: flex; flex-direction: column; gap: 6px">
@@ -94,20 +101,19 @@ button{font:inherit;color:inherit;cursor:default}
 </sc-if>
 
 <sc-if value="{{scrEmpty}}" hint-placeholder-val="{{ false }}">
+<sc-if value="{{chromeOn}}" hint-placeholder-val="{{ true }}">
 <div style="position: absolute; right: 16px; top: 56px; height: 44px; display: flex; align-items: center; padding: 0 4px; border-radius: 22px; background: {{t.glass}}; box-shadow: {{t.glassShadow}}">
 <button type="button" aria-label="Scan QR Code" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-qrcode-viewfinder" aria-hidden="true" style="width: 20px; height: 19px"></span></button>
 <button type="button" aria-label="Add Server" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-plus" aria-hidden="true" style="width: 19px; height: 18px"></span></button>
 <button type="button" aria-label="Layout and grouping" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-list-bullet-indent" aria-hidden="true" style="width: 22px; height: 14px"></span></button>
 </div>
+<a href="https://github.com/specialistvlad/clistream" target="_blank" rel="noopener" aria-label="CLIStream on GitHub" style="position: absolute; left: 16px; top: 56px; width: 44px; height: 44px; border-radius: 22px; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; color: {{t.label}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-chevron-left-forwardslash-chevron-right" aria-hidden="true" style="width: 23px; height: 16px"></span></a>
+</sc-if>
 <h1 style="position: absolute; left: 16px; top: 102px; margin: 0; font-size: 34px; font-weight: 700">Servers</h1>
 <div style="position: absolute; left: 32px; right: 32px; top: 300px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center">
 <span class="sf sf-network" aria-hidden="true" style="width: 56px; height: 56px; color: {{accent}}"></span>
 <h2 style="margin: 8px 0 0; font-size: 22px; font-weight: 700">No Servers</h2>
 <p style="margin: 0; font-size: 17px; line-height: 22px; color: {{t.secondary}}">Scan the QR code that clistreamd shows, or paste its invitation. Invitations last three minutes.</p>
-</div>
-<div style="position: absolute; left: 36px; right: 36px; bottom: 44px; display: flex; flex-direction: column; gap: 10px">
-<button type="button" style="height: 50px; border-radius: 25px; border: none; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; font-size: 17px; font-weight: 600; color: {{accent}}">Paste</button>
-<button type="button" style="height: 50px; border-radius: 25px; border: none; background: {{accent}}; font-size: 17px; font-weight: 600; color: #FFFFFF; display: flex; align-items: center; justify-content: center; gap: 8px"><span class="sf sf-qrcode-viewfinder" aria-hidden="true" style="width: 20px; height: 19px"></span>Scan QR Code</button>
 </div>
 </sc-if>
 
@@ -123,10 +129,12 @@ button{font:inherit;color:inherit;cursor:default}
 <h1 style="margin: 0; font-size: 17px; font-weight: 600; line-height: 20px">sh</h1>
 <span style="font-size: 12px; line-height: 15px; color: {{t.secondary}}; white-space: nowrap">build-mac — Build server</span>
 </div>
+<sc-if value="{{chromeOn}}" hint-placeholder-val="{{ true }}">
 <div style="position: absolute; right: 16px; top: 56px; height: 44px; display: flex; align-items: center; padding: 0 4px; border-radius: 22px; background: {{t.glass}}; box-shadow: {{t.glassShadow}}">
 <button type="button" aria-label="Ports" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-network" aria-hidden="true" style="width: 20px; height: 20px"></span></button>
 <button type="button" aria-label="Session" aria-haspopup="menu" style="width: 44px; height: 44px; border: none; border-radius: 22px; background: {{menuBtnBg}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-ellipsis" aria-hidden="true" style="width: 20px; height: 6px"></span></button>
 </div>
+</sc-if>
 </sc-if>
 <sc-if value="{{isDuo}}" hint-placeholder-val="{{ false }}">
 <button type="button" aria-label="Back" style="position: absolute; left: 14px; top: 16px; width: 44px; height: 44px; border-radius: 22px; border: none; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-chevron-left" aria-hidden="true" style="width: 11px; height: 17px"></span></button>
@@ -167,11 +175,12 @@ button{font:inherit;color:inherit;cursor:default}
 <sc-if value="{{menuOn}}" hint-placeholder-val="{{ false }}">
 <div role="menu" aria-label="Session" style="position: absolute; right: 16px; top: 108px; width: 250px; padding: 6px 0; border-radius: 28px; background: {{t.menu}}; box-shadow: 0 16px 48px rgba(0,0,0,0.28), 0 0 0 0.5px {{t.menuEdge}}; backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px)">
 <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 6px 8px 10px">
-<button type="button" role="menuitem" style="border: none; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; font-size: 13px; font-weight: 500"><span class="sf sf-arrow-counterclockwise" aria-hidden="true" style="width: 18px; height: 21px"></span>Restart…</button>
-<button type="button" role="menuitem" style="border: none; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; font-size: 13px; font-weight: 500; color: {{t.red}}"><span class="sf sf-stop" aria-hidden="true" style="width: 18px; height: 17px"></span>Stop…</button>
+<button type="button" role="menuitem" style="border: none; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; font-size: 13px; font-weight: 500"><span class="sf sf-arrow-counterclockwise" aria-hidden="true" style="width: 18px; height: 21px"></span>Restart</button>
+<button type="button" role="menuitem" style="border: none; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; font-size: 13px; font-weight: 500; color: {{t.red}}"><span class="sf sf-stop" aria-hidden="true" style="width: 18px; height: 17px"></span>Stop</button>
 <button type="button" role="menuitem" aria-disabled="true" style="border: none; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; font-size: 13px; font-weight: 500; color: {{t.disabled}}"><span class="sf sf-text-append" aria-hidden="true" style="width: 20px; height: 17px"></span>Send EOF</button>
 </div>
 <span aria-hidden="true" style="display: block; height: 0.5px; margin: 0 18px; background: {{t.menuSep}}"></span>
+<button type="button" role="menuitem" style="width: 100%; height: 44px; border: none; background: transparent; display: flex; align-items: center; gap: 14px; padding: 0 20px; font-size: 17px; text-align: left"><span class="sf sf-pencil" aria-hidden="true" style="width: 20px; height: 20px"></span>Edit Arguments…</button>
 <button type="button" role="menuitem" style="width: 100%; height: 44px; border: none; background: transparent; display: flex; align-items: center; gap: 14px; padding: 0 20px; font-size: 17px; text-align: left"><span class="sf sf-network" aria-hidden="true" style="width: 21px; height: 21px"></span>Ports</button>
 <button type="button" role="menuitem" style="width: 100%; height: 44px; border: none; background: transparent; display: flex; align-items: center; gap: 14px; padding: 0 20px; font-size: 17px; text-align: left"><span class="sf sf-folder" aria-hidden="true" style="width: 21px; height: 17px"></span>Show in Files</button>
 <span aria-hidden="true" style="display: block; height: 0.5px; margin: 4px 18px; background: {{t.menuSep}}"></span>
@@ -203,6 +212,7 @@ button{font:inherit;color:inherit;cursor:default}
 <sc-if value="{{c.hasDetail}}" hint-placeholder-val="{{ false }}"><span style="font-size: 17px; font-family: {{c.detailFont}}; color: {{t.secondary}}; white-space: nowrap">{{c.detail}}</span></sc-if>
 <sc-if value="{{c.hasToggle}}" hint-placeholder-val="{{ false }}"><button type="button" role="switch" aria-checked="{{c.checked}}" aria-label="{{c.title}}" style="width: 64px; height: 28px; border: none; border-radius: 14px; padding: 2px; box-sizing: border-box; background: {{c.track}}; display: flex; justify-content: {{c.justify}}"><span aria-hidden="true" style="width: 38px; height: 24px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.2)"></span></button></sc-if>
 <sc-if value="{{c.hasCopy}}" hint-placeholder-val="{{ false }}"><button type="button" aria-label="Copy address" style="width: 34px; height: 34px; border-radius: 17px; border: none; background: {{t.fill}}; color: {{accent}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-doc-on-doc" aria-hidden="true" style="width: 13px; height: 16px"></span></button></sc-if>
+<sc-if value="{{c.hasOpen}}" hint-placeholder-val="{{ false }}"><button type="button" aria-label="Open in browser" style="height: 30px; padding: 0 14px; border-radius: 15px; border: none; background: {{t.fill}}; color: {{accent}}; font-size: 15px; font-weight: 600">Open</button></sc-if>
 </div>
 </sc-for>
 </div>
@@ -232,12 +242,12 @@ button{font:inherit;color:inherit;cursor:default}
 
 <sc-if value="{{alertOn}}" hint-placeholder-val="{{ false }}">
 <div aria-hidden="true" style="position: absolute; inset: 0; background: {{t.scrim}}"></div>
-<div role="alertdialog" aria-label="{{al.title}}" style="position: absolute; left: {{alertLeft}}; top: {{alertTop}}; width: 300px; box-sizing: border-box; padding: 22px 18px 18px; border-radius: 34px; background: {{t.alert}}; box-shadow: 0 18px 50px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 8px">
-<h2 style="margin: 0 4px; font-size: 17px; font-weight: 700; line-height: 22px">{{al.title}}</h2>
-<p style="margin: 0 4px; font-size: 15px; line-height: 20px; color: {{t.secondary}}">{{al.message}}</p>
-<div style="display: flex; flex-direction: {{al.dir}}; gap: 10px; margin-top: 12px">
+<div role="alertdialog" aria-label="{{al.title}}" style="position: absolute; left: {{alertLeft}}; top: {{alertTop}}; width: 300px; box-sizing: border-box; padding: 22px 14px 14px; border-radius: 34px; background: {{t.alert}}; box-shadow: 0 18px 50px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0 8px; font-size: 17px; font-weight: 700; line-height: 22px">{{al.title}}</h2>
+<p style="margin: 0 8px; font-size: 17px; line-height: 22px; color: {{t.secondary}}">{{al.message}}</p>
+<div style="display: flex; flex-direction: {{al.dir}}; gap: 8px; margin-top: 14px">
 <sc-for list="{{al.buttons}}" as="b" hint-placeholder-count="2">
-<button type="button" style="flex: 1; height: 48px; border-radius: 24px; border: none; background: {{b.bg}}; color: {{b.fg}}; font-size: 17px; font-weight: {{b.weight}}">{{b.label}}</button>
+<button type="button" style="flex: 1 0 auto; width: {{al.bw}}; height: 48px; border-radius: 24px; border: none; background: {{b.bg}}; color: {{b.fg}}; font-size: 17px; font-weight: {{b.weight}}">{{b.label}}</button>
 </sc-for>
 </div>
 </div>
@@ -329,28 +339,28 @@ class Component extends DCLogic {
         title, sub: x.sub || '', hasSub: !!x.sub, detail: x.detail || '', hasDetail: !!x.detail, detailFont: x.mono ? "'SF Mono', ui-monospace, monospace" : 'inherit',
         font: x.monoTitle ? "'SF Mono', ui-monospace, monospace" : 'inherit', fg: x.accent ? accent : x.dim ? t.secondary : t.label,
         hasToggle: x.toggle !== undefined, checked: x.toggle ? 'true' : 'false', track: x.toggle ? t.green : t.trackOff, justify: x.toggle ? 'flex-end' : 'flex-start',
-        hasCopy: !!x.copy, hasIcon: !!x.icon, icon: x.icon || '', sep: x.first ? 'transparent' : t.sep
+        hasCopy: !!x.copy, hasOpen: !!x.open, hasIcon: !!x.icon, icon: x.icon || '', sep: x.first ? 'transparent' : t.sep
       };
     };
     const group = (rows, header, footer) => ({ rows, header: header || '', hasHeader: !!header, footer: footer || '', hasFooter: !!footer });
     const sheets = {
       ports: { title: 'Ports', confirm: false, confirmLabel: '', height: '470px', groups: [
-        group([cell('web', { sub: 'TCP · 127.0.0.1:8080', toggle: true, first: true }), cell('127.0.0.1:8081', { monoTitle: true, copy: true }), cell('metrics', { sub: 'UDP · 127.0.0.1:9125', toggle: false })], '', 'Forwards keep running when you close this sheet.')
+        group([cell('web', { sub: 'TCP · 127.0.0.1:8080', toggle: true, first: true }), cell('127.0.0.1:8081', { monoTitle: true, copy: true, open: true }), cell('metrics', { sub: 'UDP · 127.0.0.1:9125', toggle: false })], '', 'Forwards keep running when you close this sheet.')
       ] },
-      pair: { title: 'Add Server', confirm: true, confirmLabel: 'Pair', height: '790px', groups: [
-        group([cell('•••••••••••••••••••••••••', { first: true }), cell('Paste', { accent: true, icon: 'sf-doc-on-clipboard' }), cell('Scan QR Code', { accent: true, icon: 'sf-qrcode-viewfinder' })], 'Invitation', 'Scan or paste the invitation from clistreamd. Invitations last three minutes.'),
+      pair: { title: 'Add Server', large: true, confirm: true, confirmLabel: 'Pair', height: '790px', groups: [
+        group([cell('clistream://192.168.1.20:7443/?token=7Q2MX9KD4RTA', { monoTitle: true, first: true }), cell('Paste', { accent: true, icon: 'sf-doc-on-clipboard' }), cell('Scan QR Code', { accent: true, icon: 'sf-qrcode-viewfinder' })], 'Invitation', 'Scan or paste the invitation from clistreamd. Invitations last three minutes.'),
         group([cell('Address', { detail: '192.168.1.20:7443', first: true }), cell('Identity', { detail: '4F2A 91C3 … 7D0E', mono: true })], 'Server', 'Check the server before pairing. This device can then control every CLI on it.')
       ] },
-      scan: { title: 'Scan QR Code', confirm: false, confirmLabel: '', height: '790px', groups: [] },
-      command: { title: 'Restart “sh”', confirm: true, confirmLabel: 'Restart', height: '470px', groups: [
-        group([cell('/bin/sh -l', { monoTitle: true, first: true })], 'Command', 'Quote arguments that contain spaces. Use "" for an empty argument. Restarting ends the current run for everyone connected.')
+      scan: { title: 'Scan QR Code', large: true, confirm: false, confirmLabel: '', height: '790px', groups: [] },
+      command: { title: 'Edit Arguments', confirm: true, confirmLabel: 'Restart', height: '470px', groups: [
+        group([cell('/bin/sh -l', { monoTitle: true, first: true })], 'Command', 'Quote arguments that contain spaces. Use "" for an empty argument. Saving restarts “sh” for everyone connected.')
       ] }
     };
     const ab = (label, kind) => kind === 'primary' ? { label, bg: accent, fg: '#FFFFFF', weight: 600 }
       : kind === 'destructive' ? { label, bg: t.fill, fg: t.red, weight: 600 } : { label, bg: t.fill, fg: t.label, weight: 400 };
     const alerts = {
-      stop: { title: 'Stop “sh”?', message: 'This ends the current run for everyone connected.', dir: 'row', buttons: [ab('Cancel'), ab('Stop', 'destructive')] },
-      pairError: { title: 'Couldn’t Pair This Device', message: 'The invitation expired or was replaced. Ask the server operator for a new one with clistreamd invite.', dir: 'column', buttons: [ab('OK', 'primary')] }
+      stop: { title: 'Stop “sh”?', message: 'This ends the current run for everyone connected.', dir: 'row', bw: '0px', buttons: [ab('Cancel'), ab('Stop', 'destructive')] },
+      pairError: { title: 'Couldn’t Pair This Device', message: 'The invitation expired or was replaced. Ask the server operator for a new one with clistreamd invite.', dir: 'column', bw: '100%', buttons: [ab('OK', 'primary')] }
     };
 
     const scrTerm = screen === 'terminal';
@@ -366,6 +376,7 @@ class Component extends DCLogic {
       termBottom: kb ? '420px' : duo ? '40px' : '84px', statusBottom: kb ? '392px' : duo ? '12px' : '42px', statusRight: duo ? '96px' : kb ? '16px' : '76px',
       menuOn: menuKind === 'session', menuBtnBg: menuKind === 'session' ? t.fill : 'transparent',
       sheetOn: !!sheets[sheetKind], sh: sheets[sheetKind] || sheets.ports, scanOn: sheetKind === 'scan',
+      chromeOn: !(sheets[sheetKind] && sheets[sheetKind].large),
       alertOn: !!alerts[alertKind], al: alerts[alertKind] || alerts.stop,
       alertLeft: ((W - 300) / 2) + 'px', alertTop: (H / 2 - 110) + 'px'
     };

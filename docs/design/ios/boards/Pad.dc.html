@@ -15,6 +15,7 @@
 body{margin:0}
 button{font:inherit;color:inherit;cursor:default}
 .sf-qrcode-viewfinder{-webkit-mask-image:url(/_blob/187590152f11b97313f7a2fa1f895f8d);mask-image:url(/_blob/187590152f11b97313f7a2fa1f895f8d)}
+.sf-chevron-left-forwardslash-chevron-right{-webkit-mask-image:url(/_blob/5f1d9ddeabea0244018abad36d623224);mask-image:url(/_blob/5f1d9ddeabea0244018abad36d623224)}
 </style>
 </helmet>
 <div style="width: {{boardW}}; height: {{boardH}}; box-sizing: border-box; padding: 40px; background: {{t.desk}}; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; color: {{t.label}}; -webkit-font-smoothing: antialiased">
@@ -31,7 +32,12 @@ button{font:inherit;color:inherit;cursor:default}
 <button type="button" aria-label="Add Server" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-plus" aria-hidden="true" style="width: 19px; height: 18px"></span></button>
 <button type="button" aria-label="Layout and grouping" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-list-bullet-indent" aria-hidden="true" style="width: 22px; height: 14px"></span></button>
 </div>
+<div style="display: flex; gap: 10px">
+<sc-if value="{{isPad}}" hint-placeholder-val="{{ true }}">
+<a href="https://github.com/specialistvlad/clistream" target="_blank" rel="noopener" aria-label="CLIStream on GitHub" style="width: 44px; height: 44px; border-radius: 22px; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; color: {{t.label}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-chevron-left-forwardslash-chevron-right" aria-hidden="true" style="width: 23px; height: 16px"></span></a>
+</sc-if>
 <button type="button" aria-label="Hide Sidebar" style="width: 44px; height: 44px; border-radius: 22px; border: none; background: {{t.glass}}; box-shadow: {{t.glassShadow}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-sidebar-left" aria-hidden="true" style="width: 23px; height: 18px"></span></button>
+</div>
 </div>
 <label style="position: absolute; left: 16px; right: 16px; top: {{searchTop}}; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 20px; background: {{t.field}}; color: {{t.secondary}}">
 <span class="sf sf-magnifyingglass" aria-hidden="true" style="width: 18px; height: 17px"></span>
@@ -74,8 +80,9 @@ button{font:inherit;color:inherit;cursor:default}
 </div>
 <div style="position: absolute; right: {{barRight}}; top: {{barTop}}; display: flex; gap: 10px">
 <div style="height: 44px; display: flex; align-items: center; padding: 0 4px; border-radius: 22px; background: {{t.glass}}; box-shadow: {{t.glassShadow}}">
-<button type="button" aria-label="Restart…" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-arrow-counterclockwise" aria-hidden="true" style="width: 17px; height: 20px"></span></button>
-<button type="button" aria-label="Stop…" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-stop" aria-hidden="true" style="width: 17px; height: 16px"></span></button>
+<button type="button" aria-label="Restart" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-arrow-counterclockwise" aria-hidden="true" style="width: 17px; height: 20px"></span></button>
+<button type="button" aria-label="Stop" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-stop" aria-hidden="true" style="width: 17px; height: 16px"></span></button>
+<button type="button" aria-label="Edit Arguments…" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-pencil" aria-hidden="true" style="width: 19px; height: 19px"></span></button>
 </div>
 <div style="height: 44px; display: flex; align-items: center; padding: 0 4px; border-radius: 22px; background: {{t.glass}}; box-shadow: {{t.glassShadow}}">
 <button type="button" aria-label="Show in Files" style="width: 44px; height: 44px; border: none; background: transparent; display: flex; align-items: center; justify-content: center"><span class="sf sf-folder" aria-hidden="true" style="width: 21px; height: 17px"></span></button>
@@ -101,6 +108,7 @@ button{font:inherit;color:inherit;cursor:default}
 </div>
 <sc-if value="{{c.hasToggle}}" hint-placeholder-val="{{ true }}"><button type="button" role="switch" aria-checked="{{c.checked}}" aria-label="{{c.title}}" style="width: 64px; height: 28px; border: none; border-radius: 14px; padding: 2px; box-sizing: border-box; background: {{c.track}}; display: flex; justify-content: {{c.justify}}"><span aria-hidden="true" style="width: 38px; height: 24px; border-radius: 12px; background: #FFFFFF; box-shadow: 0 1px 3px rgba(0,0,0,0.2)"></span></button></sc-if>
 <sc-if value="{{c.hasCopy}}" hint-placeholder-val="{{ false }}"><button type="button" aria-label="Copy address" style="width: 34px; height: 34px; border-radius: 17px; border: none; background: {{t.fill}}; color: {{accent}}; display: flex; align-items: center; justify-content: center"><span class="sf sf-doc-on-doc" aria-hidden="true" style="width: 13px; height: 16px"></span></button></sc-if>
+<sc-if value="{{c.hasOpen}}" hint-placeholder-val="{{ false }}"><button type="button" aria-label="Open in browser" style="height: 30px; padding: 0 14px; border-radius: 15px; border: none; background: {{t.fill}}; color: {{accent}}; font-size: 15px; font-weight: 600">Open</button></sc-if>
 </div>
 </sc-for>
 </div>
@@ -175,10 +183,10 @@ class Component extends DCLogic {
       return {
         title, sub: x.sub || '', hasSub: !!x.sub, font: x.mono ? "'SF Mono', ui-monospace, monospace" : 'inherit',
         hasToggle: !!x.key, checked: on ? 'true' : 'false', track: on ? t.green : t.trackOff, justify: on ? 'flex-end' : 'flex-start',
-        hasCopy: !!x.copy, sep: x.first ? 'transparent' : t.sep
+        hasCopy: !!x.copy, hasOpen: !!x.open, sep: x.first ? 'transparent' : t.sep
       };
     };
-    const ports = [pc('web', { sub: 'TCP · 127.0.0.1:8080', key: 'web', on: true, first: true }), pc('127.0.0.1:8081', { mono: true, copy: true }), pc('metrics', { sub: 'UDP · 127.0.0.1:9125', key: 'metrics', on: false })];
+    const ports = [pc('web', { sub: 'TCP · 127.0.0.1:8080', key: 'web', on: true, first: true }), pc('127.0.0.1:8081', { mono: true, copy: true, open: true }), pc('metrics', { sub: 'UDP · 127.0.0.1:9125', key: 'metrics', on: false })];
     const inspW = duo ? 300 : 360;
     return {
       t, accent, isPad: !duo, isDuo: duo, sections, lines, ports,

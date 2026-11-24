@@ -33,7 +33,6 @@ Each iOS board on the canvas renders one of the two components with these props.
 | `IPhonePair` | Phone | `sheet="pair"` |
 | `IPhoneScan` | Phone | `sheet="scan"` |
 | `IPhoneCommand` | Phone | `screen="terminal"` `sheet="command"` |
-| `IPhoneStop` | Phone | `screen="terminal"` `alert="stop"` |
 | `IPhoneEmpty` | Phone | `screen="empty"` |
 | `IPhonePairError` | Phone | `screen="empty"` `alert="pairError"` |
 | `DuoOuterList` | Phone | `device="duoOuter"` |

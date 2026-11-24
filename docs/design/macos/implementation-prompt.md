@@ -6,6 +6,20 @@ Give this file to a coding agent working in this repository.
 
 You are implementing the macOS 27 redesign of the CLIStream Mac app. The design is finished and approved by the owner. Your job is to make the shipping app match it, using Apple's system components, and to keep the iPhone and iPad apps working unchanged.
 
+## Revision of November 24, 2026
+
+The first implementation of this design has shipped. The owner then revised it, and spec.md, tokens.json and the boards hold the revised design. Implement these changes. The Mac interface now lives in `apple/Desktop` (`DesktopApp`, `DesktopCommands`, `DesktopSidebar`, `DesktopSheets`, `DesktopTerminal`), with session models and the command field in `apple/App`.
+
+1. **Run controls act at once.** Restart stops the run and starts it again with the same arguments. Start launches a stopped program with its last arguments. Stop ends the run with no alert. Their labels lose the ellipsis in the toolbar, menus and the stopped strip.
+2. **Edit Arguments…** (`pencil`) opens the command sheet, now titled `Edit Arguments for “NAME”`. Confirming restarts a running program or starts a stopped one. It follows Stop in the toolbar group, sits beside Start on a stopped run, and appears in the CLI context menu and in Session as ⌘<.
+3. **One command set.** The CLI context menu and the Session menu list the toolbar's commands in toolbar order with its symbols. Show Ports moves from View to Session, keeping ⌥⌘I.
+4. **Sidebar toolbar.** Add Server and Layout and grouping move into the sidebar's toolbar area, before the sidebar toggle.
+5. **GitHub link.** A **CLIStream on GitHub** circle before Search opens `https://github.com/specialistvlad/clistream`.
+6. **Open port.** The Ports inspector adds **Open** beside Copy for enabled TCP forwards.
+7. **Visible invitation.** The Pair sheet shows the invitation link in SF Mono.
+
+Follow steps 2, 4, 5 and 7 below for these changes. Update the UI cases that confirm the Stop alert or reach the command sheet through Restart, and add cases for Edit Arguments…, Open and the GitHub link. [Native Apple clients](../../apple-client-design.md) already describes the revised behavior.
+
 ## What exists
 
 The design was built on a canvas with Apple's macOS 27 UI Kit, then written into this folder:
@@ -48,11 +62,11 @@ The sidebar, sheets and controls in `apple/App` are shared with iPhone and iPad.
 3. **Ask the one open question.** **Show in Finder** opens the session's workspace through a File Provider domain, which [Future file access](../../apple-client-design.md#future-file-access) plans and the app lacks today. Ask the owner whether to build the File Provider in this change or ship the button hidden until it exists. Done when the answer is recorded in the plan.
 4. **Build in slices.** Land each slice as a compiling, working increment, in this order:
    1. Sidebar: `List(selection:)`, server sections, host disclosure rows, CLI row states, context menus, inline rename on Return.
-   2. Toolbar: title and subtitle, Add Server and layout capsule, session group, Start… as the prominent action, Reconnect, Show in Finder and Ports capsule, search field.
+   2. Toolbar: title and subtitle, session group with Edit Arguments…, Start as the prominent action, Reconnect, Show in Finder and Ports capsule, GitHub circle, search field. Add Server and layout capsule in the sidebar's toolbar area.
    3. Content: terminal inset, stopped and revoked strips, status bar.
    4. Ports inspector: grouped `Form`, mini switches, no Done button.
    5. Menu bar: File, View, Session and Server commands routed to the key window through focused scene values.
-   6. Sheets and alerts: Pair (empty and pasted), Restart and Start, Stop, Remove Server, pairing error.
+   6. Sheets and alerts: Pair (empty and pasted), Edit Arguments, Remove Server, pairing error.
    7. New features: Search CLIs, Paste Invitation, Remove Server… (delete the profile, its enrollment directory and its saved name), Show in Finder per step 3.
 
    Done for each slice when the macOS app builds locally:

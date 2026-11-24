@@ -14,6 +14,7 @@
 <style>
 body{margin:0}
 button{font:inherit;color:inherit;cursor:default}
+.sf-folder{-webkit-mask-image:url(/_blob/e42db55b144edd942a7b1f4e0a717c77);mask-image:url(/_blob/e42db55b144edd942a7b1f4e0a717c77)}
 </style>
 </helmet>
 <div style="position: relative; width: 1720px; height: 760px; background: #C9CFD8; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, system-ui, sans-serif; font-size: 13px; color: #363636; -webkit-font-smoothing: antialiased; overflow: hidden">
@@ -45,9 +46,9 @@ button{font:inherit;color:inherit;cursor:default}
 
 <div style="position: absolute; left: 120px; right: 40px; bottom: 32px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
 <p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Standard order.</strong> App, File, Edit, View, then the custom Session and Server menus, then Window and Help, as the HIG orders menu bar menus.</p>
-<p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Shortcuts.</strong> Main menus show them and context menus don’t. Every shortcut uses Command, so Control combinations keep reaching the terminal. Restart ⌘R and Stop ⌘. follow Xcode’s Run and Stop.</p>
-<p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Availability.</strong> Main menus dim commands the selection can’t run, such as Send EOF for a PTY. Context menus hide them. Restart… reads Start… when the run is stopped.</p>
-<p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Kit styling.</strong> Rows are 24 pt of SF Pro 13 in a 12 pt-radius glass menu. Icons mark key actions only, as the June 2026 HIG asks: the run controls, Remove Server… and the system’s Dictation and Emoji items. Each group shows icons on every item or none.</p>
+<p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Shortcuts.</strong> Main menus show them and context menus don’t. Every shortcut uses Command, so Control combinations keep reaching the terminal. Restart ⌘R, Stop ⌘. and Edit Arguments… ⌘< follow Xcode’s Run, Stop and Edit Scheme….</p>
+<p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Availability.</strong> Main menus dim commands the selection can’t run, such as Send EOF for a PTY. Context menus hide them. Restart reads Start when the run is stopped.</p>
+<p style="margin: 0; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,0.75); font-size: 12px; line-height: 17px"><strong style="font-weight: 600">Same commands everywhere.</strong> The Session menu, the CLI context menu and the window toolbar offer the same commands with the same symbols; the Server menu matches the server context menu. Rows are 24 pt of SF Pro 13 in a 12 pt-radius glass menu, and each group shows icons on every item or none.</p>
 </div>
 </div>
 </x-dc>
@@ -87,19 +88,20 @@ class Component extends DCLogic {
         it('Start Dictation…', '', { icon: 'sf-mic', w: 10, h: 13 }), it('Emoji & Symbols', '', { icon: 'sf-face-smiling', w: 13, h: 13 })
       ]),
       menu('View', 250, [
-        it('Hide Sidebar', '⌃ ⌘ S'), it('Show Ports', '⌥ ⌘ I'), sep,
+        it('Hide Sidebar', '⌃ ⌘ S'), sep,
         it('as Tree', '⌘ 1', { check: true, checked: true }), it('as List', '⌘ 2', { check: true }),
         it('Group By', '', { sub: true, hl: true }), sep,
         it('Enter Full Screen', 'fn F')
       ]),
-      { title: 'Group By', left: '886px', top: '143px', width: '160px', items: [
+      { title: 'Group By', left: '886px', top: '119px', width: '160px', items: [
         it('Server', '', { check: true, checked: true }), it('Host', '', { check: true }), it('CLI Name', '', { check: true })
       ] },
-      menu('Session', 230, [
-        it('Restart…', '⌘ R', { icon: 'sf-arrow-counterclockwise', w: 12, h: 14 }), it('Stop…', '⌘ .', { icon: 'sf-stop', w: 12, h: 11 }),
-        it('Send EOF', '', { disabled: true, icon: 'sf-text-append', w: 14, h: 12 }), it('Reconnect', '', { disabled: true, icon: 'sf-arrow-clockwise', w: 12, h: 14 }), sep,
+      menu('Session', 250, [
         it('Open in New Tab'), it('Open in New Window'), sep,
-        it('Show in Finder', '⌥ ⌘ R')
+        it('Restart', '⌘ R', { icon: 'sf-arrow-counterclockwise', w: 12, h: 14 }), it('Stop', '⌘ .', { icon: 'sf-stop', w: 12, h: 11 }),
+        it('Edit Arguments…', '⌘ <', { icon: 'sf-pencil', w: 12, h: 12 }),
+        it('Send EOF', '', { disabled: true, icon: 'sf-text-append', w: 14, h: 12 }), it('Reconnect', '', { disabled: true, icon: 'sf-arrow-clockwise', w: 12, h: 14 }), sep,
+        it('Show in Finder', '⌥ ⌘ R', { icon: 'sf-folder', w: 14, h: 12 }), it('Show Ports', '⌥ ⌘ I', { icon: 'sf-sidebar-right', w: 15, h: 12 })
       ]),
       menu('Server', 220, [
         it('Rename…'), it('Reconnect'), sep,

@@ -6,6 +6,21 @@ Give this file to a coding agent working in this repository.
 
 You are implementing the iOS 27 redesign of the CLIStream app on its three targets: iPhone Pro, iPad and iPhone Duo. The design is approved by the owner. Your job is to make the universal iOS app match it with Apple's system components, keeping the Mac app as it is.
 
+## Revision of November 24, 2026
+
+The first implementation of this design has shipped. The owner then revised it, and spec.md, tokens.json and the boards hold the revised design. Implement these changes in `apple/Mobile`. The [README](README.md#implementation-map) maps each part of the design to its file there.
+
+1. **Run controls act at once.** Restart, Start and Stop act immediately in the Session menu, the iPad toolbar and the swipe actions, without the Stop alert. Their labels lose the ellipsis.
+2. **Edit Arguments…** (`pencil`) opens the command sheet, now titled `Edit Arguments`. Confirming restarts a running program or starts a stopped one. It is the first Actions row of the Session menu and follows Stop in the iPad toolbar capsule.
+3. **First launch** shows only the No Servers message, without its two buttons.
+4. **Large sheets** cover the Servers toolbar of the screen behind them.
+5. **Alerts** use the kit spacing in spec.md: 14 pt side and bottom padding, 17 pt message, 48 pt buttons with an 8 pt gap.
+6. **GitHub link.** A **CLIStream on GitHub** circle opens `https://github.com/specialistvlad/clistream`: leading on the iPhone Servers list, last in the Duo outer column, beside Hide Sidebar on iPad.
+7. **Open port.** Enabled TCP forwards get an **Open** capsule in the Ports sheet and inspector.
+8. **Visible invitation.** Add Server shows the invitation link in SF Mono.
+
+Follow steps 2, 4, 5 and 7 below for these changes. Update the UI cases that confirm the Stop alert or tap the first-launch buttons, and add cases for Edit Arguments…, Open and the GitHub link. [Native Apple clients](../../apple-client-design.md) already describes the revised behavior.
+
 ## What exists
 
 | Source | Contents | Read it |
@@ -55,9 +70,9 @@ You are implementing the iOS 27 redesign of the CLIStream app on its three targe
    3. Terminal toolbar per target: inline title and subtitle, Ports and Session on iPhone, capsule groups on iPad and the Duo inner screen, stacked circles on the Duo outer screen. On iPad and the Duo inner screen, connection status and PTY size move into the navigation subtitle and the bottom status line goes away.
    4. Key bar: the floating glass capsule above the keyboard, the Show Keyboard circle, horizontal overflow for `~ | / -` and F1–F8.
    5. Session menu: control row and actions, replacing the Keys submenu.
-   6. Sheets and inspector: Ports (sheet on compact, inspector on regular), Add Server with Paste and Scan QR Code, Restart and Start.
+   6. Sheets and inspector: Ports (sheet on compact, inspector on regular), Add Server with Paste and Scan QR Code, Edit Arguments.
    7. Scan QR Code: the VisionKit scanner sheet, its unavailable and denied states, the camera usage string, and the hand-off to Add Server.
-   8. Alerts and empty state: Stop, Remove Server, pairing error, first launch.
+   8. Alerts and empty state: Remove Server, pairing error, first launch.
    9. Show in Files per step 3.
 
    Done for each slice when the iOS app builds locally:

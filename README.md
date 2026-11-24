@@ -22,7 +22,7 @@
 
 The **server** handles pairing and routes traffic. A **supervisor** runs beside each program on its **host** and keeps it available when viewers leave. A server can bring together programs from several hosts. The Apple apps require macOS 27 or iOS/iPadOS 27 and follow the system appearance. Upgrade the Go client, daemon, and supervisor together. Older native builds also need an update to display current sessions. [Native client guide](docs/apple-client-design.md) · [Build and TestFlight instructions](docs/deployment.md#apple-client-and-testflight)
 
-In the native apps, type directly into either a pipe or a PTY session. **Restart…** lets you review the full command before replacing a run. Open **Ports** to manage that session’s forwards from a side panel or compact sheet.
+In the native apps, type directly into either a pipe or a PTY session. **Restart** and **Stop** act at once, and **Edit Arguments…** lets you review the full command before replacing a run. Open **Ports** to manage that session’s forwards from a side panel or compact sheet.
 
 ## Try it with /bin/sh
 
