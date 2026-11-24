@@ -100,6 +100,12 @@ The final full Duo rerun without screenshots passed 16 of 20 required cases. Fol
 
 The isolated four-client test passed with the native Mac, iPhone and iPad apps and an independent Go terminal client attached to the same pipe. All four exchanged input. The Mac switched to a PTY and then to a second server while the other three continued using the original child. When the Mac returned, it saw the phone’s input from its time away. [Four-client test](https://github.com/specialistvlad/clistream/actions/runs/45019186229)
 
+## TestFlight 0.1.0 (2611240800)
+
+The mobile beta was archived from `24ae2c3` without Files. It includes mobile terminal focus and Dynamic Type changes. Both Apple schemes compiled locally. The hosted Mac native UI step and gallery passed. Mobile, Duo and shared UI results were pending at upload. The preceding matrix failed in mobile Files browsing, Duo simulator migration, shared Mac Control-C input, and other native UI cases. The Linux workspace VM also failed to boot on the iPad runner. [Matrix before the fixes](https://github.com/specialistvlad/clistream/actions/runs/45340612506) · [Follow-up matrix](https://github.com/specialistvlad/clistream/actions/runs/45352370564)
+
+App Store Connect reported `VALID` and `IN_BETA_TESTING` and confirmed access for the **Vlad** internal group. [iOS build in TestFlight](https://appstoreconnect.apple.com/apps/6837168864/testflight/ios/9d2d6945-0cc0-426c-a37b-1023602ae2e1)
+
 ## TestFlight 0.1.0 (2611240603)
 
 The November 24 mobile beta was archived from `fd0fee7` with the Files-free release configuration. The hosted iPhone checks passed search and swipe actions and switching between sessions on two servers. The latter verified that the first server’s terminal was visible and accepted fresh input after switching back. App Store Connect reported `VALID` and `IN_BETA_TESTING` and confirmed access for the **Vlad** internal group. [Focused iPhone checks](https://github.com/specialistvlad/clistream/actions/runs/45337627291) · [iOS build in TestFlight](https://appstoreconnect.apple.com/apps/6837168864/testflight/ios/c7b7ad83-17a6-4f75-847c-86a25080782b)
