@@ -12,7 +12,7 @@ func help() {
 		cliopts.Section{Title: "Pairing and connection", Body: `  clistreams 'PAIRING_LINK' PROGRAM    Pair and launch. Later, omit the link.
   --pair-stdin                         Read a pairing link from stdin and exit.
   --server-address HOST:PORT           Connect to another address for the same
-                                       pinned server.`},
+                                       pinned server, also while pairing.`},
 		cliopts.Section{Title: "Terminal and input", Body: `  --interactive          Use the child terminal locally, or its streams in a pipe.
   --local-input=false    With --interactive, view output without sending local input.
   --io-mode MODE         auto (default), pipe, or pty. Auto uses a PTY when both

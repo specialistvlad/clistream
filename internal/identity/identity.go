@@ -160,10 +160,14 @@ func Pair(ctx context.Context, dir, link, role string) error {
 	if e != nil {
 		return e
 	}
-	return pair(ctx, dir, link, role, invite)
+	return pair(ctx, dir, link, role, invite, "")
 }
 
-func pair(ctx context.Context, dir, link, role string, invite Invitation) error {
+// pair enrolls the device key in dir with the invitation's server. A non-empty dial address
+// reaches the same pinned server at another HOST:PORT, such as loopback on the daemon's own host
+// when the advertised endpoint is reachable only from outside. The saved profile keeps the
+// invitation's advertised address either way.
+func pair(ctx context.Context, dir, link, role string, invite Invitation, dial string) error {
 	if invite.Role != "" && invite.Role != role {
 		return errors.New("invitation is for a different device role")
 	}
@@ -172,7 +176,11 @@ func pair(ctx context.Context, dir, link, role string, invite Invitation) error 
 	if invite.Version > 0 {
 		token = link
 	}
-	c, e := Dial(ctx, dir, p)
+	via := p
+	if dial != "" {
+		via.Address = dial
+	}
+	c, e := Dial(ctx, dir, via)
 	if e != nil {
 		return e
 	}

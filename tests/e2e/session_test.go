@@ -205,6 +205,24 @@ func TestSharedDefaultIdentity(t *testing.T) {
 	}
 }
 
+// TestSupervisorPairsThroughServerAddress pairs a supervisor on the daemon's host through
+// --server-address when the link advertises an endpoint that does not answer, as on a VM whose
+// advertised address is reachable only from other hosts.
+func TestSupervisorPairsThroughServerAddress(t *testing.T) {
+	f := setup(t)
+	f.server.stop()
+	f.startServer("--advertise", "192.0.2.1:9")
+	link := strings.TrimSpace(f.run("srv", daemon, "invite"))
+	contains(t, link, "clistream://")
+	p := f.start("via", supervisor, "--server-address", f.address, "--pair-stdin")
+	p.send(link + "\n")
+	p.input.Close()
+	p.expect(0)
+	f.run("via", supervisor, "--server-address", f.address, "--once", "true")
+	saved := read(t, filepath.Join(f.config("via"), "device", "server.json"))
+	contains(t, saved, "192.0.2.1:9")
+}
+
 func TestLegacyProfiles(t *testing.T) {
 	f := setup(t)
 	link := strings.TrimSpace(f.run("srv", daemon, "invite"))
