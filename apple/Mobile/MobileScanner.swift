@@ -34,7 +34,7 @@ struct MobileScanner: View {
           }
         }.aspectRatio(1, contentMode: .fit).clipShape(.rect(cornerRadius: 32))
         Text("Point the camera at the QR code in the clistreamd terminal.").font(.headline)
-        Text("Open clistreamd in a terminal to show the code. Invitations last three minutes.")
+        Text("Open clistreamd in a terminal to show the code. An invitation lasts three minutes unless its server made it longer.")
           .font(.subheadline).foregroundStyle(.secondary)
       }.multilineTextAlignment(.center).padding()
     }

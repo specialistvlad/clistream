@@ -18,14 +18,14 @@ import (
 	"golang.org/x/term"
 )
 
-func adminRequest(sock, action, arg string) (string, error) {
+func adminRequest(sock, action, arg, valid string) (string, error) {
 	c, e := net.DialTimeout("unix", sock, 3*time.Second)
 	if e != nil {
 		return "", e
 	}
 	defer c.Close()
 	c.SetDeadline(time.Now().Add(5 * time.Second))
-	if e = json.NewEncoder(c).Encode(request{action, arg}); e != nil {
+	if e = json.NewEncoder(c).Encode(request{Action: action, Arg: arg, Valid: valid}); e != nil {
 		return "", e
 	}
 	var r reply
@@ -104,7 +104,11 @@ func display(ctx context.Context, qr bool, issue func() (string, error)) error {
 				expires = i.Expires
 			}
 			fmt.Println("Replace PROGRAM with the command to share. Use the same link to pair more devices.")
-			fmt.Printf("Expires at %s. Press p to replace the displayed links on all interfaces. Ctrl-C exits.\n", expires.Local().Format("15:04:05 MST"))
+			layout := "15:04:05 MST"
+			if expires.Sub(time.Now()) > 24*time.Hour {
+				layout = "2006-01-02 15:04:05 MST"
+			}
+			fmt.Printf("Expires at %s. Press p to replace the displayed links on all interfaces. Ctrl-C exits.\n", expires.Local().Format(layout))
 			refresh = false
 		}
 		if !expires.IsZero() && !time.Now().Before(expires) {

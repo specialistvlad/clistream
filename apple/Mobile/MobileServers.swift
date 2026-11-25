@@ -40,7 +40,7 @@ struct MobileServers: View {
           }
         } description: {
           Text(
-            "Scan the QR code that clistreamd shows, or paste its invitation. Invitations last three minutes."
+            "Scan the QR code that clistreamd shows, or paste its invitation. An invitation lasts three minutes unless its server made it longer."
           )
         }
       } else {

@@ -38,7 +38,7 @@ struct DesktopPairSheet: View {
   var body: some View {
     DesktopFormSheet(title: "Pair with a server",
       message: valid ? "Check the server before pairing. This device can then control every CLI on it."
-        : "Paste the invitation from clistreamd. Invitations last three minutes.",
+        : "Paste the invitation from clistreamd. An invitation lasts three minutes unless its server made it longer.",
       action: "Pair", enabled: valid, submit: {
         guard valid else { return }
         confirm(link.trimmingCharacters(in: .whitespacesAndNewlines))

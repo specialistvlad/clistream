@@ -4,6 +4,7 @@ import "github.com/specialistvlad/clistream/internal/cliopts"
 
 var commands = map[string]cliopts.Command{
 	"invite": {}, "devices": {}, "revoke": {Arguments: "FINGERPRINT", Min: 1, Max: 1},
+	"invitations": {}, "uninvite": {},
 }
 
 func help() {
@@ -25,7 +26,11 @@ func help() {
   clistreamd devices              List enrolled devices and their key fingerprints.
   clistreamd revoke FINGERPRINT   Disconnect the device and remove its enrollment.
   --qr=false                      Hide QR codes in the terminal pairing display.
-  clistreamd --qr invite          Include a QR code with a scripted invitation.`},
+  clistreamd --qr invite          Include a QR code with a scripted invitation.
+  clistreamd --valid 168h invite  A link that lasts longer, at most a week. It survives a
+                                  restart and pairs several devices until it expires.
+  clistreamd invitations          List the long-lived links and their expiry.
+  clistreamd uninvite             Cancel every long-lived link.`},
 		cliopts.Section{Title: "Logging", Body: `  --log-file=TRUE|FALSE|PATH    Also write activity to a rotating file. TRUE uses
                                 private server.log (default). FALSE uses stderr only.`})
 }

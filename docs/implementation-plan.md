@@ -59,6 +59,7 @@ Verify conditional writes, conflicts, interrupted transfers, confinement, revoca
 ## Original implementation sequence
 
 1. Establish TLS identities, reusable three-minute invitations and mandatory bounded compression.
+   Long-lived invitations (`--valid`, at most a week) are kept on disk, outlive a restart and the display's replacement, and are listed and cancelled by `invitations` and `uninvite`.
 2. Connect the daemon and its local administration socket to a session registry and multiplexed QUIC relay.
 3. Implement pipe and PTY process execution, terminal fan-out, local interaction and explicit port exports.
 4. Share the client library between the Unix CLI and a native Apple terminal.
