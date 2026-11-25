@@ -100,6 +100,12 @@ The final full Duo rerun without screenshots passed 16 of 20 required cases. Fol
 
 The isolated four-client test passed with the native Mac, iPhone and iPad apps and an independent Go terminal client attached to the same pipe. All four exchanged input. The Mac switched to a PTY and then to a second server while the other three continued using the original child. When the Mac returned, it saw the phone’s input from its time away. [Four-client test](https://github.com/specialistvlad/clistream/actions/runs/45019186229)
 
+## TestFlight 0.1.0 (2611251808)
+
+The signed mobile beta from `ccf1e29` removes the dedicated Paste button from Add Server. The scanner’s Paste button and the invitation field remain available. The beta also includes the sidebar reveal and Offline text scaling changes. Local `make test e2e` and the iOS Simulator `build-for-testing` passed. The hosted mobile reruns were pending at release. The prior matrix had failures in mobile Files, Duo startup, shared viewers and other mobile UI cases. [iPhone checks](https://github.com/specialistvlad/clistream/actions/runs/45671560772) · [iPad checks](https://github.com/specialistvlad/clistream/actions/runs/45672032821) · [Full matrix](https://github.com/specialistvlad/clistream/actions/runs/45672033259)
+
+The archive uses the Files-free beta configuration. App Store Connect reported `VALID` and `IN_BETA_TESTING` and confirmed access for the **Vlad** internal group. [iOS build in TestFlight](https://appstoreconnect.apple.com/apps/6837168864/testflight/ios/e0335879-6f1a-4542-a652-47385bcb014c)
+
 ## TestFlight 0.1.0 (2611240800)
 
 The mobile beta was archived from `24ae2c3` without Files. It includes mobile terminal focus and Dynamic Type changes. Both Apple schemes compiled locally. The hosted Mac native UI step and gallery passed. Mobile, Duo and shared UI results were pending at upload. The preceding matrix failed in mobile Files browsing, Duo simulator migration, shared Mac Control-C input, and other native UI cases. The Linux workspace VM also failed to boot on the iPad runner. [Matrix before the fixes](https://github.com/specialistvlad/clistream/actions/runs/45340612506) · [Follow-up matrix](https://github.com/specialistvlad/clistream/actions/runs/45352370564)
