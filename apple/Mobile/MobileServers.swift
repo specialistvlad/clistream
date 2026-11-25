@@ -9,10 +9,11 @@ struct MobileServers: View {
   @Environment(\.closedHinge) private var closedHinge
   @Environment(\.regularWorkspace) private var regular
   @Environment(\.dynamicTypeSize) private var textSize
-  @ScaledMetric(relativeTo: .body) private var retryFontSize: CGFloat = 17
+  @ScaledMetric(relativeTo: .body) private var connectionLabelSize: CGFloat = 17
   @AppStorage("workspace-list") private var flat = false
   @AppStorage("workspace-group") private var grouping = "Server"
   @State private var query = ""
+  @State private var pendingServerReveal: String?
   @State private var collapsed = Set<[String]>()
   @State private var renaming: ServerProfile?
   @State private var name = ""
@@ -80,8 +81,15 @@ struct MobileServers: View {
       Group {
         if regular { servers.listStyle(.sidebar) } else { servers.listStyle(.insetGrouped) }
       }.onChange(of: workspace.profiles.map(\.id)) { previous, current in
-        if grouping == "Server", let added = current.first(where: { !previous.contains($0) }) {
-          reader.scrollTo(added, anchor: .top)
+        guard grouping == "Server",
+          let added = current.first(where: { !previous.contains($0) }) else { return }
+        pendingServerReveal = workspace.rows[added] == nil ? added : nil
+        reader.scrollTo(added, anchor: .top)
+      }.onChange(of: workspace.rows.keys.sorted()) { _, loaded in
+        guard let pendingServerReveal, loaded.contains(pendingServerReveal) else { return }
+        self.pendingServerReveal = nil
+        if grouping == "Server" && query.isEmpty {
+          reader.scrollTo(pendingServerReveal, anchor: .top)
         }
       }
     }
@@ -105,10 +113,11 @@ struct MobileServers: View {
                   ? AnyLayout(VStackLayout(alignment: .leading))
                   : AnyLayout(HStackLayout())
                 layout {
-                  Label("Offline", systemImage: "wifi.slash").foregroundStyle(.secondary)
+                  Label("Offline", systemImage: "wifi.slash")
+                    .font(.system(size: connectionLabelSize)).foregroundStyle(.secondary)
                   if !textSize.isAccessibilitySize { Spacer() }
                   Button { workspace.retry(server) } label: {
-                    Text("Retry").font(.system(size: retryFontSize)).fixedSize()
+                    Text("Retry").font(.system(size: connectionLabelSize)).fixedSize()
                   }.buttonStyle(.borderless).accessibilityIdentifier("retry-server")
                 }
               }
