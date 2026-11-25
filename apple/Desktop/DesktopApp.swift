@@ -131,7 +131,7 @@ private struct DesktopWindow: View {
       ContentUnavailableView {
         Label("Pair with a server", systemImage: "network")
       } description: {
-        Text("Open an invitation from clistreamd, or paste one. Invitations last three minutes.")
+        Text("Open an invitation from clistreamd, or paste one. An invitation lasts three minutes unless its server made it longer.")
       } actions: {
         HStack {
           Button("Paste Invitation") { actions.pasteInvitation() }

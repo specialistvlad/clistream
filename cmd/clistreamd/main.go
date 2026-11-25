@@ -25,7 +25,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type request struct{ Action, Arg string }
+type request struct {
+	Action, Arg string
+	// Valid is invite's lifetime as a Go duration ("168h"); empty means the default.
+	Valid string `json:",omitempty"`
+}
 type reply struct{ Result, Error string }
 
 func main() {
@@ -39,6 +43,7 @@ func run() (err error) {
 	addr := flag.String("advertise", "", "host:port clients can reach")
 	logFile := flag.String("log-file", "TRUE", "TRUE, FALSE or activity log path")
 	qr := flag.Bool("qr", true, "render invitation QR")
+	valid := flag.Duration("valid", 0, "invitation lifetime (default 3m, at most 168h)")
 	var names []string
 	flag.Func("interface", "interface name or loopback (repeatable)", func(name string) error { names = append(names, name); return nil })
 	flag.Usage = help
@@ -51,6 +56,16 @@ func run() (err error) {
 		action, arg = flag.Arg(0), flag.Arg(1)
 	}
 	inviteQR := cliopts.Supplied("qr") && *qr
+	if cliopts.Supplied("valid") && action != "invite" {
+		return errors.New("--valid goes with invite: clistreamd --valid 168h invite")
+	}
+	if cliopts.Supplied("valid") && (*valid <= 0 || *valid > broker.MaxInviteLifetime) {
+		return fmt.Errorf("--valid must be more than 0 and at most %s", broker.MaxInviteLifetime)
+	}
+	validArg := ""
+	if cliopts.Supplied("valid") {
+		validArg = valid.String()
+	}
 	dir := identity.Default("server")
 	if e := identity.EnsurePrivateDir(dir); e != nil {
 		return e
@@ -77,13 +92,13 @@ func run() (err error) {
 		if action == "serve" && interactive() {
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 			defer cancel()
-			return display(ctx, *qr, func() (string, error) { return adminRequest(sock, "display", "") })
+			return display(ctx, *qr, func() (string, error) { return adminRequest(sock, "display", "", "") })
 		}
 		if action == "serve" {
 			fmt.Println("clistreamd is already running. Open clistreamd in a terminal to pair, or run clistreamd invite.")
 			return nil
 		}
-		result, e := adminRequest(sock, action, arg)
+		result, e := adminRequest(sock, action, arg, validArg)
 		if e != nil {
 			return e
 		}
@@ -174,7 +189,16 @@ func run() (err error) {
 					log.Record(activity.Event{Name: "admin_request", Operation: "unknown", Outcome: "invalid_record"})
 					return
 				}
-				result, e := s.Admin(r.Action, r.Arg)
+				var result string
+				var e error
+				if r.Action == "invite" && r.Valid != "" {
+					var d time.Duration
+					if d, e = time.ParseDuration(r.Valid); e == nil {
+						result, e = s.Invite(r.Arg, d)
+					}
+				} else {
+					result, e = s.Admin(r.Action, r.Arg)
+				}
 				out := reply{Result: result}
 				if e != nil {
 					out.Error = e.Error()

@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -47,7 +48,7 @@ type Server struct {
 	slots       chan struct{}
 	now         func() time.Time
 	devices     map[string]string
-	invites     map[string]time.Time
+	invites     map[string]invite
 	sessions    map[string]entry
 	peers       map[*quic.Conn]string
 }
@@ -61,9 +62,23 @@ func New(dir string, addresses []string, auth identity.Authenticator, log *activ
 		controllers: map[string]managedEntry{}, log: log, auth: auth, dir: dir, addresses: addresses, pin: identity.Pin(cert.Leaf),
 		signingKey: cert.PrivateKey.(ed25519.PrivateKey), now: time.Now,
 		slots: make(chan struct{}, 128), devices: map[string]string{},
-		invites: map[string]time.Time{}, sessions: map[string]entry{}, peers: map[*quic.Conn]string{},
+		invites: map[string]invite{}, sessions: map[string]entry{}, peers: map[*quic.Conn]string{},
 	}
-	b, e := os.ReadFile(filepath.Join(dir, "devices.json"))
+	// Long-lived invitations outlive a restart: invitations.json keeps their IDs and expiries.
+	var kept map[string]int64
+	b, e := os.ReadFile(filepath.Join(dir, "invitations.json"))
+	if e == nil {
+		e = json.Unmarshal(b, &kept)
+	}
+	if e != nil && !errors.Is(e, os.ErrNotExist) {
+		return nil, nil, e
+	}
+	for id, unix := range kept {
+		if until := time.Unix(unix, 0); s.now().Before(until) {
+			s.invites[id] = invite{until: until, kept: true}
+		}
+	}
+	b, e = os.ReadFile(filepath.Join(dir, "devices.json"))
 	if e == nil {
 		e = json.Unmarshal(b, &s.devices)
 	}
@@ -83,10 +98,36 @@ func New(dir string, addresses []string, auth identity.Authenticator, log *activ
 	return s, cfg, nil
 }
 func randomID(n int) string { b := make([]byte, n); rand.Read(b); return hex.EncodeToString(b) }
+
+// DefaultInviteLifetime is how long a pairing link lasts unless its issuer asks for longer, and
+// MaxInviteLifetime the longest it may last. A link longer than the default is kept: it outlives a
+// restart (invitations.json) and the display's replacement of its own links, until it expires or
+// `clistreamd uninvite` cancels it.
+const (
+	DefaultInviteLifetime = 3 * time.Minute
+	MaxInviteLifetime     = 7 * 24 * time.Hour
+)
+
+type invite struct {
+	until time.Time
+	kept  bool
+}
+
+// Invite issues one pairing link for role ("", client or supervisor) valid for the given lifetime
+// (zero: DefaultInviteLifetime), as `clistreamd [--valid D] invite` asks.
+func (s *Server) Invite(role string, valid time.Duration) (string, error) {
+	event := activity.Event{Name: "admin_request", Outcome: "ok", Operation: "invite"}
+	result, err := s.issue("invite", role, valid)
+	if err != nil {
+		event.Outcome = "failed"
+	}
+	s.log.Record(event)
+	return result, err
+}
 func (s *Server) Admin(action, arg string) (string, error) {
 	event := activity.Event{Name: "admin_request", Outcome: "ok", Operation: "unknown"}
 	switch action {
-	case "display", "invite", "devices", "revoke":
+	case "display", "invite", "devices", "revoke", "invitations", "uninvite":
 		event.Operation = action
 	}
 	result, err := s.admin(action, arg)
@@ -99,53 +140,112 @@ func (s *Server) Admin(action, arg string) (string, error) {
 	return result, err
 }
 func (s *Server) admin(action, arg string) (string, error) {
+	switch action {
+	case "invite", "display":
+		return s.issue(action, arg, 0)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	switch action {
-	case "invite", "display":
-		if arg != "" && arg != "client" && arg != "supervisor" {
-			return "", errors.New("expected client or supervisor")
-		}
+	case "invitations":
+		// The kept links, one line each: an ID prefix and the expiry (UTC).
+		var lines []string
 		now := s.now()
 		for id, v := range s.invites {
-			if !now.Before(v) {
+			if v.kept && now.Before(v.until) {
+				lines = append(lines, id[:12]+" "+v.until.UTC().Format(time.RFC3339))
+			}
+		}
+		sort.Strings(lines)
+		return strings.Join(lines, "\n"), nil
+	case "uninvite":
+		n := 0
+		for id, v := range s.invites {
+			if v.kept {
 				delete(s.invites, id)
+				n++
 			}
 		}
-		id := make([]byte, 32)
-		rand.Read(id)
-		token := hex.EncodeToString(id)
-		until := now.Add(3 * time.Minute).Truncate(time.Second)
-		if len(s.addresses) == 0 {
-			return "", errors.New("no listening endpoints")
+		if e := s.saveInvites(); e != nil {
+			return "", e
 		}
-		addresses := s.addresses
-		if action == "invite" {
-			// Scripts expect one line. Prefer a reachable network address for
-			// remote devices when loopback and network listeners coexist.
-			address := addresses[0]
-			for _, candidate := range addresses {
-				host, _, _ := net.SplitHostPort(candidate)
-				if host != "localhost" && !net.ParseIP(host).IsLoopback() {
-					address = candidate
-					break
-				}
+		return fmt.Sprintf("cancelled %d", n), nil
+	}
+	return s.adminDevices(action, arg)
+}
+
+// issue makes a link (invite: one, display: one per endpoint) valid for valid (zero: the default).
+func (s *Server) issue(action, arg string, valid time.Duration) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if arg != "" && arg != "client" && arg != "supervisor" {
+		return "", errors.New("expected client or supervisor")
+	}
+	if valid == 0 {
+		valid = DefaultInviteLifetime
+	}
+	if valid < 0 || valid > MaxInviteLifetime {
+		return "", fmt.Errorf("an invitation lasts at most %s", MaxInviteLifetime)
+	}
+	now := s.now()
+	pruned := false
+	for id, v := range s.invites {
+		if !now.Before(v.until) {
+			delete(s.invites, id)
+			pruned = pruned || v.kept
+		}
+	}
+	id := make([]byte, 32)
+	rand.Read(id)
+	token := hex.EncodeToString(id)
+	until := now.Add(valid).Truncate(time.Second)
+	kept := valid > DefaultInviteLifetime
+	if len(s.addresses) == 0 {
+		return "", errors.New("no listening endpoints")
+	}
+	addresses := s.addresses
+	if action == "invite" {
+		// Scripts expect one line. Prefer a reachable network address for
+		// remote devices when loopback and network listeners coexist.
+		address := addresses[0]
+		for _, candidate := range addresses {
+			host, _, _ := net.SplitHostPort(candidate)
+			if host != "localhost" && !net.ParseIP(host).IsLoopback() {
+				address = candidate
+				break
 			}
-			addresses = []string{address}
 		}
-		var links []string
-		for _, addr := range addresses {
-			link, e := identity.SignInvitation(s.signingKey, addr, id, until)
-			if e != nil {
-				return "", e
+		addresses = []string{address}
+	}
+	var links []string
+	for _, addr := range addresses {
+		link, e := identity.SignInvitation(s.signingKey, addr, id, until)
+		if e != nil {
+			return "", e
+		}
+		links = append(links, link)
+	}
+	if action == "display" {
+		// The display replaces its own links; a kept link lasts until it expires or is cancelled.
+		for k, v := range s.invites {
+			if !v.kept {
+				delete(s.invites, k)
 			}
-			links = append(links, link)
 		}
-		if action == "display" {
-			clear(s.invites)
+	}
+	s.invites[token] = invite{until: until, kept: kept}
+	if kept || pruned {
+		if e := s.saveInvites(); e != nil {
+			delete(s.invites, token)
+			return "", e
 		}
-		s.invites[token] = until
-		return strings.Join(links, "\n"), nil
+	}
+	return strings.Join(links, "\n"), nil
+}
+
+// adminDevices answers devices and revoke.
+func (s *Server) adminDevices(action, arg string) (string, error) {
+	switch action {
 	case "devices":
 		var lines []string
 		for k, v := range s.devices {
@@ -173,6 +273,17 @@ func (s *Server) admin(action, arg string) (string, error) {
 	return "", errors.New("unknown action")
 }
 func (s *Server) save() error { return identity.Save(filepath.Join(s.dir, "devices.json"), s.devices) }
+
+// saveInvites writes the kept invitations (ID and Unix expiry) to invitations.json.
+func (s *Server) saveInvites() error {
+	kept := map[string]int64{}
+	for id, v := range s.invites {
+		if v.kept {
+			kept[id] = v.until.Unix()
+		}
+	}
+	return identity.Save(filepath.Join(s.dir, "invitations.json"), kept)
+}
 func (s *Server) Serve(ctx context.Context, listeners ...*quic.Listener) error {
 	ctx, stop := context.WithCancel(ctx)
 	defer stop()
@@ -355,7 +466,7 @@ func (s *Server) handle(c *quic.Conn, st *quic.Stream, ev activity.Event, m wire
 			return errors.New("invalid invitation")
 		}
 		v, ok := s.invites[i.ID]
-		if !ok || !s.now().Before(v) || !i.Expires.Equal(v) {
+		if !ok || !s.now().Before(v.until) || !i.Expires.Equal(v.until) {
 			return errors.New("invalid invitation; press p in the server terminal for a new link")
 		}
 		if !enrolled {

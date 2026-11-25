@@ -223,6 +223,27 @@ func TestSupervisorPairsThroughServerAddress(t *testing.T) {
 	contains(t, saved, "192.0.2.1:9")
 }
 
+// TestLongLivedInvitation issues a link that lasts an hour: it pairs two devices across a daemon
+// restart, invitations lists it, and uninvite cancels it.
+func TestLongLivedInvitation(t *testing.T) {
+	f := setup(t)
+	contains(t, f.reject("srv", daemon, "--valid", "1h", "devices"), "--valid goes with invite")
+	contains(t, f.reject("srv", daemon, "--valid", "169h", "invite"), "at most")
+	link := strings.TrimSpace(f.run("srv", daemon, "--valid", "1h", "invite"))
+	contains(t, link, "clistream://")
+	f.server.stop()
+	f.startServer()
+	for _, account := range []string{"phone", "tablet"} {
+		f.run(account, client, link)
+		f.run(account, client, "list")
+	}
+	listed := f.run("srv", daemon, "invitations")
+	equal(t, len(strings.Fields(listed)), 2)
+	contains(t, f.run("srv", daemon, "uninvite"), "cancelled 1")
+	f.reject("late", client, link)
+	equal(t, strings.TrimSpace(f.run("srv", daemon, "invitations")), "")
+}
+
 func TestLegacyProfiles(t *testing.T) {
 	f := setup(t)
 	link := strings.TrimSpace(f.run("srv", daemon, "invite"))

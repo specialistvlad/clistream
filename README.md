@@ -56,7 +56,7 @@ The default server listens on loopback. To connect a second machine, stop the de
 ./bin/clistreamd --interface loopback --interface en0
 ```
 
-On the second machine, install the Go CLI on your PATH and paste the **Network** client command printed by the server, including the single quotes around the link. Select the same shell to share its input and output. Invitations last three minutes. Press **p** in the server terminal to replace outstanding links. After pairing, reconnect with just `clistream`.
+On the second machine, install the Go CLI on your PATH and paste the **Network** client command printed by the server, including the single quotes around the link. Select the same shell to share its input and output. Invitations last three minutes, or up to a week with `clistreamd --valid 168h invite`. Press **p** in the server terminal to replace the displayed links. After pairing, reconnect with just `clistream`.
 
 Each client and supervisor connects to the server using QUIC with TLS 1.3. The self-hosted server decrypts and relays traffic, so run it on a machine you trust. An enrolled device can control CLI apps and access their shared workspaces. [Security model](docs/security.md)
 

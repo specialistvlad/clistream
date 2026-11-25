@@ -101,7 +101,7 @@ private struct MobileInvitationSheet: View {
           } header: {
             Text("Invitation")
           } footer: {
-            Text("Scan or paste the invitation from clistreamd. Invitations last three minutes.")
+            Text("Scan or paste the invitation from clistreamd. An invitation lasts three minutes unless its server made it longer.")
           }
           if let address = info.Address, let pin = info.Pin, info.Error == nil {
             Section {
