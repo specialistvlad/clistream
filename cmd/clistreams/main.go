@@ -70,7 +70,7 @@ func run() (int, error) {
 		if _, e := fmt.Fscanln(os.Stdin, &link); e != nil {
 			return 1, e
 		}
-		_, _, err := identity.CLIProfile(context.Background(), "supervisor", link)
+		_, _, err := identity.CLIProfileAt(context.Background(), "supervisor", link, *addr)
 		return 0, err
 	}
 	args := flag.Args()
@@ -99,7 +99,7 @@ func run() (int, error) {
 		}
 		defer root.Close()
 	}
-	directory, saved, e := identity.CLIProfile(context.Background(), "supervisor", link)
+	directory, saved, e := identity.CLIProfileAt(context.Background(), "supervisor", link, *addr)
 	if link == "" && errors.Is(e, os.ErrNotExist) {
 		return 1, errors.New("This supervisor needs pairing. " + inviteHelp + "\nThen run clistreams PAIRING-LINK PROGRAM.")
 	}

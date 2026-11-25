@@ -63,6 +63,13 @@ func readDefaults() (defaultProfiles, error) {
 // CLIProfile resolves the saved directory and, when supplied, enrolls the link.
 // A private lock serializes enrollment and publication across both executables.
 func CLIProfile(ctx context.Context, role, link string) (string, Profile, error) {
+	return CLIProfileAt(ctx, role, link, "")
+}
+
+// CLIProfileAt is CLIProfile that enrolls the link through the dial address when it is not
+// empty. The supervisor's --server-address uses it, so a supervisor on the daemon's host pairs
+// over loopback with a link that advertises an address only other hosts can reach.
+func CLIProfileAt(ctx context.Context, role, link, dial string) (string, Profile, error) {
 	if link == "" {
 		profiles, err := readDefaults()
 		if err != nil {
@@ -129,7 +136,7 @@ func CLIProfile(ctx context.Context, role, link string) (string, Profile, error)
 		}
 	}
 	dir := Default(name)
-	if err := pair(ctx, dir, link, role, invite); err != nil {
+	if err := pair(ctx, dir, link, role, invite, dial); err != nil {
 		return "", Profile{}, err
 	}
 	return dir, invite.Profile, Save(Default("defaults.json"), profiles)
