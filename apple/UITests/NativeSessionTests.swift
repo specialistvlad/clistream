@@ -246,6 +246,7 @@ final class NativeSessionTests: XCTestCase {
     #else
       action("Send EOF", app)
     #endif
+    XCTAssertTrue(terminal.waitForNonExistence(timeout: 30))
     let result = app.descendants(matching: .any).matching(NSPredicate(
       format: "value CONTAINS %@ OR label CONTAINS %@", "finished-child","finished-child"
     )).firstMatch

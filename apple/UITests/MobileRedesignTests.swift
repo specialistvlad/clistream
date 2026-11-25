@@ -111,7 +111,12 @@ extension NativeSessionTests {
       XCTAssertTrue(project.exists)
     }
     app.buttons["workspace-add-server"].firstMatch.tap()
-    app.buttons["pairing-paste-invitation"].firstMatch.tap()
+    let invitation = app.textFields["pairing-link"].firstMatch
+    XCTAssertTrue(invitation.waitForExistence(timeout: 12))
+    XCTAssertFalse(app.buttons["Paste"].exists)
+    XCTAssertFalse(confirm.isEnabled)
+    invitation.tap()
+    invitation.typeText(try await fixtureResponse("QR"))
     XCTAssertTrue(confirm.wait(for: \.isEnabled, toEqual: true, timeout: 12))
   }
 

@@ -97,7 +97,6 @@ private struct MobileInvitationSheet: View {
                 .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                 .accessibilityIdentifier("pairing-link")
             }
-            InvitationPasteButton(review: flow.add).accessibilityIdentifier("pairing-paste-invitation")
             Button("Scan QR Code", systemImage: "qrcode.viewfinder", action: flow.scan)
           } header: {
             Text("Invitation")

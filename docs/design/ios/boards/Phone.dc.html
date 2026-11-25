@@ -348,7 +348,7 @@ class Component extends DCLogic {
         group([cell('web', { sub: 'TCP · 127.0.0.1:8080', toggle: true, first: true }), cell('127.0.0.1:8081', { monoTitle: true, copy: true, open: true }), cell('metrics', { sub: 'UDP · 127.0.0.1:9125', toggle: false })], '', 'Forwards keep running when you close this sheet.')
       ] },
       pair: { title: 'Add Server', large: true, confirm: true, confirmLabel: 'Pair', height: '790px', groups: [
-        group([cell('clistream://192.168.1.20:7443/?token=7Q2MX9KD4RTA', { monoTitle: true, first: true }), cell('Paste', { accent: true, icon: 'sf-doc-on-clipboard' }), cell('Scan QR Code', { accent: true, icon: 'sf-qrcode-viewfinder' })], 'Invitation', 'Scan or paste the invitation from clistreamd. Invitations last three minutes.'),
+        group([cell('clistream://192.168.1.20:7443/?token=7Q2MX9KD4RTA', { monoTitle: true, first: true }), cell('Scan QR Code', { accent: true, icon: 'sf-qrcode-viewfinder' })], 'Invitation', 'Scan or paste the invitation from clistreamd. Invitations last three minutes.'),
         group([cell('Address', { detail: '192.168.1.20:7443', first: true }), cell('Identity', { detail: '4F2A 91C3 … 7D0E', mono: true })], 'Server', 'Check the server before pairing. This device can then control every CLI on it.')
       ] },
       scan: { title: 'Scan QR Code', large: true, confirm: false, confirmLabel: '', height: '790px', groups: [] },

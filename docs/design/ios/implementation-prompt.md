@@ -70,7 +70,7 @@ Follow steps 2, 4, 5 and 7 below for these changes. Update the UI cases that con
    3. Terminal toolbar per target: inline title and subtitle, Ports and Session on iPhone, capsule groups on iPad and the Duo inner screen, stacked circles on the Duo outer screen. On iPad and the Duo inner screen, connection status and PTY size move into the navigation subtitle and the bottom status line goes away.
    4. Key bar: the floating glass capsule above the keyboard, the Show Keyboard circle, horizontal overflow for `~ | / -` and F1–F8.
    5. Session menu: control row and actions, replacing the Keys submenu.
-   6. Sheets and inspector: Ports (sheet on compact, inspector on regular), Add Server with Paste and Scan QR Code, Edit Arguments.
+   6. Sheets and inspector: Ports (sheet on compact, inspector on regular), Add Server with an editable invitation field and Scan QR Code, Edit Arguments.
    7. Scan QR Code: the VisionKit scanner sheet, its unavailable and denied states, the camera usage string, and the hand-off to Add Server.
    8. Alerts and empty state: Remove Server, pairing error, first launch.
    9. Show in Files per step 3.

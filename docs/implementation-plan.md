@@ -20,6 +20,8 @@ Compact iPhone and Duo navigation now opens a CLI through an explicit row action
 
 The CI follow-up moves mobile keyboard focus to terminal mounting, scales Retry explicitly with Dynamic Type, and improves hosted synchronization for Mac window changes, shared PTY focus, iPad server selection and scanner dismissal. Go commands, daemon, supervisor, deployment and protocol on Linux and macOS keep the same policies. Current feature guides already describe the affected user flows. Compile both Apple schemes, run focused Mac and mobile regressions on GitHub, and record remaining Files and simulator failures in the verification record. Keep the mobile TestFlight packaging without Files while App Group signing is unavailable.
 
+Remove the dedicated Paste button from Add Server on iPhone, iPad and Duo. Keep the editable invitation field and its system edit menu, the scanner’s Paste fallback, and explicit pairing confirmation. This only changes the mobile sheet, so macOS and the Go daemon, supervisor and CLI on macOS and Linux retain their current behavior. The iOS spec, canvas and native guide cover the revised entry points. Verify scanner Paste, manual entry and absence of the dialog action on hosted mobile runners. Record the matrix status and TestFlight build in the verification record.
+
 ## Universal iOS redesign and Files · November 23, 2026
 
 | Screens in the design | Current view | Target |
